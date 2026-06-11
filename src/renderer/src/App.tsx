@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react'
 import type { Settings, Theme } from '../../shared/types'
 import { api } from './api'
+import Home from './views/Home'
+import Editor from './views/Editor'
+
+type View = { page: 'home' } | { page: 'editor'; slug: string }
 
 export default function App(): React.JSX.Element {
   const [settings, setSettings] = useState<Settings | null>(null)
+  const [view, setView] = useState<View>({ page: 'home' })
 
   useEffect(() => {
     api.getSettings().then((s) => {
@@ -23,6 +28,11 @@ export default function App(): React.JSX.Element {
   return (
     <div className="app">
       <header className="app-header">
+        {view.page === 'editor' && (
+          <button className="btn" onClick={() => setView({ page: 'home' })}>
+            ← Назад
+          </button>
+        )}
         <span className="app-title">Слово</span>
         <span className="app-sub">локальные расшифровки</span>
         <div style={{ marginLeft: 'auto' }}>
@@ -31,10 +41,11 @@ export default function App(): React.JSX.Element {
           </button>
         </div>
       </header>
-      <main className="empty">
-        <div className="empty-title">Пока пусто</div>
-        <div>Импорт записей появится на следующем шаге (Фаза 1)</div>
-      </main>
+      {view.page === 'home' ? (
+        <Home onOpen={(slug) => setView({ page: 'editor', slug })} />
+      ) : (
+        <Editor slug={view.slug} />
+      )}
     </div>
   )
 }

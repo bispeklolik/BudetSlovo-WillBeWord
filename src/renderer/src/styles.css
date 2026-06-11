@@ -8,6 +8,8 @@
   --border: #e3e1d9;
   --accent: #185fa5;
   --accent-soft: #e6f1fb;
+  --wave: #b4b2a9;
+  --playhead: #d85a30;
   --spk1: #378add;
   --spk2: #1d9e75;
   --conf-mid-bg: #faeeda;
@@ -27,6 +29,8 @@
   --border: #2e2e36;
   --accent: #85b7eb;
   --accent-soft: #142433;
+  --wave: #534ab7;
+  --playhead: #f0997b;
   --spk1: #85b7eb;
   --spk2: #5dcaa5;
   --conf-mid-bg: #3a2e14;
@@ -94,9 +98,25 @@ button {
   cursor: pointer;
 }
 
-.btn:hover {
+.btn:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  color: #fff;
+  opacity: 0.92;
 }
 
 .empty {
@@ -112,4 +132,144 @@ button {
 .empty-title {
   font-size: 18px;
   color: var(--text);
+}
+
+/* ---------- главная ---------- */
+
+.home {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.home-toolbar {
+  padding: 16px;
+}
+
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+
+.project-card {
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.project-card:hover {
+  border-color: var(--accent);
+}
+
+.project-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.project-card-meta {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---------- редактор ---------- */
+
+.editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.editor-head {
+  padding: 14px 20px 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.editor-title {
+  font-size: 18px;
+  margin: 0;
+}
+
+.editor-sub {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.transcript-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.player {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  padding: 10px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.time {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 13px;
+  margin-left: 6px;
+}
+
+.rate {
+  margin-left: auto;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 8px;
+}
+
+.waveform {
+  position: relative;
+  height: 72px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.waveform canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--playhead);
+  pointer-events: none;
 }
