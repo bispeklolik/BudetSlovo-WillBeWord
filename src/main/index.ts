@@ -9,7 +9,14 @@ import {
   readPeaks,
   projectDir
 } from './project/store'
-import type { Settings } from '../shared/types'
+import {
+  initQueue,
+  setJobNotifier,
+  enqueueTranscribe,
+  cancelJob,
+  listJobs
+} from './jobs/queue'
+import type { Settings, TranscribeOptions } from '../shared/types'
 
 // Все данные Chromium-профиля строго на D: — C: почти полон.
 app.setPath('userData', join(DATA_DIR, 'electron'))
@@ -82,7 +89,19 @@ ipcMain.handle('project:list', () => listProjects())
 ipcMain.handle('project:get', (_e, slug: string) => getProject(slug))
 ipcMain.handle('project:peaks', (_e, slug: string) => readPeaks(slug))
 
+// ---------- задачи расшифровки ----------
+ipcMain.handle('job:start', (_e, slug: string, opts: TranscribeOptions) =>
+  enqueueTranscribe(slug, opts)
+)
+ipcMain.handle('job:cancel', (_e, id: string) => cancelJob(id))
+ipcMain.handle('job:list', () => listJobs())
+
 app.whenReady().then(() => {
+  initQueue()
+  setJobNotifier((job) => {
+    win?.webContents.send('job:update', job)
+  })
+
   installMediaProtocol((url) => {
     if (url.host === 'audio') {
       const slug = decodeURIComponent(url.pathname.replace(/^\//, ''))

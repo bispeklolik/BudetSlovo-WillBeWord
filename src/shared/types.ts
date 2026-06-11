@@ -22,9 +22,45 @@ export interface ProjectMeta {
   createdAt: string
   updatedAt: string
   audio: ProjectAudio
+  transcription?: {
+    numSpeakers: number
+    enhance: boolean
+  }
+  engine?: {
+    model: string
+    completedAt: string
+  }
 }
 
 export type ImportProgress =
   | { phase: 'repair'; message: string }
   | { phase: 'peaks'; message: string }
   | { phase: 'done'; message: string }
+
+export interface TranscribeOptions {
+  numSpeakers: number
+  enhance: boolean
+}
+
+export type JobStatus =
+  | 'queued'
+  | 'running'
+  | 'done'
+  | 'error'
+  | 'cancelled'
+  | 'interrupted'
+
+export interface JobInfo {
+  id: string
+  kind: 'transcribe'
+  slug: string
+  options?: TranscribeOptions
+  status: JobStatus
+  phase: string
+  percent: number | null
+  error?: string
+  cancelRequested?: boolean
+  createdAt: string
+  startedAt?: string
+  endedAt?: string
+}

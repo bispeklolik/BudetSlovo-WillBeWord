@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ProjectMeta } from '../../../shared/types'
 import { api } from '../api'
 import Waveform from '../components/Waveform'
+import TranscribePanel from '../components/TranscribePanel'
 
 function fmtTime(sec: number): string {
   const t = Math.floor(sec)
@@ -100,9 +101,20 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
         </span>
       </div>
 
-      <div className="transcript-placeholder">
-        <div className="empty-title">Здесь появится текст</div>
-        <div>Расшифровка и синхронный текст — следующие фазы (2–4)</div>
+      <div className="editor-body">
+        {meta.engine?.completedAt ? (
+          <div className="transcript-placeholder">
+            <div className="empty-title">Расшифровка готова</div>
+            <div>Текст с ролями появится здесь на следующем шаге (Фаза 3)</div>
+          </div>
+        ) : (
+          <TranscribePanel
+            meta={meta}
+            onTranscribed={() => {
+              api.getProject(slug).then(setMeta)
+            }}
+          />
+        )}
       </div>
 
       <div className="player">

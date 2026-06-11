@@ -217,6 +217,103 @@ button {
   color: var(--muted);
 }
 
+.editor-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel {
+  margin: auto;
+  width: min(520px, calc(100% - 48px));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.panel-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.panel-note {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.field select {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font: inherit;
+}
+
+.field-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+.job-phase {
+  font-size: 14px;
+}
+
+.job-error {
+  font-size: 13px;
+  color: var(--conf-low-text);
+  background: var(--conf-low-bg);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.progress {
+  height: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 6px;
+  transition: width 0.4s ease;
+}
+
+.progress-fill.indeterminate {
+  position: absolute;
+  width: 30%;
+  animation: indet 1.4s infinite ease-in-out;
+}
+
+@keyframes indet {
+  0% {
+    left: -30%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
 .player {
   flex: 0 0 auto;
   border-top: 1px solid var(--border);

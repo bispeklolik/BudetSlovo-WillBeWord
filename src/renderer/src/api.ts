@@ -19,7 +19,13 @@ const stub: RendererApi = {
   listProjects: async () => [],
   getProject: async () => null,
   getPeaks: async () => null,
-  onImportProgress: () => () => {}
+  onImportProgress: () => () => {},
+  startTranscribe: async () => {
+    throw new Error('Расшифровка доступна только в приложении (Electron)')
+  },
+  cancelJob: async () => null,
+  listJobs: async () => [],
+  onJobUpdate: () => () => {}
 }
 
 export const api: RendererApi = window.api ?? stub

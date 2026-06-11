@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Settings, ProjectMeta, ImportProgress } from '../shared/types'
+import type {
+  Settings,
+  ProjectMeta,
+  ImportProgress,
+  JobInfo,
+  TranscribeOptions
+} from '../shared/types'
 
 const api = {
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('settings:get'),
@@ -18,6 +24,18 @@ const api = {
     ipcRenderer.on('import:progress', handler)
     return () => {
       ipcRenderer.off('import:progress', handler)
+    }
+  },
+
+  startTranscribe: (slug: string, opts: TranscribeOptions): Promise<JobInfo> =>
+    ipcRenderer.invoke('job:start', slug, opts),
+  cancelJob: (id: string): Promise<JobInfo | null> => ipcRenderer.invoke('job:cancel', id),
+  listJobs: (): Promise<JobInfo[]> => ipcRenderer.invoke('job:list'),
+  onJobUpdate: (cb: (j: JobInfo) => void): (() => void) => {
+    const handler = (_e: unknown, j: JobInfo): void => cb(j)
+    ipcRenderer.on('job:update', handler)
+    return () => {
+      ipcRenderer.off('job:update', handler)
     }
   }
 }
