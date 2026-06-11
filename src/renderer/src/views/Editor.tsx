@@ -3,6 +3,7 @@ import type { ProjectMeta } from '../../../shared/types'
 import { api } from '../api'
 import Waveform from '../components/Waveform'
 import TranscribePanel from '../components/TranscribePanel'
+import TranscriptView from '../components/TranscriptView'
 
 function fmtTime(sec: number): string {
   const t = Math.floor(sec)
@@ -102,10 +103,11 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
       </div>
 
       <div className="editor-body">
-        {meta.engine?.completedAt ? (
+        {meta.turns && meta.turns.length > 0 ? (
+          <TranscriptView meta={meta} />
+        ) : meta.engine?.completedAt ? (
           <div className="transcript-placeholder">
-            <div className="empty-title">Расшифровка готова</div>
-            <div>Текст с ролями появится здесь на следующем шаге (Фаза 3)</div>
+            <div className="empty-title">Собираю текст…</div>
           </div>
         ) : (
           <TranscribePanel

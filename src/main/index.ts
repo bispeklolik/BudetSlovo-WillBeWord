@@ -6,9 +6,11 @@ import {
   createProjectFromFile,
   listProjects,
   getProject,
+  saveProject,
   readPeaks,
   projectDir
 } from './project/store'
+import { mergeEngineOutputs } from './project/merge'
 import {
   initQueue,
   setJobNotifier,
@@ -86,7 +88,22 @@ ipcMain.handle('project:import', async () => {
 })
 
 ipcMain.handle('project:list', () => listProjects())
-ipcMain.handle('project:get', (_e, slug: string) => getProject(slug))
+ipcMain.handle('project:get', (_e, slug: string) => {
+  const meta = getProject(slug)
+  // Ленивый merge: расшифровка есть, а слитого транскрипта ещё нет
+  // (например, движок отработал до появления этой функции).
+  if (meta?.engine?.completedAt && !meta.turns) {
+    try {
+      const merged = mergeEngineOutputs(slug)
+      meta.speakers = merged.speakers
+      meta.turns = merged.turns
+      saveProject(meta)
+    } catch {
+      // нет файлов движка — отдадим как есть
+    }
+  }
+  return meta
+})
 ipcMain.handle('project:peaks', (_e, slug: string) => readPeaks(slug))
 
 // ---------- задачи расшифровки ----------

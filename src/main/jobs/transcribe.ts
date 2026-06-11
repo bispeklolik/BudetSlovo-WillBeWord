@@ -3,6 +3,7 @@ import { createWriteStream, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { ENGINE_EXE, ENGINE_DIR, MODELS_DIR, STT_TEMP } from '../paths'
 import { projectDir, getProject, saveProject } from '../project/store'
+import { mergeEngineOutputs } from '../project/merge'
 import type { JobInfo } from '../../shared/types'
 
 const procs = new Map<string, ChildProcess>()
@@ -152,6 +153,13 @@ export function runTranscribe(
             enhance: job.options?.enhance !== false
           }
           fresh.engine = { model: 'large-v3', completedAt: new Date().toISOString() }
+          try {
+            const merged = mergeEngineOutputs(job.slug)
+            fresh.speakers = merged.speakers
+            fresh.turns = merged.turns
+          } catch (err) {
+            log.write('\n[slovo] merge failed: ' + String(err) + '\n')
+          }
           saveProject(fresh)
         }
         resolve()

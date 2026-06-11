@@ -14,6 +14,31 @@ export interface ProjectAudio {
   peaks: { file: string; perSec: number }
 }
 
+export interface Word {
+  id: number
+  /** Секунды начала/конца и уверенность — отсутствуют у вставленных слов. */
+  s?: number
+  e?: number
+  p?: number
+  t: string
+  /** Исходный текст движка, если слово правили. */
+  t0?: string
+}
+
+export interface Turn {
+  id: string
+  spk: string
+  startSec: number
+  words: Word[]
+}
+
+export interface SpeakerInfo {
+  id: string
+  engineLabel: string
+  name: string
+  colorKey: string
+}
+
 export interface ProjectMeta {
   version: 1
   id: string
@@ -30,6 +55,8 @@ export interface ProjectMeta {
     model: string
     completedAt: string
   }
+  speakers?: SpeakerInfo[]
+  turns?: Turn[]
 }
 
 export type ImportProgress =
