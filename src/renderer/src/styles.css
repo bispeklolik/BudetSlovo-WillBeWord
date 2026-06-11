@@ -362,6 +362,16 @@ button {
   box-shadow: inset 0 -2px 0 var(--conf-low-line);
 }
 
+.word.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-follow {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .player {
   flex: 0 0 auto;
   border-top: 1px solid var(--border);

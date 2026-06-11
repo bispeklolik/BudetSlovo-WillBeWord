@@ -1,13 +1,28 @@
 import { useEffect, useRef } from 'react'
 
+export interface Lane {
+  startFrac: number
+  endFrac: number
+  colorKey: string
+}
+
 interface Props {
   peaks: Int8Array | null
   durationSec: number
   currentTime: number
+  lanes?: Lane[]
   onSeek: (sec: number) => void
 }
 
-export default function Waveform({ peaks, durationSec, currentTime, onSeek }: Props): React.JSX.Element {
+const LANE_H = 5
+
+export default function Waveform({
+  peaks,
+  durationSec,
+  currentTime,
+  lanes,
+  onSeek
+}: Props): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -28,28 +43,41 @@ export default function Waveform({ peaks, durationSec, currentTime, onSeek }: Pr
       if (!ctx) return
       ctx.scale(dpr, dpr)
       ctx.clearRect(0, 0, w, h)
-      const color = getComputedStyle(document.documentElement).getPropertyValue('--wave').trim() || '#888'
-      ctx.fillStyle = color
-      if (!peaks || peaks.length < 2) {
-        ctx.fillRect(0, h / 2, w, 1)
-        return
-      }
-      const buckets = peaks.length / 2
-      const mid = h / 2
-      for (let x = 0; x < w; x++) {
-        const b0 = Math.floor((x / w) * buckets)
-        const b1 = Math.max(b0 + 1, Math.floor(((x + 1) / w) * buckets))
-        let min = 127
-        let max = -128
-        for (let b = b0; b < b1 && b < buckets; b++) {
-          const lo = peaks[b * 2]
-          const hi = peaks[b * 2 + 1]
-          if (lo < min) min = lo
-          if (hi > max) max = hi
+
+      const css = getComputedStyle(document.documentElement)
+      const waveH = lanes && lanes.length > 0 ? h - LANE_H - 3 : h
+
+      ctx.fillStyle = css.getPropertyValue('--wave').trim() || '#888'
+      if (peaks && peaks.length >= 2) {
+        const buckets = peaks.length / 2
+        const mid = waveH / 2
+        for (let x = 0; x < w; x++) {
+          const b0 = Math.floor((x / w) * buckets)
+          const b1 = Math.max(b0 + 1, Math.floor(((x + 1) / w) * buckets))
+          let min = 127
+          let max = -128
+          for (let b = b0; b < b1 && b < buckets; b++) {
+            const lo = peaks[b * 2]
+            const hi = peaks[b * 2 + 1]
+            if (lo < min) min = lo
+            if (hi > max) max = hi
+          }
+          const y1 = mid - (max / 128) * (mid - 2)
+          const y2 = mid - (min / 128) * (mid - 2)
+          ctx.fillRect(x, y1, 1, Math.max(1, y2 - y1))
         }
-        const y1 = mid - (max / 128) * (mid - 2)
-        const y2 = mid - (min / 128) * (mid - 2)
-        ctx.fillRect(x, y1, 1, Math.max(1, y2 - y1))
+      } else {
+        ctx.fillRect(0, waveH / 2, w, 1)
+      }
+
+      if (lanes && lanes.length > 0) {
+        const y = h - LANE_H
+        for (const lane of lanes) {
+          const x0 = lane.startFrac * w
+          const x1 = Math.max(x0 + 1, lane.endFrac * w)
+          ctx.fillStyle = css.getPropertyValue('--' + lane.colorKey).trim() || '#888'
+          ctx.fillRect(x0, y, x1 - x0, LANE_H)
+        }
       }
     }
 
@@ -57,7 +85,7 @@ export default function Waveform({ peaks, durationSec, currentTime, onSeek }: Pr
     const ro = new ResizeObserver(draw)
     ro.observe(wrap)
     return () => ro.disconnect()
-  }, [peaks])
+  }, [peaks, lanes])
 
   const playheadPct = durationSec > 0 ? Math.min(100, (currentTime / durationSec) * 100) : 0
 

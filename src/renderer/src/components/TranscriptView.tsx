@@ -1,4 +1,5 @@
-import { Virtuoso } from 'react-virtuoso'
+import { useEffect, useRef } from 'react'
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import type { ProjectMeta, Turn, Word } from '../../../shared/types'
 
 function fmtTime(sec: number): string {
@@ -20,16 +21,36 @@ function confClass(w: Word): string {
 
 interface Props {
   meta: ProjectMeta
+  activeWordId: number | null
+  activeTurnIndex: number | null
+  follow: boolean
+  onWordClick: (w: Word) => void
+  onUserScroll: () => void
 }
 
-export default function TranscriptView({ meta }: Props): React.JSX.Element {
+export default function TranscriptView({
+  meta,
+  activeWordId,
+  activeTurnIndex,
+  follow,
+  onWordClick,
+  onUserScroll
+}: Props): React.JSX.Element {
   const turns = meta.turns ?? []
+  const ref = useRef<VirtuosoHandle>(null)
+
   const speakerName = (spk: string): string =>
     meta.speakers?.find((s) => s.id === spk)?.name ?? spk
   const speakerColor = (spk: string): string => {
     const key = meta.speakers?.find((s) => s.id === spk)?.colorKey ?? 'spk1'
     return `var(--${key})`
   }
+
+  useEffect(() => {
+    if (follow && activeTurnIndex !== null && ref.current) {
+      ref.current.scrollToIndex({ index: activeTurnIndex, align: 'center', behavior: 'smooth' })
+    }
+  }, [activeTurnIndex, follow])
 
   const renderTurn = (_index: number, turn: Turn): React.JSX.Element => (
     <div className="turn" data-turn={turn.id}>
@@ -38,7 +59,12 @@ export default function TranscriptView({ meta }: Props): React.JSX.Element {
       </div>
       <p className="turn-text">
         {turn.words.map((w) => (
-          <span key={w.id} className={'word' + confClass(w)} data-word={w.id}>
+          <span
+            key={w.id}
+            className={'word' + confClass(w) + (w.id === activeWordId ? ' active' : '')}
+            data-word={w.id}
+            onClick={() => onWordClick(w)}
+          >
             {w.t}{' '}
           </span>
         ))}
@@ -47,9 +73,11 @@ export default function TranscriptView({ meta }: Props): React.JSX.Element {
   )
 
   return (
-    <div className="transcript" data-testid="transcript">
+    <div className="transcript" data-testid="transcript" onWheel={onUserScroll}>
       <Virtuoso
+        ref={ref}
         data={turns}
+        context={{ activeWordId }}
         itemContent={renderTurn}
         computeItemKey={(_i, t) => t.id}
         increaseViewportBy={600}
