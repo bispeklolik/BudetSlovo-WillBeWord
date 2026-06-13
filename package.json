@@ -21,6 +21,7 @@
     "vite": "^7.3.5"
   },
   "dependencies": {
+    "docx": "^9.7.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-virtuoso": "^4.18.7",

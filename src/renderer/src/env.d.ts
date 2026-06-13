@@ -21,6 +21,11 @@ export interface RendererApi {
     turns: Turn[],
     speakers: SpeakerInfo[]
   ) => Promise<ProjectMeta | null>
+  exportTranscript: (
+    slug: string,
+    format: 'docx' | 'md' | 'txt',
+    highlight: boolean
+  ) => Promise<string | null>
   onImportProgress: (cb: (p: ImportProgress) => void) => () => void
   startTranscribe: (slug: string, opts: TranscribeOptions) => Promise<JobInfo>
   cancelJob: (id: string) => Promise<JobInfo | null>

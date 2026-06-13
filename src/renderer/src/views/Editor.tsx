@@ -7,6 +7,7 @@ import { api } from '../api'
 import Waveform, { type Lane } from '../components/Waveform'
 import TranscribePanel from '../components/TranscribePanel'
 import TranscriptView from '../components/TranscriptView'
+import ExportMenu from '../components/ExportMenu'
 
 function fmtTime(sec: number): string {
   const t = Math.floor(sec)
@@ -260,6 +261,11 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
           {meta.audio.repairedPrefixBytes > 0 && ' · файл починен при импорте'}
           {hasText && (dirty ? ' · сохраняю…' : ' · сохранено')}
         </span>
+        {hasText && (
+          <div style={{ marginLeft: 'auto' }}>
+            <ExportMenu slug={slug} />
+          </div>
+        )}
       </div>
 
       <div className="editor-body">

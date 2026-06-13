@@ -35,6 +35,12 @@ const api = {
     }
   },
 
+  exportTranscript: (
+    slug: string,
+    format: 'docx' | 'md' | 'txt',
+    highlight: boolean
+  ): Promise<string | null> => ipcRenderer.invoke('export:run', slug, format, highlight),
+
   startTranscribe: (slug: string, opts: TranscribeOptions): Promise<JobInfo> =>
     ipcRenderer.invoke('job:start', slug, opts),
   cancelJob: (id: string): Promise<JobInfo | null> => ipcRenderer.invoke('job:cancel', id),

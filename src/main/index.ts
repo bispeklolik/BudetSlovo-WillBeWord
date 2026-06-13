@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { join } from 'path'
 import { DATA_DIR, loadSettings, saveSettings } from './settings'
 import { registerMediaScheme, installMediaProtocol } from './protocol'
@@ -12,6 +12,7 @@ import {
   projectDir
 } from './project/store'
 import { mergeEngineOutputs } from './project/merge'
+import { exportTranscript, type ExportFormat } from './export'
 import {
   initQueue,
   setJobNotifier,
@@ -118,6 +119,26 @@ ipcMain.handle('job:start', (_e, slug: string, opts: TranscribeOptions) =>
 )
 ipcMain.handle('job:cancel', (_e, id: string) => cancelJob(id))
 ipcMain.handle('job:list', () => listJobs())
+
+// ---------- экспорт ----------
+ipcMain.handle(
+  'export:run',
+  async (_e, slug: string, format: ExportFormat, highlight: boolean) => {
+    if (!win) return null
+    const meta = getProject(slug)
+    if (!meta) return null
+    const ext = format
+    const res = await dialog.showSaveDialog(win, {
+      title: 'Сохранить расшифровку',
+      defaultPath: join(projectDir(slug), `${meta.title}.${ext}`),
+      filters: [{ name: ext.toUpperCase(), extensions: [ext] }]
+    })
+    if (res.canceled || !res.filePath) return null
+    await exportTranscript(meta, res.filePath, format, highlight)
+    shell.showItemInFolder(res.filePath)
+    return res.filePath
+  }
+)
 
 app.whenReady().then(() => {
   initQueue()

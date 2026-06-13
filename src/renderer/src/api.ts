@@ -20,6 +20,7 @@ const stub: RendererApi = {
   getProject: async () => null,
   getPeaks: async () => null,
   saveTranscript: async () => null,
+  exportTranscript: async () => null,
   onImportProgress: () => () => {},
   startTranscribe: async () => {
     throw new Error('Расшифровка доступна только в приложении (Electron)')
