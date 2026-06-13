@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import type { ProjectMeta, Turn, Word } from '../../../shared/types'
 
@@ -26,24 +26,26 @@ interface Props {
   follow: boolean
   onWordClick: (w: Word) => void
   onUserScroll: () => void
+  onCommitWord: (turnId: string, wordId: number, text: string) => void
+  onInsertBefore: (turnId: string, index: number) => number
+  onRenameSpeaker: (speakerId: string, name: string) => void
+  onSetTurnSpeaker: (turnId: string, spk: string) => void
+  onMergeTurn: (turnId: string) => void
 }
 
-export default function TranscriptView({
-  meta,
-  activeWordId,
-  activeTurnIndex,
-  follow,
-  onWordClick,
-  onUserScroll
-}: Props): React.JSX.Element {
+export default function TranscriptView(props: Props): React.JSX.Element {
+  const { meta, activeWordId, activeTurnIndex, follow } = props
   const turns = meta.turns ?? []
   const ref = useRef<VirtuosoHandle>(null)
 
-  const speakerName = (spk: string): string =>
-    meta.speakers?.find((s) => s.id === spk)?.name ?? spk
-  const speakerColor = (spk: string): string => {
-    const key = meta.speakers?.find((s) => s.id === spk)?.colorKey ?? 'spk1'
-    return `var(--${key})`
+  const [editId, setEditId] = useState<number | null>(null)
+  const [draft, setDraft] = useState('')
+  const [spkEdit, setSpkEdit] = useState<string | null>(null)
+  const [spkDraft, setSpkDraft] = useState('')
+
+  const speaker = (spk: string): { name: string; color: string } => {
+    const s = meta.speakers?.find((s) => s.id === spk)
+    return { name: s?.name ?? spk, color: `var(--${s?.colorKey ?? 'spk1'})` }
   }
 
   useEffect(() => {
@@ -52,32 +54,149 @@ export default function TranscriptView({
     }
   }, [activeTurnIndex, follow])
 
-  const renderTurn = (_index: number, turn: Turn): React.JSX.Element => (
-    <div className="turn" data-turn={turn.id}>
-      <div className="turn-head" style={{ color: speakerColor(turn.spk) }}>
-        {speakerName(turn.spk)} — {fmtTime(turn.startSec)}
-      </div>
-      <p className="turn-text">
-        {turn.words.map((w) => (
-          <span
-            key={w.id}
-            className={'word' + confClass(w) + (w.id === activeWordId ? ' active' : '')}
-            data-word={w.id}
-            onClick={() => onWordClick(w)}
+  const startEdit = (w: Word): void => {
+    setEditId(w.id)
+    setDraft(w.t)
+  }
+  const commit = (turnId: string): void => {
+    if (editId !== null) props.onCommitWord(turnId, editId, draft)
+    setEditId(null)
+  }
+
+  const renderTurn = (index: number, turn: Turn): React.JSX.Element => {
+    const sp = speaker(turn.spk)
+    return (
+      <div className="turn" data-turn={turn.id}>
+        <div className="turn-head">
+          {spkEdit === turn.spk ? (
+            <input
+              className="spk-input"
+              value={spkDraft}
+              autoFocus
+              onChange={(e) => setSpkDraft(e.target.value)}
+              onBlur={() => {
+                props.onRenameSpeaker(turn.spk, spkDraft.trim() || sp.name)
+                setSpkEdit(null)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                if (e.key === 'Escape') setSpkEdit(null)
+              }}
+            />
+          ) : (
+            <button
+              className="spk-name"
+              style={{ color: sp.color }}
+              title="Переименовать говорящего"
+              onClick={() => {
+                setSpkEdit(turn.spk)
+                setSpkDraft(sp.name)
+              }}
+            >
+              {sp.name}
+            </button>
+          )}
+          <span className="turn-time">{fmtTime(turn.startSec)}</span>
+          {(meta.speakers?.length ?? 0) > 1 && (
+            <select
+              className="turn-spk"
+              value={turn.spk}
+              title="Кто говорит в этой реплике"
+              onChange={(e) => props.onSetTurnSpeaker(turn.id, e.target.value)}
+            >
+              {meta.speakers?.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          )}
+          {index > 0 && (
+            <button
+              className="turn-merge"
+              title="Объединить с предыдущей репликой"
+              onClick={() => props.onMergeTurn(turn.id)}
+            >
+              ⌃ объединить
+            </button>
+          )}
+        </div>
+        <p className="turn-text">
+          {turn.words.map((w, i) => (
+            <span className="wtok" key={w.id}>
+              <button
+                className="ins"
+                title="Вставить слово"
+                tabIndex={-1}
+                onClick={() => {
+                  const id = props.onInsertBefore(turn.id, i)
+                  setEditId(id)
+                  setDraft('')
+                }}
+              >
+                +
+              </button>
+              {editId === w.id ? (
+                <input
+                  className="word-input"
+                  value={draft}
+                  autoFocus
+                  onFocus={(e) => e.currentTarget.select()}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onBlur={() => commit(turn.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                    else if (e.key === 'Escape') setEditId(null)
+                  }}
+                />
+              ) : (
+                <span
+                  className={
+                    'word' + confClass(w) + (w.id === activeWordId ? ' active' : '')
+                  }
+                  data-word={w.id}
+                  title={w.t0 !== undefined ? 'исходно: ' + w.t0.trim() : undefined}
+                  onClick={() => props.onWordClick(w)}
+                  onDoubleClick={() => startEdit(w)}
+                >
+                  {w.t}
+                  <button
+                    className="wdel"
+                    title="Удалить слово"
+                    tabIndex={-1}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      props.onCommitWord(turn.id, w.id, '')
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              )}{' '}
+            </span>
+          ))}
+          <button
+            className="ins ins-end"
+            title="Добавить слово в конец"
+            tabIndex={-1}
+            onClick={() => {
+              const id = props.onInsertBefore(turn.id, turn.words.length)
+              setEditId(id)
+              setDraft('')
+            }}
           >
-            {w.t}{' '}
-          </span>
-        ))}
-      </p>
-    </div>
-  )
+            +
+          </button>
+        </p>
+      </div>
+    )
+  }
 
   return (
-    <div className="transcript" data-testid="transcript" onWheel={onUserScroll}>
+    <div className="transcript" data-testid="transcript" onWheel={props.onUserScroll}>
       <Virtuoso
         ref={ref}
         data={turns}
-        context={{ activeWordId }}
         itemContent={renderTurn}
         computeItemKey={(_i, t) => t.id}
         increaseViewportBy={600}

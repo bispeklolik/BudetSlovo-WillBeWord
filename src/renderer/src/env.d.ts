@@ -4,7 +4,9 @@ import type {
   ProjectMeta,
   ImportProgress,
   JobInfo,
-  TranscribeOptions
+  TranscribeOptions,
+  Turn,
+  SpeakerInfo
 } from '../../shared/types'
 
 export interface RendererApi {
@@ -14,6 +16,11 @@ export interface RendererApi {
   listProjects: () => Promise<ProjectMeta[]>
   getProject: (slug: string) => Promise<ProjectMeta | null>
   getPeaks: (slug: string) => Promise<Uint8Array | null>
+  saveTranscript: (
+    slug: string,
+    turns: Turn[],
+    speakers: SpeakerInfo[]
+  ) => Promise<ProjectMeta | null>
   onImportProgress: (cb: (p: ImportProgress) => void) => () => void
   startTranscribe: (slug: string, opts: TranscribeOptions) => Promise<JobInfo>
   cancelJob: (id: string) => Promise<JobInfo | null>

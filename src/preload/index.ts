@@ -4,7 +4,9 @@ import type {
   ProjectMeta,
   ImportProgress,
   JobInfo,
-  TranscribeOptions
+  TranscribeOptions,
+  Turn,
+  SpeakerInfo
 } from '../shared/types'
 
 const api = {
@@ -18,6 +20,12 @@ const api = {
     ipcRenderer.invoke('project:get', slug),
   getPeaks: (slug: string): Promise<Uint8Array | null> =>
     ipcRenderer.invoke('project:peaks', slug),
+  saveTranscript: (
+    slug: string,
+    turns: Turn[],
+    speakers: SpeakerInfo[]
+  ): Promise<ProjectMeta | null> =>
+    ipcRenderer.invoke('project:saveTranscript', slug, turns, speakers),
 
   onImportProgress: (cb: (p: ImportProgress) => void): (() => void) => {
     const handler = (_e: unknown, p: ImportProgress): void => cb(p)

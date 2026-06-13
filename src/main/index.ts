@@ -7,6 +7,7 @@ import {
   listProjects,
   getProject,
   saveProject,
+  saveTranscript,
   readPeaks,
   projectDir
 } from './project/store'
@@ -18,7 +19,7 @@ import {
   cancelJob,
   listJobs
 } from './jobs/queue'
-import type { Settings, TranscribeOptions } from '../shared/types'
+import type { Settings, TranscribeOptions, Turn, SpeakerInfo } from '../shared/types'
 
 // Все данные Chromium-профиля строго на D: — C: почти полон.
 app.setPath('userData', join(DATA_DIR, 'electron'))
@@ -105,6 +106,11 @@ ipcMain.handle('project:get', (_e, slug: string) => {
   return meta
 })
 ipcMain.handle('project:peaks', (_e, slug: string) => readPeaks(slug))
+ipcMain.handle(
+  'project:saveTranscript',
+  (_e, slug: string, turns: Turn[], speakers: SpeakerInfo[]) =>
+    saveTranscript(slug, turns, speakers)
+)
 
 // ---------- задачи расшифровки ----------
 ipcMain.handle('job:start', (_e, slug: string, opts: TranscribeOptions) =>

@@ -329,21 +329,10 @@ button {
   padding: 10px 24px 14px;
 }
 
-.turn-head {
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
 .turn-text {
   margin: 0;
   font-size: 15px;
-  line-height: 1.75;
-}
-
-.word {
-  border-radius: 3px;
-  cursor: pointer;
+  line-height: 1.85;
 }
 
 .word:hover {
@@ -370,6 +359,143 @@ button {
 .btn-follow {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* ---------- правка транскрипта ---------- */
+
+.turn-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.spk-name {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.spk-name:hover {
+  text-decoration: underline;
+}
+
+.spk-input {
+  font-size: 13px;
+  font-weight: 600;
+  width: 140px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.turn-time {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.turn-spk,
+.turn-merge {
+  font-size: 12px;
+  color: var(--muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 2px 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.turn:hover .turn-spk,
+.turn:hover .turn-merge {
+  opacity: 1;
+}
+
+.turn-spk {
+  border-color: var(--border);
+}
+
+.turn-merge:hover {
+  color: var(--accent);
+  border-color: var(--border);
+}
+
+.wtok {
+  position: relative;
+  white-space: nowrap;
+}
+
+.word {
+  position: relative;
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0 1px;
+  white-space: normal;
+}
+
+.ins {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0;
+  padding: 0 1px;
+  width: 0;
+  overflow: hidden;
+}
+
+.wtok:hover .ins {
+  opacity: 0.7;
+  width: auto;
+}
+
+.ins-end {
+  width: auto;
+  opacity: 0;
+}
+
+.turn:hover .ins-end {
+  opacity: 0.5;
+}
+
+.wdel {
+  display: none;
+  border: none;
+  background: var(--conf-low-line);
+  color: #fff;
+  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  line-height: 12px;
+  font-size: 11px;
+  padding: 0;
+  margin-left: 2px;
+  cursor: pointer;
+  vertical-align: super;
+}
+
+.word:hover .wdel {
+  display: inline-block;
+}
+
+.word-input {
+  font: inherit;
+  font-size: 15px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 0 3px;
+  width: 8ch;
+  min-width: 4ch;
 }
 
 .player {

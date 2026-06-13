@@ -1,10 +1,19 @@
-import { mkdirSync, readFileSync, writeFileSync, renameSync, readdirSync, existsSync } from 'fs'
+import {
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  renameSync,
+  readdirSync,
+  existsSync,
+  copyFileSync,
+  unlinkSync
+} from 'fs'
 import { join, basename, extname } from 'path'
 import { randomUUID } from 'crypto'
 import { PROJECTS_DIR } from '../paths'
 import { repairAndRemux } from '../audio/import'
 import { buildPeaks } from '../jobs/peaks'
-import type { ProjectMeta } from '../../shared/types'
+import type { ProjectMeta, Turn, SpeakerInfo } from '../../shared/types'
 
 const TRANSLIT: Record<string, string> = {
   а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i',
@@ -46,16 +55,73 @@ export function projectDir(slug: string): string {
 }
 
 export function getProject(slug: string): ProjectMeta | null {
+  const file = join(projectDir(slug), 'project.json')
   try {
-    return JSON.parse(readFileSync(join(projectDir(slug), 'project.json'), 'utf8'))
+    return JSON.parse(readFileSync(file, 'utf8'))
   } catch {
-    return null
+    // project.json повреждён (например, обрыв питания) — пробуем последний .bak
+    try {
+      return JSON.parse(readFileSync(file + '.bak', 'utf8'))
+    } catch {
+      return null
+    }
   }
 }
 
 export function saveProject(meta: ProjectMeta): void {
   meta.updatedAt = new Date().toISOString()
   writeJsonAtomic(join(projectDir(meta.slug), 'project.json'), meta)
+}
+
+const lastSnapshotAt = new Map<string, number>()
+
+// Сохранение правок транскрипта: .bak (последний хороший) -> атомарная запись
+// -> троттлинг-снапшот в autosave\ (на случай повреждения основного файла).
+export function saveTranscript(
+  slug: string,
+  turns: Turn[],
+  speakers: SpeakerInfo[]
+): ProjectMeta | null {
+  const meta = getProject(slug)
+  if (!meta) return null
+  meta.turns = turns
+  meta.speakers = speakers
+  meta.updatedAt = new Date().toISOString()
+
+  const file = join(projectDir(slug), 'project.json')
+  try {
+    if (existsSync(file)) copyFileSync(file, file + '.bak')
+  } catch {
+    /* .bak не критичен */
+  }
+  writeJsonAtomic(file, meta)
+
+  const now = Date.now()
+  if (now - (lastSnapshotAt.get(slug) ?? 0) > 60000) {
+    lastSnapshotAt.set(slug, now)
+    try {
+      const dir = join(projectDir(slug), 'autosave')
+      mkdirSync(dir, { recursive: true })
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+      writeFileSync(join(dir, stamp + '.json'), JSON.stringify(meta), 'utf8')
+      const files = readdirSync(dir)
+        .filter((f) => f.endsWith('.json'))
+        .sort()
+      while (files.length > 10) {
+        const f = files.shift()
+        if (f) {
+          try {
+            unlinkSync(join(dir, f))
+          } catch {
+            /* игнор */
+          }
+        }
+      }
+    } catch {
+      /* снапшот не критичен */
+    }
+  }
+  return meta
 }
 
 export function listProjects(): ProjectMeta[] {

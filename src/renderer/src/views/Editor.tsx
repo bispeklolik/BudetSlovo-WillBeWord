@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ProjectMeta, Word } from '../../../shared/types'
+import type { Patch } from '../../../shared/patches'
+import { nextWordId } from '../../../shared/patches'
+import { withPatch } from '../editing'
 import { api } from '../api'
 import Waveform, { type Lane } from '../components/Waveform'
 import TranscribePanel from '../components/TranscribePanel'
@@ -33,16 +36,28 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
   const [activeWordId, setActiveWordId] = useState<number | null>(null)
   const [activeTurnIndex, setActiveTurnIndex] = useState<number | null>(null)
   const [follow, setFollow] = useState(true)
+  const [dirty, setDirty] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   const rafRef = useRef(0)
   const indexRef = useRef<IndexEntry[]>([])
+  const undoRef = useRef<ProjectMeta[]>([])
+  const redoRef = useRef<ProjectMeta[]>([])
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const metaRef = useRef<ProjectMeta | null>(null)
+  metaRef.current = meta
+
+  const loadMeta = useCallback((m: ProjectMeta | null): void => {
+    undoRef.current = []
+    redoRef.current = []
+    setMeta(m)
+  }, [])
 
   useEffect(() => {
-    api.getProject(slug).then(setMeta)
+    api.getProject(slug).then(loadMeta)
     api.getPeaks(slug).then((u8) => {
       if (u8) setPeaks(new Int8Array(u8.buffer, u8.byteOffset, u8.byteLength))
     })
-  }, [slug])
+  }, [slug, loadMeta])
 
   // Плоский индекс слов для караоке/seek: бинарный поиск по currentTime.
   useEffect(() => {
@@ -54,6 +69,7 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
         }
       }
     })
+    idx.sort((a, b) => a.s - b.s)
     indexRef.current = idx
   }, [meta])
 
@@ -71,37 +87,76 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
     })
   }, [meta])
 
-  useEffect(() => {
-    const findActive = (t: number): IndexEntry | null => {
-      const idx = indexRef.current
-      if (idx.length === 0) return null
-      let lo = 0
-      let hi = idx.length - 1
-      let candidate = -1
-      while (lo <= hi) {
-        const mid = (lo + hi) >> 1
-        if (idx[mid].s <= t) {
-          candidate = mid
-          lo = mid + 1
-        } else {
-          hi = mid - 1
-        }
-      }
-      if (candidate === -1) return null
-      const entry = idx[candidate]
-      // Слово активно, пока не началось следующее (паузы липнут к предыдущему).
-      return entry
-    }
+  // -------- сохранение (дебаунс) --------
+  const scheduleSave = useCallback(
+    (m: ProjectMeta): void => {
+      setDirty(true)
+      clearTimeout(saveTimer.current)
+      saveTimer.current = setTimeout(() => {
+        api.saveTranscript(slug, m.turns ?? [], m.speakers ?? []).then(() => setDirty(false))
+      }, 700)
+    },
+    [slug]
+  )
 
+  // -------- правки + отмена/повтор --------
+  const edit = useCallback(
+    (patch: Patch): void => {
+      const m = metaRef.current
+      if (!m) return
+      undoRef.current.push(m)
+      if (undoRef.current.length > 60) undoRef.current.shift()
+      redoRef.current = []
+      const next = withPatch(m, patch)
+      setMeta(next)
+      scheduleSave(next)
+    },
+    [scheduleSave]
+  )
+
+  const undo = useCallback((): void => {
+    const m = metaRef.current
+    const prev = undoRef.current.pop()
+    if (!prev || !m) return
+    redoRef.current.push(m)
+    setMeta(prev)
+    scheduleSave(prev)
+  }, [scheduleSave])
+
+  const redo = useCallback((): void => {
+    const m = metaRef.current
+    const nxt = redoRef.current.pop()
+    if (!nxt || !m) return
+    undoRef.current.push(m)
+    setMeta(nxt)
+    scheduleSave(nxt)
+  }, [scheduleSave])
+
+  useEffect(() => {
     const tick = (): void => {
       const a = audioRef.current
       if (a) {
-        const t = a.currentTime
-        setCur(t)
+        setCur(a.currentTime)
         if (!a.paused) {
-          const entry = findActive(t)
-          setActiveWordId((prev) => (entry && entry.wordId !== prev ? entry.wordId : prev))
-          setActiveTurnIndex((prev) => (entry && entry.turnIdx !== prev ? entry.turnIdx : prev))
+          const idx = indexRef.current
+          if (idx.length) {
+            let lo = 0
+            let hi = idx.length - 1
+            let cand = -1
+            const t = a.currentTime
+            while (lo <= hi) {
+              const mid = (lo + hi) >> 1
+              if (idx[mid].s <= t) {
+                cand = mid
+                lo = mid + 1
+              } else hi = mid - 1
+            }
+            if (cand >= 0) {
+              const entry = idx[cand]
+              setActiveWordId((p) => (entry.wordId !== p ? entry.wordId : p))
+              setActiveTurnIndex((p) => (entry.turnIdx !== p ? entry.turnIdx : p))
+            }
+          }
         }
       }
       rafRef.current = requestAnimationFrame(tick)
@@ -116,22 +171,27 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
     if (a.paused) {
       setFollow(true)
       void a.play()
-    } else {
-      a.pause()
-    }
+    } else a.pause()
   }, [])
 
   const skip = useCallback((d: number): void => {
     const a = audioRef.current
-    if (!a) return
-    a.currentTime = Math.max(0, a.currentTime + d)
+    if (a) a.currentTime = Math.max(0, a.currentTime + d)
   }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const el = e.target as HTMLElement | null
       if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA' || el?.isContentEditable) return
-      if (e.code === 'Space') {
+      // e.code (раскладко-независимо): на RU-раскладке e.key для Z = 'я'.
+      if (e.ctrlKey && e.code === 'KeyZ') {
+        e.preventDefault()
+        if (e.shiftKey) redo()
+        else undo()
+      } else if (e.ctrlKey && e.code === 'KeyY') {
+        e.preventDefault()
+        redo()
+      } else if (e.code === 'Space') {
         e.preventDefault()
         togglePlay()
       } else if (e.code === 'ArrowLeft') {
@@ -142,7 +202,7 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [togglePlay, skip])
+  }, [togglePlay, skip, undo, redo])
 
   const seek = (sec: number): void => {
     const a = audioRef.current
@@ -154,6 +214,25 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
     setFollow(true)
     seek(w.s + 0.01)
     setActiveWordId(w.id)
+  }
+
+  // -------- колбэки правок для TranscriptView --------
+  const onCommitWord = (turnId: string, wordId: number, text: string): void => {
+    const m = metaRef.current
+    const turn = m?.turns?.find((t) => t.id === turnId)
+    const w = turn?.words.find((w) => w.id === wordId)
+    if (!w) return
+    const next = text.trim()
+    if (next === w.t) return
+    if (next === '') edit({ op: 'deleteWords', turnId, wordIds: [wordId] })
+    else edit({ op: 'setWordText', turnId, wordId, t: next, t0: w.t0 ?? w.t })
+  }
+  const onInsertBefore = (turnId: string, index: number): number => {
+    const m = metaRef.current
+    if (!m) return -1
+    const id = nextWordId(m)
+    edit({ op: 'insertWords', turnId, atIndex: index, words: [{ id, t: '' }] })
+    return id
   }
 
   const changeRate = (r: number): void => {
@@ -170,18 +249,21 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
     )
   }
 
+  const hasText = (meta.turns?.length ?? 0) > 0
+
   return (
     <main className="editor">
       <div className="editor-head">
         <h1 className="editor-title">{meta.title}</h1>
         <span className="editor-sub">
           {fmtTime(meta.audio.durationSec)}
-          {meta.audio.repairedPrefixBytes > 0 && ' · файл был автоматически починен при импорте'}
+          {meta.audio.repairedPrefixBytes > 0 && ' · файл починен при импорте'}
+          {hasText && (dirty ? ' · сохраняю…' : ' · сохранено')}
         </span>
       </div>
 
       <div className="editor-body">
-        {meta.turns && meta.turns.length > 0 ? (
+        {hasText ? (
           <TranscriptView
             meta={meta}
             activeWordId={activeWordId}
@@ -189,18 +271,18 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
             follow={follow && playing}
             onWordClick={onWordClick}
             onUserScroll={() => setFollow(false)}
+            onCommitWord={onCommitWord}
+            onInsertBefore={onInsertBefore}
+            onRenameSpeaker={(speakerId, name) => edit({ op: 'renameSpeaker', speakerId, name })}
+            onSetTurnSpeaker={(turnId, spk) => edit({ op: 'setTurnSpeaker', turnId, spk })}
+            onMergeTurn={(turnId) => edit({ op: 'mergeTurnIntoPrev', turnId })}
           />
         ) : meta.engine?.completedAt ? (
           <div className="transcript-placeholder">
             <div className="empty-title">Собираю текст…</div>
           </div>
         ) : (
-          <TranscribePanel
-            meta={meta}
-            onTranscribed={() => {
-              api.getProject(slug).then(setMeta)
-            }}
-          />
+          <TranscribePanel meta={meta} onTranscribed={() => api.getProject(slug).then(loadMeta)} />
         )}
       </div>
 
