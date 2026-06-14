@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from 'child_process'
-import { createWriteStream, existsSync, mkdirSync } from 'fs'
+import { createWriteStream, existsSync, mkdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { ENGINE_EXE, ENGINE_DIR, MODELS_DIR, STT_TEMP } from '../paths'
 import { projectDir, getProject, saveProject } from '../project/store'
@@ -12,6 +12,18 @@ export function killJobProcess(jobId: string): void {
   const p = procs.get(jobId)
   if (p?.pid) {
     spawnSync('taskkill', ['/PID', String(p.pid), '/T', '/F'], { windowsHide: true })
+  }
+}
+
+// Результат готов, если записан непустой audio.json. Движок (PyInstaller+CUDA)
+// иногда падает на teardown с кодом 0xC0000409 уже ПОСЛЕ записи всех файлов —
+// такой результат полноценен, и выбрасывать его нельзя.
+function outputsValid(engineOut: string): boolean {
+  try {
+    const data = JSON.parse(readFileSync(join(engineOut, 'audio.json'), 'utf8'))
+    return Array.isArray(data.segments) && data.segments.length > 0
+  } catch {
+    return false
   }
 }
 
@@ -133,25 +145,25 @@ export function runTranscribe(
 
     child.on('close', (code) => {
       procs.delete(job.id)
-      log.end()
       const elapsed = Date.now() - startedAt
 
       if (job.cancelRequested) {
+        log.end()
         resolve()
         return
       }
-      if (code === 0) {
-        const produced = existsSync(join(engineOut, 'audio.json'))
-        if (!produced) {
-          reject(new Error('Движок завершился успешно, но результат не найден в папке engine.'))
-          return
+
+      // Успех = записан валидный результат (код выхода вторичен: движок может
+      // упасть на завершении уже после записи файлов).
+      if (outputsValid(engineOut)) {
+        if (code !== 0) {
+          log.write(
+            `\n[slovo] движок вышел с кодом ${code}, но результат записан полностью — считаем успехом\n`
+          )
         }
         const fresh = getProject(job.slug)
         if (fresh) {
-          fresh.transcription = {
-            numSpeakers: n,
-            enhance: job.options?.enhance !== false
-          }
+          fresh.transcription = { numSpeakers: n, enhance: job.options?.enhance !== false }
           fresh.engine = { model: 'large-v3', completedAt: new Date().toISOString() }
           try {
             const merged = mergeEngineOutputs(job.slug)
@@ -162,9 +174,12 @@ export function runTranscribe(
           }
           saveProject(fresh)
         }
+        log.end()
         resolve()
         return
       }
+
+      log.end()
       if (elapsed < 3000) {
         reject(
           new Error(
@@ -173,7 +188,9 @@ export function runTranscribe(
         )
         return
       }
-      reject(new Error(`Движок завершился с ошибкой (код ${code}). Подробности: job.log в папке проекта.`))
+      reject(
+        new Error(`Движок завершился с ошибкой (код ${code}), результат не записан. Подробности: job.log в папке проекта.`)
+      )
     })
   })
 }

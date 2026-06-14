@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { join } from 'path'
+import { existsSync } from 'fs'
 import { DATA_DIR, loadSettings, saveSettings } from './settings'
 import { registerMediaScheme, installMediaProtocol } from './protocol'
 import {
@@ -92,16 +93,20 @@ ipcMain.handle('project:import', async () => {
 ipcMain.handle('project:list', () => listProjects())
 ipcMain.handle('project:get', (_e, slug: string) => {
   const meta = getProject(slug)
-  // Ленивый merge: расшифровка есть, а слитого транскрипта ещё нет
-  // (например, движок отработал до появления этой функции).
-  if (meta?.engine?.completedAt && !meta.turns) {
+  // Ленивый merge: результат движка на диске есть, а слитого транскрипта нет.
+  // Срабатывает и когда задача не финализировалась (краш движка на teardown
+  // уже после записи файлов) — результат не теряется.
+  if (meta && !meta.turns && existsSync(join(projectDir(slug), 'engine', 'audio.json'))) {
     try {
       const merged = mergeEngineOutputs(slug)
       meta.speakers = merged.speakers
       meta.turns = merged.turns
+      if (!meta.engine) {
+        meta.engine = { model: 'large-v3', completedAt: new Date().toISOString() }
+      }
       saveProject(meta)
     } catch {
-      // нет файлов движка — отдадим как есть
+      // файлы движка неполные — отдадим как есть
     }
   }
   return meta
