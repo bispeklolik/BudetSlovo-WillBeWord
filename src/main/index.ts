@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
+import { autoUpdater } from 'electron-updater'
 import { DATA_DIR, loadSettings, saveSettings } from './settings'
 import { registerMediaScheme, installMediaProtocol } from './protocol'
 import {
@@ -161,6 +162,13 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+
+  // Автообновление: только в собранном приложении (в dev нет app-update.yml).
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      console.error('[updater]', err)
+    })
+  }
 
   // Dev-хук: headless-проверка пайплайна импорта без диалога.
   const devImport = process.env['SLOVO_IMPORT']
