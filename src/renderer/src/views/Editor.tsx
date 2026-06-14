@@ -38,6 +38,7 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
   const [activeTurnIndex, setActiveTurnIndex] = useState<number | null>(null)
   const [follow, setFollow] = useState(true)
   const [dirty, setDirty] = useState(false)
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const rafRef = useRef(0)
   const indexRef = useRef<IndexEntry[]>([])
@@ -59,6 +60,26 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
       if (u8) setPeaks(new Int8Array(u8.buffer, u8.byteOffset, u8.byteLength))
     })
   }, [slug, loadMeta])
+
+  // Грузим аудио целиком в Blob (через media://) и проигрываем из него:
+  // Blob seekable в любую точку, в отличие от потокового протокола.
+  useEffect(() => {
+    let url: string | null = null
+    let cancelled = false
+    setAudioUrl(null)
+    fetch(`media://audio/${slug}`)
+      .then((r) => r.blob())
+      .then((b) => {
+        if (cancelled) return
+        url = URL.createObjectURL(b)
+        setAudioUrl(url)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [slug])
 
   // Плоский индекс слов для караоке/seek: бинарный поиск по currentTime.
   useEffect(() => {
@@ -295,7 +316,7 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
       <div className="player">
         <audio
           ref={audioRef}
-          src={`media://audio/${slug}`}
+          src={audioUrl ?? undefined}
           preload="metadata"
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
