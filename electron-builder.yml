@@ -19,5 +19,6 @@ nsis:
 # owner будет проставлен реальным GitHub-логином перед публикацией.
 publish:
   provider: github
-  owner: PLACEHOLDER_OWNER
-  repo: slovo
+  owner: bispeklolik
+  repo: BudetSlovo-WillBeWord
+  releaseType: release
