@@ -79,6 +79,9 @@ export function runTranscribe(
       '--compute_type', 'float16',
       '--beam_size', '5',
       '--vad_filter', 'True',
+      // Не переносить контекст между сегментами: иначе одна ошибка на трудном
+      // участке отравляет последующие и модель сваливается в бред (англ. мусор).
+      '--condition_on_previous_text', 'False',
       '--diarize', 'pyannote_v3.1',
       '--output_dir', engineOut,
       '--output_format', 'txt', 'srt', 'json',
