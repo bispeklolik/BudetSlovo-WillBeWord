@@ -39,6 +39,7 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
   const [follow, setFollow] = useState(true)
   const [dirty, setDirty] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [reproc, setReproc] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   const rafRef = useRef(0)
   const indexRef = useRef<IndexEntry[]>([])
@@ -282,15 +283,38 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
           {meta.audio.repairedPrefixBytes > 0 && ' · файл починен при импорте'}
           {hasText && (dirty ? ' · сохраняю…' : ' · сохранено')}
         </span>
-        {hasText && (
-          <div style={{ marginLeft: 'auto' }}>
+        {hasText && !reproc && (
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <button
+              className="btn"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Перераспознать запись заново? Текущий текст и правки будут заменены.'
+                  )
+                )
+                  setReproc(true)
+              }}
+            >
+              Перераспознать
+            </button>
             <ExportMenu slug={slug} />
           </div>
         )}
       </div>
 
       <div className="editor-body">
-        {hasText ? (
+        {reproc ? (
+          <TranscribePanel
+            meta={meta}
+            replaceWarning
+            onCancel={() => setReproc(false)}
+            onTranscribed={() => {
+              setReproc(false)
+              api.getProject(slug).then(loadMeta)
+            }}
+          />
+        ) : hasText ? (
           <TranscriptView
             meta={meta}
             activeWordId={activeWordId}

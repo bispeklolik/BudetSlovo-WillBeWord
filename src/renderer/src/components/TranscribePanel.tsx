@@ -17,9 +17,16 @@ function elapsedLabel(j: JobInfo, now: number): string {
 interface Props {
   meta: ProjectMeta
   onTranscribed: () => void
+  onCancel?: () => void
+  replaceWarning?: boolean
 }
 
-export default function TranscribePanel({ meta, onTranscribed }: Props): React.JSX.Element {
+export default function TranscribePanel({
+  meta,
+  onTranscribed,
+  onCancel,
+  replaceWarning
+}: Props): React.JSX.Element {
   const [job, setJob] = useState<JobInfo | null>(null)
   const [numSpeakers, setNumSpeakers] = useState(meta.transcription?.numSpeakers ?? 2)
   const [enhance, setEnhance] = useState(meta.transcription?.enhance ?? true)
@@ -84,7 +91,10 @@ export default function TranscribePanel({ meta, onTranscribed }: Props): React.J
 
   return (
     <div className="panel" data-testid="transcribe-panel">
-      <div className="panel-title">Расшифровать запись</div>
+      <div className="panel-title">{replaceWarning ? 'Перераспознать запись' : 'Расшифровать запись'}</div>
+      {replaceWarning && (
+        <div className="job-error">Текущий текст и правки будут заменены новой расшифровкой.</div>
+      )}
       {job?.status === 'error' && (
         <div className="job-error">Прошлая попытка завершилась ошибкой: {job.error}</div>
       )}
@@ -106,10 +116,15 @@ export default function TranscribePanel({ meta, onTranscribed }: Props): React.J
         <input type="checkbox" checked={enhance} onChange={(e) => setEnhance(e.target.checked)} />
         <span>Чистка звука (помогает с тихой и неразборчивой речью)</span>
       </label>
-      <div>
+      <div style={{ display: 'flex', gap: 8 }}>
         <button className="btn btn-primary" onClick={start} data-testid="start-transcribe">
           Расшифровать
         </button>
+        {onCancel && (
+          <button className="btn" onClick={onCancel}>
+            ← Назад к тексту
+          </button>
+        )}
       </div>
       <div className="panel-note">
         Всё происходит на вашем компьютере: запись никуда не отправляется.
