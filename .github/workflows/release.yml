@@ -11,15 +11,28 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: npm ci
-      # Собирает установщик и публикует его в GitHub Release этого тега.
-      # electron-updater в приложении читает релизы отсюда же.
-      - run: npm run dist:publish
+      # Сборка + публикация в GitHub Release. Публикацию повторяем до 3 раз:
+      # загрузка крупного .exe на uploads.github.com иногда срывается (флаки-сеть),
+      # из-за чего релиз оставался без части ассетов (в т.ч. latest.yml).
+      - name: Build and publish
+        shell: pwsh
+        run: |
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw "build failed" }
+          for ($i = 1; $i -le 3; $i++) {
+            npx electron-builder --publish always
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($i -eq 3) { throw "publish failed after 3 attempts" }
+            Write-Host "publish attempt $i failed, retrying in 20s..."
+            Start-Sleep -Seconds 20
+          }
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
