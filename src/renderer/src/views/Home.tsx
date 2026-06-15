@@ -56,7 +56,7 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
       {projects.length === 0 && !busy ? (
         <div className="empty">
           <div className="empty-title">Пока нет ни одной записи</div>
-          <div>Нажмите «Импортировать запись» и выберите файл с диктофона</div>
+          <div>Нажмите «Импортировать запись» и выберите аудио- или видеофайл</div>
         </div>
       ) : (
         <div className="project-grid">

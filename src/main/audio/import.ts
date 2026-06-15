@@ -1,4 +1,4 @@
-import { openSync, readSync, closeSync, createReadStream, createWriteStream, existsSync, unlinkSync, copyFileSync } from 'fs'
+import { openSync, readSync, closeSync, createReadStream, createWriteStream, existsSync, unlinkSync } from 'fs'
 import { spawnSync } from 'child_process'
 import { join } from 'path'
 import { pipeline } from 'stream/promises'
@@ -20,18 +20,50 @@ function findFtyp(path: string): number {
   return -1
 }
 
-export interface ImportResult {
-  prefixBytes: number
+interface Probe {
+  hasAudio: boolean
+  hasVideo: boolean
 }
 
-// Чинит контейнер при необходимости и ремуксит с faststart (moov в начало -->
-// быстрый старт и точный seek). Результат: <destDir>\audio.m4a
-export async function repairAndRemux(src: string, destDir: string): Promise<ImportResult> {
+// Определяем дорожки файла. `ffmpeg -i` без указания выхода печатает сведения о
+// потоках в stderr и завершается с кодом 1 — это ожидаемо, парсим stderr.
+// Обложку альбома ffmpeg помечает как Video ... (attached pic) — это не видео.
+function probe(src: string): Probe {
+  const res = spawnSync(FFMPEG, ['-hide_banner', '-nostdin', '-i', src], {
+    windowsHide: true,
+    encoding: 'utf8'
+  })
+  const err = res.stderr || ''
+  const hasAudio = /Stream #\d+:\d+.*: Audio:/.test(err)
+  const videoLines = err.match(/Stream #\d+:\d+.*: Video:[^\n]*/g) || []
+  const hasVideo = videoLines.some((l) => !/attached pic/i.test(l))
+  return { hasAudio, hasVideo }
+}
+
+export interface ImportResult {
+  prefixBytes: number
+  fromVideo: boolean
+}
+
+// Универсальная подготовка медиа: на входе аудио ИЛИ видео, на выходе всегда
+// чистый <destDir>\audio.m4a (AAC + faststart: быстрый старт и точный seek).
+// - чистое AAC-аудио → копируем дорожку без потерь (быстро);
+// - прочее аудио (mp3/wav/flac/ogg…) и видео → извлекаем/перекодируем звук в AAC.
+export async function repairAndRemux(
+  src: string,
+  destDir: string,
+  onVideoExtract?: () => void
+): Promise<ImportResult> {
+  const { hasAudio, hasVideo } = probe(src)
+  if (!hasAudio) {
+    throw new Error('В файле нет звуковой дорожки — расшифровывать нечего.')
+  }
+
+  // Починка iPhone-префикса (срабатывает только если ftyp смещён мусором).
   const ftyp = findFtyp(src)
   let prefixBytes = 0
   let work = src
   const tmp = join(destDir, '_repaired.tmp.m4a')
-
   if (ftyp >= 6) {
     prefixBytes = ftyp - 4
     await pipeline(createReadStream(src, { start: prefixBytes }), createWriteStream(tmp))
@@ -39,15 +71,36 @@ export async function repairAndRemux(src: string, destDir: string): Promise<Impo
   }
 
   const out = join(destDir, 'audio.m4a')
-  const res = spawnSync(
-    FFMPEG,
-    ['-y', '-v', 'error', '-nostdin', '-i', work, '-c', 'copy', '-movflags', '+faststart', out],
-    { windowsHide: true, encoding: 'utf8' }
-  )
-  if (res.status !== 0 || !existsSync(out)) {
-    // Ремукс не удался (экзотический контейнер) — берём файл как есть.
-    copyFileSync(work, out)
+
+  // Быстрый путь без потерь — только для чистого аудио (копия AAC-дорожки,
+  // отбрасывая возможную обложку через -vn).
+  let ok = false
+  if (!hasVideo) {
+    const r = spawnSync(
+      FFMPEG,
+      ['-y', '-v', 'error', '-nostdin', '-i', work, '-vn', '-c:a', 'copy', '-movflags', '+faststart', out],
+      { windowsHide: true, encoding: 'utf8' }
+    )
+    ok = r.status === 0 && existsSync(out)
   }
+
+  // Универсальный путь: извлечь/перекодировать звук в AAC (видео или не-AAC аудио).
+  if (!ok) {
+    if (hasVideo) onVideoExtract?.()
+    const r = spawnSync(
+      FFMPEG,
+      [
+        '-y', '-v', 'error', '-nostdin', '-i', work,
+        '-vn', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out
+      ],
+      { windowsHide: true, encoding: 'utf8' }
+    )
+    if (r.status !== 0 || !existsSync(out)) {
+      if (existsSync(tmp)) unlinkSync(tmp)
+      throw new Error('Не удалось извлечь звук: ' + (r.stderr || 'ffmpeg error').slice(0, 300))
+    }
+  }
+
   if (existsSync(tmp)) unlinkSync(tmp)
-  return { prefixBytes }
+  return { prefixBytes, fromVideo: hasVideo }
 }

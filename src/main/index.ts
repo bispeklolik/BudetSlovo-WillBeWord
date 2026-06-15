@@ -70,6 +70,7 @@ async function importFromPath(src: string) {
   return createProjectFromFile(src, (phase) => {
     const messages: Record<string, string> = {
       repair: 'Проверяю и готовлю файл…',
+      extract: 'Извлекаю звук из видео…',
       peaks: 'Строю звуковую волну…',
       done: 'Готово'
     }
@@ -80,10 +81,18 @@ async function importFromPath(src: string) {
 ipcMain.handle('project:import', async () => {
   if (!win) return null
   const res = await dialog.showOpenDialog(win, {
-    title: 'Выберите аудиозапись',
+    title: 'Выберите аудио- или видеозапись',
     properties: ['openFile'],
     filters: [
-      { name: 'Аудио', extensions: ['m4a', 'mp3', 'wav', 'aac', 'ogg', 'flac', 'webm', 'mp4'] },
+      {
+        name: 'Аудио и видео',
+        extensions: [
+          // аудио
+          'm4a', 'mp3', 'wav', 'aac', 'ogg', 'oga', 'flac', 'opus', 'wma',
+          // видео
+          'mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v', 'flv', 'wmv', 'mpg', 'mpeg', 'mts', 'm2ts', 'ts', '3gp', 'ogv'
+        ]
+      },
       { name: 'Все файлы', extensions: ['*'] }
     ]
   })

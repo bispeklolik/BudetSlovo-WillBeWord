@@ -143,7 +143,7 @@ export function readPeaks(slug: string): Buffer | null {
   }
 }
 
-export type ImportPhase = 'repair' | 'peaks' | 'done'
+export type ImportPhase = 'repair' | 'extract' | 'peaks' | 'done'
 
 export async function createProjectFromFile(
   src: string,
@@ -156,7 +156,7 @@ export async function createProjectFromFile(
   mkdirSync(dir, { recursive: true })
 
   onProgress?.('repair')
-  const { prefixBytes } = await repairAndRemux(src, dir)
+  const { prefixBytes } = await repairAndRemux(src, dir, () => onProgress?.('extract'))
 
   onProgress?.('peaks')
   const { durationSec } = await buildPeaks(join(dir, 'audio.m4a'), join(dir, 'peaks.bin'), 50)
