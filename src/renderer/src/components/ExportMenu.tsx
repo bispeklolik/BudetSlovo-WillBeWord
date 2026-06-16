@@ -27,6 +27,18 @@ export default function ExportMenu({ slug }: { slug: string }): React.JSX.Elemen
     }
   }
 
+  const runAudio = async (): Promise<void> => {
+    setBusy(true)
+    try {
+      await api.exportAudio(slug)
+    } catch (err) {
+      alert('Не удалось сохранить: ' + String(err))
+    } finally {
+      setBusy(false)
+      setOpen(false)
+    }
+  }
+
   return (
     <div className="export-wrap" ref={wrapRef}>
       <button className="btn" onClick={() => setOpen((v) => !v)} data-testid="export-btn">
@@ -50,6 +62,9 @@ export default function ExportMenu({ slug }: { slug: string }): React.JSX.Elemen
           </button>
           <button className="export-item" disabled={busy} onClick={() => run('txt')}>
             Текст (.txt)
+          </button>
+          <button className="export-item" disabled={busy} onClick={runAudio}>
+            Аудио (.m4a)
           </button>
         </div>
       )}

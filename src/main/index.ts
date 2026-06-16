@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { join } from 'path'
-import { existsSync } from 'fs'
+import { existsSync, copyFileSync } from 'fs'
 import { autoUpdater } from 'electron-updater'
 import { DATA_DIR, loadSettings, saveSettings } from './settings'
 import { registerMediaScheme, installMediaProtocol } from './protocol'
@@ -154,6 +154,24 @@ ipcMain.handle(
     return res.filePath
   }
 )
+
+// «Видео→аудио» как файл: отдать извлечённый звук проекта (audio.m4a) наружу.
+ipcMain.handle('export:audio', async (_e, slug: string) => {
+  if (!win) return null
+  const meta = getProject(slug)
+  if (!meta) return null
+  const srcAudio = join(projectDir(slug), 'audio.m4a')
+  if (!existsSync(srcAudio)) return null
+  const res = await dialog.showSaveDialog(win, {
+    title: 'Сохранить аудио',
+    defaultPath: join(projectDir(slug), `${meta.title}.m4a`),
+    filters: [{ name: 'Аудио', extensions: ['m4a'] }]
+  })
+  if (res.canceled || !res.filePath) return null
+  copyFileSync(srcAudio, res.filePath)
+  shell.showItemInFolder(res.filePath)
+  return res.filePath
+})
 
 app.whenReady().then(() => {
   initQueue()

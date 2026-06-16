@@ -40,6 +40,8 @@ const api = {
     format: 'docx' | 'md' | 'txt',
     highlight: boolean
   ): Promise<string | null> => ipcRenderer.invoke('export:run', slug, format, highlight),
+  exportAudio: (slug: string): Promise<string | null> =>
+    ipcRenderer.invoke('export:audio', slug),
 
   startTranscribe: (slug: string, opts: TranscribeOptions): Promise<JobInfo> =>
     ipcRenderer.invoke('job:start', slug, opts),
