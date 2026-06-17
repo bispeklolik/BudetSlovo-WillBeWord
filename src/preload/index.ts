@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type {
   Settings,
   ProjectMeta,
@@ -15,6 +15,10 @@ const api = {
     ipcRenderer.invoke('settings:set', patch),
 
   importAudio: (): Promise<ProjectMeta | null> => ipcRenderer.invoke('project:import'),
+  // Путь к перетащенному файлу (в новых Electron — только через webUtils).
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
+  importPath: (path: string): Promise<ProjectMeta | null> =>
+    ipcRenderer.invoke('project:importPath', path),
   listProjects: (): Promise<ProjectMeta[]> => ipcRenderer.invoke('project:list'),
   getProject: (slug: string): Promise<ProjectMeta | null> =>
     ipcRenderer.invoke('project:get', slug),

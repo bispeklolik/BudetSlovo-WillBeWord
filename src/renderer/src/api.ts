@@ -16,6 +16,8 @@ const stub: RendererApi = {
     alert('Импорт доступен только в приложении (Electron)')
     return null
   },
+  getPathForFile: () => '',
+  importPath: async () => null,
   listProjects: async () => [],
   getProject: async () => null,
   getPeaks: async () => null,

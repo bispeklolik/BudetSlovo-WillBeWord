@@ -106,6 +106,9 @@ ipcMain.handle('project:import', async () => {
   return importFromPath(res.filePaths[0])
 })
 
+// Импорт по пути (перетаскивание файла в окно) — без диалога.
+ipcMain.handle('project:importPath', (_e, path: string) => importFromPath(path))
+
 ipcMain.handle('project:list', () => listProjects())
 ipcMain.handle('project:get', (_e, slug: string) => {
   const meta = getProject(slug)

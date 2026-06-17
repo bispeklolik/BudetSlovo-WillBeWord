@@ -13,6 +13,8 @@ export interface RendererApi {
   getSettings: () => Promise<Settings>
   setSettings: (patch: Partial<Settings>) => Promise<Settings>
   importAudio: () => Promise<ProjectMeta | null>
+  getPathForFile: (file: File) => string
+  importPath: (path: string) => Promise<ProjectMeta | null>
   listProjects: () => Promise<ProjectMeta[]>
   getProject: (slug: string) => Promise<ProjectMeta | null>
   getPeaks: (slug: string) => Promise<Uint8Array | null>
