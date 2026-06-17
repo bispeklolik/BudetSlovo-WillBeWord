@@ -38,13 +38,12 @@ export default function App(): React.JSX.Element {
         alert('Не удалось определить путь к файлу.')
         return
       }
-      setImporting('Импортирую и запускаю расшифровку…')
+      setImporting('Импортирую…')
       try {
         const meta = await api.importPath(path)
-        if (meta) {
-          await api.startTranscribe(meta.slug, { numSpeakers: 2, enhance: true })
-          setView({ page: 'editor', slug: meta.slug })
-        }
+        // Открываем редактор — там панель выбора параметров расшифровки (диалог),
+        // после которой пользователь сам запускает расшифровку.
+        if (meta) setView({ page: 'editor', slug: meta.slug })
       } catch (err) {
         alert('Не удалось импортировать: ' + String(err))
       } finally {
@@ -93,7 +92,7 @@ export default function App(): React.JSX.Element {
       {(dragging || importing) && (
         <div className="drop-overlay">
           <div className="drop-overlay-box">
-            {importing ?? 'Отпустите файл — начнётся расшифровка'}
+            {importing ?? 'Отпустите файл, чтобы импортировать'}
           </div>
         </div>
       )}
