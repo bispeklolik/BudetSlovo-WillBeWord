@@ -47,4 +47,16 @@ describe('applyCleanup', () => {
     const out = applyCleanup(words, 'звали', () => n++)
     expect(out[0]).toMatchObject({ t: 'звали', t0: 'завут', src: 'ai' })
   })
+
+  it('flags a suspect word (kept, not AI-changed) for review', () => {
+    const words = [W(0, 'Насилие'), W(1, 'это'), W(2, 'коблит')]
+    const out = applyCleanup(words, 'Насилие это коблит', () => 0, ['коблит'])
+    expect(out.find((w) => w.t === 'коблит')!.src).toBe('suspect')
+    expect(out.find((w) => w.t === 'Насилие')!.src).toBeUndefined()
+  })
+
+  it('does not flag suspect when AI already changed that word (stays ai)', () => {
+    const out = applyCleanup([W(0, 'коблит')], 'бьёт', () => 0, ['коблит'])
+    expect(out[0]).toMatchObject({ t: 'бьёт', src: 'ai' })
+  })
 })

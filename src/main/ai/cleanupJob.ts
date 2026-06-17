@@ -66,9 +66,9 @@ export async function runCleanup(
     let words = t.words
     if (text) {
       try {
-        const cleaned = await provider.cleanupTurn(text, {})
+        const { cleaned, suspect } = await provider.cleanupTurn(text, {})
         if (cleaned && cleaned.length >= text.length * 0.4 && cleaned.length <= text.length * 2.5) {
-          words = applyCleanup(t.words, cleaned, nextId)
+          words = applyCleanup(t.words, cleaned, nextId, suspect)
         }
       } catch {
         // оставляем реплику как есть

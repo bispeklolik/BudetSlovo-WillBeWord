@@ -165,18 +165,20 @@ export default function TranscriptView(props: Props): React.JSX.Element {
                   className={
                     'word' +
                     confClass(w) +
-                    (w.src === 'ai' ? ' ai' : '') +
+                    (w.src ? ' ' + w.src : '') +
                     (w.id === activeWordId ? ' active' : '')
                   }
                   data-word={w.id}
                   title={
-                    w.src === 'ai'
-                      ? w.t0 !== undefined
-                        ? 'ИИ поправил · исходно: ' + w.t0.trim()
-                        : 'вставлено ИИ'
-                      : w.t0 !== undefined
-                        ? 'исходно: ' + w.t0.trim()
-                        : undefined
+                    w.src === 'suspect'
+                      ? 'ИИ: возможно, ошибка распознавания — проверь'
+                      : w.src === 'ai'
+                        ? w.t0 !== undefined
+                          ? 'ИИ поправил · исходно: ' + w.t0.trim()
+                          : 'вставлено ИИ'
+                        : w.t0 !== undefined
+                          ? 'исходно: ' + w.t0.trim()
+                          : undefined
                   }
                   onClick={() => props.onWordClick(w)}
                   onDoubleClick={() => startEdit(w)}

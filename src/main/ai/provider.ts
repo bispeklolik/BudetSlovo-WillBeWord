@@ -13,6 +13,17 @@ export interface CleanupOptions {
   systemPrompt?: string
 }
 
+export interface CleanupResult {
+  /** Причёсанный текст реплики. */
+  cleaned: string
+  /**
+   * Слова/короткие фразы (дословно из текста), которые модель считает вероятными
+   * ошибками распознавания или бессмыслицей в контексте — для гарантированной
+   * подсветки, даже если ИИ не стал их менять.
+   */
+  suspect: string[]
+}
+
 export interface AiProvider {
   id: 'local-llama' | 'claude'
   /** Человекочитаемое имя для UI (напр. «Локально» / «Claude (облако)»). */
@@ -21,8 +32,8 @@ export interface AiProvider {
   isLocal: boolean
   /** Готов ли провайдер: модель скачана / сервер жив / ключ задан. */
   isAvailable(): Promise<boolean>
-  /** Возвращает причёсанный текст одной реплики. */
-  cleanupTurn(text: string, opts: CleanupOptions): Promise<string>
+  /** Причёсывает реплику и помечает подозрительные слова (смысловой анализ). */
+  cleanupTurn(text: string, opts: CleanupOptions): Promise<CleanupResult>
 }
 
 const providers = new Map<string, AiProvider>()
