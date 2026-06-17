@@ -547,6 +547,61 @@ button {
   color: var(--text);
 }
 
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modal {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  width: 100%;
+  max-width: 680px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 500;
+  margin-right: auto;
+}
+
+.summary-levels {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.summary-result {
+  flex: 1;
+  min-height: 240px;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--text);
+  border: 0.5px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
 .word-input {
   font: inherit;
   font-size: 15px;

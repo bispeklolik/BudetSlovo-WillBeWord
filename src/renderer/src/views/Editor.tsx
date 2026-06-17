@@ -8,6 +8,7 @@ import Waveform, { type Lane } from '../components/Waveform'
 import TranscribePanel from '../components/TranscribePanel'
 import TranscriptView from '../components/TranscriptView'
 import ExportMenu from '../components/ExportMenu'
+import SummaryPanel from '../components/SummaryPanel'
 
 function fmtTime(sec: number): string {
   const t = Math.floor(sec)
@@ -43,6 +44,7 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
   const [aiBusy, setAiBusy] = useState(false)
   const [aiProgress, setAiProgress] = useState<{ done: number; total: number } | null>(null)
   const [aiBackup, setAiBackup] = useState(false)
+  const [summaryOpen, setSummaryOpen] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   const rafRef = useRef(0)
   const indexRef = useRef<IndexEntry[]>([])
@@ -352,6 +354,9 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
                 Отменить ИИ
               </button>
             )}
+            <button className="btn" onClick={() => setSummaryOpen(true)}>
+              Саммари
+            </button>
             <button
               className="btn"
               onClick={() => {
@@ -453,6 +458,8 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
           onSeek={seek}
         />
       </div>
+
+      {summaryOpen && <SummaryPanel slug={slug} onClose={() => setSummaryOpen(false)} />}
     </main>
   )
 }

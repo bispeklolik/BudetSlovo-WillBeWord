@@ -28,6 +28,7 @@ const stub: RendererApi = {
   aiHasBackup: async () => false,
   cleanupAi: async () => null,
   revertAi: async () => null,
+  summarizeAi: async () => null,
   onAiProgress: () => () => {},
   onImportProgress: () => () => {},
   startTranscribe: async () => {

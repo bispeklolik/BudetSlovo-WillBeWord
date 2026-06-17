@@ -1,4 +1,4 @@
-import type { AiProvider, CleanupOptions, CleanupResult } from './provider'
+import type { AiProvider, CleanupOptions, CleanupResult, SummaryLevel } from './provider'
 
 // Локальный провайдер через Ollama (HTTP на 127.0.0.1:11434). Модель по
 // умолчанию — Qwen2.5-7B. За ОДИН проход модель и причёсывает реплику
@@ -21,6 +21,23 @@ const DEFAULT_SYSTEM =
   'существуют в русском языке ИЛИ бессмысленны в этом контексте — вероятные ошибки ' +
   'распознавания (например «коблит», «водопряжение»). Если таких нет — пустой список. ' +
   'Не вписывай в suspect нормальные слова.'
+
+const SUMMARY_SYSTEM =
+  'Ты помогаешь психологу. Тебе дают расшифровку консультации (реплики Психолога и ' +
+  'Клиента). Опирайся ТОЛЬКО на текст, ничего не выдумывай. Пиши по-русски, нейтрально ' +
+  'и профессионально, без обращений и воды.'
+
+const SUMMARY_PROMPTS: Record<SummaryLevel, string> = {
+  note:
+    'Сделай ОЧЕНЬ КРАТКУЮ формальную заметку (как запись в карту): запрос/тема, ключевые ' +
+    'моменты, динамика/состояние, что дальше. 4–7 пунктов, сухо и по делу.',
+  medium:
+    'Сделай КРАТКОЕ, но полное содержание: 2–4 абзаца связного пересказа, затем список ' +
+    'ключевых тезисов (главные мысли и моменты).',
+  detailed:
+    'Сделай ПОДРОБНОЕ содержание беседы: передай ход и смысл, убрав только лишнее, повторы ' +
+    'и слова-паразиты. Сохрани последовательность и важные детали.'
+}
 
 function parseResult(raw: string, original: string): CleanupResult {
   try {
@@ -71,5 +88,24 @@ export const localLlamaProvider: AiProvider = {
     if (!r.ok) throw new Error(`Ollama HTTP ${r.status}`)
     const d = (await r.json()) as { message?: { content?: string } }
     return parseResult((d.message?.content || '').trim(), text)
+  },
+
+  async summarize(text: string, level: SummaryLevel): Promise<string> {
+    const r = await fetch(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: 'system', content: SUMMARY_SYSTEM + '\n' + SUMMARY_PROMPTS[level] },
+          { role: 'user', content: text }
+        ],
+        stream: false,
+        options: { temperature: 0.3, num_ctx: 16384 }
+      })
+    })
+    if (!r.ok) throw new Error(`Ollama HTTP ${r.status}`)
+    const d = (await r.json()) as { message?: { content?: string } }
+    return (d.message?.content || '').trim()
   }
 }

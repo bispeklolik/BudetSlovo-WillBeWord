@@ -13,6 +13,10 @@ export interface CleanupOptions {
   systemPrompt?: string
 }
 
+// Уровни краткого содержания: формальная заметка → средняя с тезисами →
+// подробное содержание (выкинуто только лишнее).
+export type SummaryLevel = 'note' | 'medium' | 'detailed'
+
 export interface CleanupResult {
   /** Причёсанный текст реплики. */
   cleaned: string
@@ -34,6 +38,8 @@ export interface AiProvider {
   isAvailable(): Promise<boolean>
   /** Причёсывает реплику и помечает подозрительные слова (смысловой анализ). */
   cleanupTurn(text: string, opts: CleanupOptions): Promise<CleanupResult>
+  /** Краткое содержание всей расшифровки на выбранном уровне детализации. */
+  summarize(text: string, level: SummaryLevel): Promise<string>
 }
 
 const providers = new Map<string, AiProvider>()
