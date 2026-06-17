@@ -8,3 +8,9 @@ export const ENGINE_EXE = join(ENGINE_DIR, 'faster-whisper-xxl.exe')
 export const FFMPEG = join(ENGINE_DIR, 'ffmpeg.exe')
 export const MODELS_DIR = 'D:\\STT\\models'
 export const STT_TEMP = 'D:\\STT\\temp'
+
+// Локальный ИИ (Ollama). Установлен в D:\Apps\ollama (junction → F).
+// Модели ИИ — в slovo-data\models (отдельно от whisper-моделей выше).
+export const OLLAMA_EXE = 'D:\\Apps\\ollama\\ollama.exe'
+export const OLLAMA_ADDR = '127.0.0.1:11434'
+export const OLLAMA_MODELS_DIR = join(DATA_DIR, 'models')

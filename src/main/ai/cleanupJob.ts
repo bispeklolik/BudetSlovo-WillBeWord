@@ -4,6 +4,7 @@ import type { ProjectMeta, Turn, SpeakerInfo } from '../../shared/types'
 import { getProject, saveTranscript, projectDir, writeJsonAtomic } from '../project/store'
 import { getProvider } from './provider'
 import { applyCleanup } from './apply'
+import { ensureOllama } from './ollamaServer'
 
 export interface CleanupProgress {
   done: number
@@ -31,7 +32,8 @@ export async function runCleanup(
   if (!meta || !meta.turns) return null
   const provider = getProvider(providerId)
   if (!provider) throw new Error('AI_PROVIDER_NOT_FOUND')
-  if (!(await provider.isAvailable())) throw new Error('AI_UNAVAILABLE')
+  if (!(await ensureOllama())) throw new Error('AI_UNAVAILABLE')
+  if (!(await provider.isAvailable())) throw new Error('AI_MODEL_MISSING')
 
   // База для чистки = оригинал. Если бэкап уже есть (чистили раньше) — чистим от
   // него и НЕ перезаписываем (храним самый первый оригинал).

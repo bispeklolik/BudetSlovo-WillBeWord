@@ -18,6 +18,7 @@ import { exportTranscript, type ExportFormat } from './export'
 import { registerProvider, getProvider } from './ai/provider'
 import { localLlamaProvider } from './ai/localLlama'
 import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
+import { stopOllama } from './ai/ollamaServer'
 import {
   initQueue,
   setJobNotifier,
@@ -31,6 +32,7 @@ import type { Settings, TranscribeOptions, Turn, SpeakerInfo } from '../shared/t
 app.setPath('userData', join(DATA_DIR, 'electron'))
 registerMediaScheme()
 registerProvider(localLlamaProvider)
+app.on('before-quit', () => stopOllama())
 
 let win: BrowserWindow | null = null
 let settings: Settings = loadSettings()

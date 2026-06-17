@@ -297,12 +297,6 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
   }
 
   const runAiCleanup = async (): Promise<void> => {
-    if (!(await api.aiAvailable())) {
-      alert(
-        'ИИ-модель не готова.\nЗапусти локальный ИИ (Ollama) с моделью qwen2.5:7b-instruct и попробуй снова.'
-      )
-      return
-    }
     setAiBusy(true)
     setAiProgress({ done: 0, total: 0 })
     try {
@@ -312,7 +306,12 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
         setAiBackup(true)
       }
     } catch (err) {
-      alert('Не удалось причесать: ' + String(err))
+      const s = String(err)
+      if (s.includes('AI_UNAVAILABLE'))
+        alert('Не удалось запустить локальный ИИ (Ollama). Проверь, что он установлен в D:\\Apps\\ollama.')
+      else if (s.includes('AI_MODEL_MISSING'))
+        alert('ИИ-модель qwen2.5:7b-instruct не найдена — её нужно скачать.')
+      else alert('Не удалось причесать: ' + s)
     } finally {
       setAiBusy(false)
       setAiProgress(null)
