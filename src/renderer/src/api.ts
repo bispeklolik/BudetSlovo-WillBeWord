@@ -22,6 +22,11 @@ const stub: RendererApi = {
   saveTranscript: async () => null,
   exportTranscript: async () => null,
   exportAudio: async () => null,
+  aiAvailable: async () => false,
+  aiHasBackup: async () => false,
+  cleanupAi: async () => null,
+  revertAi: async () => null,
+  onAiProgress: () => () => {},
   onImportProgress: () => () => {},
   startTranscribe: async () => {
     throw new Error('Расшифровка доступна только в приложении (Electron)')

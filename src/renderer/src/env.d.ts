@@ -27,6 +27,11 @@ export interface RendererApi {
     highlight: boolean
   ) => Promise<string | null>
   exportAudio: (slug: string) => Promise<string | null>
+  aiAvailable: () => Promise<boolean>
+  aiHasBackup: (slug: string) => Promise<boolean>
+  cleanupAi: (slug: string) => Promise<ProjectMeta | null>
+  revertAi: (slug: string) => Promise<ProjectMeta | null>
+  onAiProgress: (cb: (p: { done: number; total: number; phase: string }) => void) => () => void
   onImportProgress: (cb: (p: ImportProgress) => void) => () => void
   startTranscribe: (slug: string, opts: TranscribeOptions) => Promise<JobInfo>
   cancelJob: (id: string) => Promise<JobInfo | null>

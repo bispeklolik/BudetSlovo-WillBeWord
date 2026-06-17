@@ -43,6 +43,18 @@ const api = {
   exportAudio: (slug: string): Promise<string | null> =>
     ipcRenderer.invoke('export:audio', slug),
 
+  aiAvailable: (): Promise<boolean> => ipcRenderer.invoke('ai:available'),
+  aiHasBackup: (slug: string): Promise<boolean> => ipcRenderer.invoke('ai:hasBackup', slug),
+  cleanupAi: (slug: string): Promise<ProjectMeta | null> => ipcRenderer.invoke('ai:cleanup', slug),
+  revertAi: (slug: string): Promise<ProjectMeta | null> => ipcRenderer.invoke('ai:revert', slug),
+  onAiProgress: (cb: (p: { done: number; total: number; phase: string }) => void): (() => void) => {
+    const handler = (_e: unknown, p: { done: number; total: number; phase: string }): void => cb(p)
+    ipcRenderer.on('ai:progress', handler)
+    return () => {
+      ipcRenderer.off('ai:progress', handler)
+    }
+  },
+
   startTranscribe: (slug: string, opts: TranscribeOptions): Promise<JobInfo> =>
     ipcRenderer.invoke('job:start', slug, opts),
   cancelJob: (id: string): Promise<JobInfo | null> => ipcRenderer.invoke('job:cancel', id),

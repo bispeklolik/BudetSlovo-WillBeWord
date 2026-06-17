@@ -18,6 +18,9 @@
   --conf-low-bg: #fcebeb;
   --conf-low-line: #e24b4a;
   --conf-low-text: #791f1f;
+  --ai-bg: #eeedfe;
+  --ai-line: #7f77dd;
+  --ai-text: #3c3489;
 }
 
 :root[data-theme='dark'] {
@@ -39,6 +42,9 @@
   --conf-low-bg: #3a1818;
   --conf-low-line: #e24b4a;
   --conf-low-text: #f09595;
+  --ai-bg: #2b2660;
+  --ai-line: #7f77dd;
+  --ai-text: #cecbf6;
 }
 
 * {
@@ -349,6 +355,12 @@ button {
   background: var(--conf-low-bg);
   color: var(--conf-low-text);
   box-shadow: inset 0 -2px 0 var(--conf-low-line);
+}
+
+.word.ai {
+  background: var(--ai-bg);
+  color: var(--ai-text);
+  box-shadow: inset 0 -2px 0 var(--ai-line);
 }
 
 .word.active {

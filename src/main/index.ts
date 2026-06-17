@@ -15,6 +15,9 @@ import {
 } from './project/store'
 import { mergeEngineOutputs } from './project/merge'
 import { exportTranscript, type ExportFormat } from './export'
+import { registerProvider, getProvider } from './ai/provider'
+import { localLlamaProvider } from './ai/localLlama'
+import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
 import {
   initQueue,
   setJobNotifier,
@@ -27,6 +30,7 @@ import type { Settings, TranscribeOptions, Turn, SpeakerInfo } from '../shared/t
 // Все данные Chromium-профиля строго на D: — C: почти полон.
 app.setPath('userData', join(DATA_DIR, 'electron'))
 registerMediaScheme()
+registerProvider(localLlamaProvider)
 
 let win: BrowserWindow | null = null
 let settings: Settings = loadSettings()
@@ -172,6 +176,17 @@ ipcMain.handle('export:audio', async (_e, slug: string) => {
   shell.showItemInFolder(res.filePath)
   return res.filePath
 })
+
+// ---------- ИИ-чистка ----------
+ipcMain.handle('ai:available', async () => {
+  const p = getProvider('local-llama')
+  return p ? p.isAvailable() : false
+})
+ipcMain.handle('ai:hasBackup', (_e, slug: string) => hasAiBackup(slug))
+ipcMain.handle('ai:cleanup', (_e, slug: string) =>
+  runCleanup(slug, 'local-llama', (p) => win?.webContents.send('ai:progress', p))
+)
+ipcMain.handle('ai:revert', (_e, slug: string) => revertCleanup(slug))
 
 app.whenReady().then(() => {
   initQueue()

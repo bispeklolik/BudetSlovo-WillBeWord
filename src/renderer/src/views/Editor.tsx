@@ -40,6 +40,9 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
   const [dirty, setDirty] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [reproc, setReproc] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiProgress, setAiProgress] = useState<{ done: number; total: number } | null>(null)
+  const [aiBackup, setAiBackup] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   const rafRef = useRef(0)
   const indexRef = useRef<IndexEntry[]>([])
@@ -61,6 +64,11 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
       if (u8) setPeaks(new Int8Array(u8.buffer, u8.byteOffset, u8.byteLength))
     })
   }, [slug, loadMeta])
+
+  useEffect(() => {
+    api.aiHasBackup(slug).then(setAiBackup)
+  }, [slug])
+  useEffect(() => api.onAiProgress((p) => setAiProgress({ done: p.done, total: p.total })), [])
 
   // Грузим аудио целиком в Blob (через media://) и проигрываем из него:
   // Blob seekable в любую точку, в отличие от потокового протокола.
@@ -272,6 +280,37 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
     )
   }
 
+  const runAiCleanup = async (): Promise<void> => {
+    if (!(await api.aiAvailable())) {
+      alert(
+        'ИИ-модель не готова.\nЗапусти локальный ИИ (Ollama) с моделью qwen2.5:7b-instruct и попробуй снова.'
+      )
+      return
+    }
+    setAiBusy(true)
+    setAiProgress({ done: 0, total: 0 })
+    try {
+      const m = await api.cleanupAi(slug)
+      if (m) {
+        loadMeta(m)
+        setAiBackup(true)
+      }
+    } catch (err) {
+      alert('Не удалось причесать: ' + String(err))
+    } finally {
+      setAiBusy(false)
+      setAiProgress(null)
+    }
+  }
+
+  const revertAiCleanup = async (): Promise<void> => {
+    const m = await api.revertAi(slug)
+    if (m) {
+      loadMeta(m)
+      setAiBackup(false)
+    }
+  }
+
   const hasText = (meta.turns?.length ?? 0) > 0
 
   return (
@@ -285,6 +324,16 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
         </span>
         {hasText && !reproc && (
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <button className="btn" disabled={aiBusy} onClick={runAiCleanup}>
+              {aiBusy
+                ? `Причёсываю${aiProgress && aiProgress.total ? ` ${aiProgress.done}/${aiProgress.total}` : '…'}`
+                : 'Причесать ИИ'}
+            </button>
+            {aiBackup && !aiBusy && (
+              <button className="btn" onClick={revertAiCleanup}>
+                Отменить ИИ
+              </button>
+            )}
             <button
               className="btn"
               onClick={() => {
