@@ -272,12 +272,15 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
     const turn = m?.turns?.find((t) => t.id === turnId)
     const w = turn?.words.find((x) => x.id === wordId)
     if (!turn || !w) return
+    // Смена реплики = смена говорящего: новая реплика идёт другому говорящему
+    // (для двоих — переключение). Если другого нет — остаётся тот же.
+    const other = m?.speakers?.find((s) => s.id !== turn.spk)
     edit({
       op: 'splitTurn',
       turnId,
       atWordId: wordId,
       newTurnId: 'T-' + Date.now().toString(36) + '-' + wordId,
-      spk: turn.spk,
+      spk: other?.id ?? turn.spk,
       startSec: w.s ?? turn.startSec
     })
   }
