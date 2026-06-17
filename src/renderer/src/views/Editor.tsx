@@ -265,6 +265,22 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
     edit({ op: 'insertWords', turnId, atIndex: index, words: [{ id, t: '' }] })
     return id
   }
+  // Разрезать реплику: слово wordId становится началом новой реплики (тот же
+  // говорящий по умолчанию — потом переназначается дропдауном «Кто говорит»).
+  const onSplitTurn = (turnId: string, wordId: number): void => {
+    const m = metaRef.current
+    const turn = m?.turns?.find((t) => t.id === turnId)
+    const w = turn?.words.find((x) => x.id === wordId)
+    if (!turn || !w) return
+    edit({
+      op: 'splitTurn',
+      turnId,
+      atWordId: wordId,
+      newTurnId: 'T-' + Date.now().toString(36) + '-' + wordId,
+      spk: turn.spk,
+      startSec: w.s ?? turn.startSec
+    })
+  }
 
   const changeRate = (r: number): void => {
     setRate(r)
@@ -376,6 +392,7 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
             onRenameSpeaker={(speakerId, name) => edit({ op: 'renameSpeaker', speakerId, name })}
             onSetTurnSpeaker={(turnId, spk) => edit({ op: 'setTurnSpeaker', turnId, spk })}
             onMergeTurn={(turnId) => edit({ op: 'mergeTurnIntoPrev', turnId })}
+            onSplitTurn={onSplitTurn}
           />
         ) : meta.engine?.completedAt ? (
           <div className="transcript-placeholder">

@@ -31,6 +31,7 @@ interface Props {
   onRenameSpeaker: (speakerId: string, name: string) => void
   onSetTurnSpeaker: (turnId: string, spk: string) => void
   onMergeTurn: (turnId: string) => void
+  onSplitTurn: (turnId: string, wordId: number) => void
 }
 
 export default function TranscriptView(props: Props): React.JSX.Element {
@@ -136,6 +137,16 @@ export default function TranscriptView(props: Props): React.JSX.Element {
               >
                 +
               </button>
+              {i > 0 && (
+                <button
+                  className="splitbtn"
+                  title="Разделить: новая реплика с этого слова"
+                  tabIndex={-1}
+                  onClick={() => props.onSplitTurn(turn.id, w.id)}
+                >
+                  ⏎
+                </button>
+              )}
               {editId === w.id ? (
                 <input
                   className="word-input"

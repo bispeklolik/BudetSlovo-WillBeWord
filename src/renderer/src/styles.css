@@ -498,6 +498,27 @@ button {
   display: inline-block;
 }
 
+.splitbtn {
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
+  vertical-align: baseline;
+}
+
+.wtok:hover .splitbtn {
+  opacity: 0.7;
+  width: auto;
+}
+
+.splitbtn:hover {
+  color: var(--accent);
+}
+
 .word-input {
   font: inherit;
   font-size: 15px;
