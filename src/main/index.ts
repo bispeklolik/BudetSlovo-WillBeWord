@@ -19,6 +19,7 @@ import { registerProvider, getProvider, type SummaryLevel, type SummaryDomain } 
 import { localLlamaProvider } from './ai/localLlama'
 import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
 import { stopOllama, ensureOllama } from './ai/ollamaServer'
+import { applyHighlights, clearHighlights } from './ai/highlight'
 import {
   initQueue,
   setJobNotifier,
@@ -208,6 +209,25 @@ ipcMain.handle(
     return provider.summarize(text, level, domain)
   }
 )
+ipcMain.handle('ai:highlights', async (_e, slug: string) => {
+  const meta = getProject(slug)
+  if (!meta?.turns) return null
+  if (!(await ensureOllama())) throw new Error('AI_UNAVAILABLE')
+  const provider = getProvider('local-llama')
+  if (!provider) throw new Error('AI_PROVIDER_NOT_FOUND')
+  if (!(await provider.isAvailable())) throw new Error('AI_MODEL_MISSING')
+  const name = (spk: string): string => meta.speakers?.find((s) => s.id === spk)?.name ?? spk
+  const text = meta.turns
+    .map((t) => name(t.spk) + ': ' + t.words.map((w) => w.t).join(' '))
+    .join('\n')
+  const phrases = await provider.highlights(text)
+  return saveTranscript(slug, applyHighlights(meta.turns, phrases), meta.speakers ?? [])
+})
+ipcMain.handle('ai:clearHighlights', (_e, slug: string) => {
+  const meta = getProject(slug)
+  if (!meta?.turns) return null
+  return saveTranscript(slug, clearHighlights(meta.turns), meta.speakers ?? [])
+})
 
 app.whenReady().then(() => {
   initQueue()

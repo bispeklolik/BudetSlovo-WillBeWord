@@ -21,6 +21,8 @@
   --ai-bg: #eeedfe;
   --ai-line: #7f77dd;
   --ai-text: #3c3489;
+  --hl-bg: #eaf3de;
+  --hl-text: #2c4a0e;
 }
 
 :root[data-theme='dark'] {
@@ -45,6 +47,8 @@
   --ai-bg: #2b2660;
   --ai-line: #7f77dd;
   --ai-text: #cecbf6;
+  --hl-bg: #20300f;
+  --hl-text: #c0dd97;
 }
 
 * {
@@ -369,6 +373,11 @@ button {
   text-decoration: underline wavy var(--conf-low-line);
   text-decoration-thickness: 1.5px;
   text-underline-offset: 2px;
+}
+
+.word.hl {
+  background: var(--hl-bg);
+  color: var(--hl-text);
 }
 
 .word.active {

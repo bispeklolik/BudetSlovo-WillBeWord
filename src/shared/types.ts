@@ -30,6 +30,8 @@ export interface Word {
    * (оставлено как есть, но требует проверки человеком).
    */
   src?: 'ai' | 'suspect'
+  /** true — слово входит в «лучшую мысль», выделенную ИИ (для подсветки). */
+  hl?: boolean
 }
 
 export interface Turn {

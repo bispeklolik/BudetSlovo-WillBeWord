@@ -38,6 +38,8 @@ export interface RendererApi {
     level: 'note' | 'medium' | 'detailed',
     domain: 'therapy' | 'business' | 'general'
   ) => Promise<string | null>
+  highlightAi: (slug: string) => Promise<ProjectMeta | null>
+  clearHighlightsAi: (slug: string) => Promise<ProjectMeta | null>
   onAiProgress: (cb: (p: { done: number; total: number; phase: string }) => void) => () => void
   onImportProgress: (cb: (p: ImportProgress) => void) => () => void
   startTranscribe: (slug: string, opts: TranscribeOptions) => Promise<JobInfo>

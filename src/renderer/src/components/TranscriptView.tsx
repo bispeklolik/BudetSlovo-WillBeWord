@@ -166,6 +166,7 @@ export default function TranscriptView(props: Props): React.JSX.Element {
                     'word' +
                     confClass(w) +
                     (w.src ? ' ' + w.src : '') +
+                    (w.hl ? ' hl' : '') +
                     (w.id === activeWordId ? ' active' : '')
                   }
                   data-word={w.id}

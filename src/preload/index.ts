@@ -56,6 +56,10 @@ const api = {
     level: 'note' | 'medium' | 'detailed',
     domain: 'therapy' | 'business' | 'general'
   ): Promise<string | null> => ipcRenderer.invoke('ai:summarize', slug, level, domain),
+  highlightAi: (slug: string): Promise<ProjectMeta | null> =>
+    ipcRenderer.invoke('ai:highlights', slug),
+  clearHighlightsAi: (slug: string): Promise<ProjectMeta | null> =>
+    ipcRenderer.invoke('ai:clearHighlights', slug),
   onAiProgress: (cb: (p: { done: number; total: number; phase: string }) => void): (() => void) => {
     const handler = (_e: unknown, p: { done: number; total: number; phase: string }): void => cb(p)
     ipcRenderer.on('ai:progress', handler)

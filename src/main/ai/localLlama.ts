@@ -50,6 +50,12 @@ const SUMMARY_LEVEL: Record<SummaryLevel, string> = {
     ' Формат: подробное содержание — передай ход и смысл, убрав только лишнее, повторы и паразиты.'
 }
 
+const HIGHLIGHTS_SYSTEM =
+  'Найди НЕ БОЛЕЕ 6 самых ценных мыслей/моментов разговора (сильные формулировки, ключевые ' +
+  'выводы, поворотные фразы). Верни СТРОГО JSON {"highlights": string[]}. Каждая цитата — ' +
+  'ДОСЛОВНО из текста, 3–12 слов, без изменений и без пояснений. Не повторяйся. Опирайся ' +
+  'только на текст; если ценного мало — верни меньше.'
+
 function parseResult(raw: string, original: string): CleanupResult {
   try {
     const o = JSON.parse(raw) as { cleaned?: unknown; suspect?: unknown }
@@ -119,5 +125,34 @@ export const localLlamaProvider: AiProvider = {
     if (!r.ok) throw new Error(`Ollama HTTP ${r.status}`)
     const d = (await r.json()) as { message?: { content?: string } }
     return (d.message?.content || '').trim()
+  },
+
+  async highlights(text: string): Promise<string[]> {
+    const r = await fetch(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: 'system', content: HIGHLIGHTS_SYSTEM },
+          { role: 'user', content: text }
+        ],
+        stream: false,
+        format: 'json',
+        options: { temperature: 0.2, num_ctx: 16384, num_predict: 800 }
+      })
+    })
+    if (!r.ok) throw new Error(`Ollama HTTP ${r.status}`)
+    const d = (await r.json()) as { message?: { content?: string } }
+    try {
+      const o = JSON.parse(d.message?.content || '{}') as { highlights?: unknown }
+      return Array.isArray(o.highlights)
+        ? o.highlights
+            .filter((x): x is string => typeof x === 'string' && x.trim() !== '')
+            .map((x) => x.trim())
+        : []
+    } catch {
+      return []
+    }
   }
 }

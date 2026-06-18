@@ -45,6 +45,7 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
   const [aiProgress, setAiProgress] = useState<{ done: number; total: number } | null>(null)
   const [aiBackup, setAiBackup] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
+  const [hlBusy, setHlBusy] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   const rafRef = useRef(0)
   const indexRef = useRef<IndexEntry[]>([])
@@ -331,7 +332,28 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
     }
   }
 
+  const runHighlights = async (): Promise<void> => {
+    setHlBusy(true)
+    try {
+      const m = await api.highlightAi(slug)
+      if (m) loadMeta(m)
+    } catch (err) {
+      const s = String(err)
+      if (s.includes('AI_UNAVAILABLE')) alert('Не удалось запустить локальный ИИ (Ollama).')
+      else if (s.includes('AI_MODEL_MISSING')) alert('ИИ-модель не найдена — её нужно скачать.')
+      else alert('Не удалось выделить мысли: ' + s)
+    } finally {
+      setHlBusy(false)
+    }
+  }
+
+  const clearHl = async (): Promise<void> => {
+    const m = await api.clearHighlightsAi(slug)
+    if (m) loadMeta(m)
+  }
+
   const hasText = (meta.turns?.length ?? 0) > 0
+  const hasHl = !!meta.turns?.some((t) => t.words.some((w) => w.hl))
 
   return (
     <main className="editor">
@@ -357,6 +379,14 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
             <button className="btn" onClick={() => setSummaryOpen(true)}>
               Саммари
             </button>
+            <button className="btn" disabled={hlBusy} onClick={runHighlights}>
+              {hlBusy ? 'Ищу…' : 'Лучшие мысли'}
+            </button>
+            {hasHl && !hlBusy && (
+              <button className="btn" onClick={clearHl}>
+                Убрать выделения
+              </button>
+            )}
             <button
               className="btn"
               onClick={() => {
