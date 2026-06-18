@@ -19,6 +19,8 @@ const api = {
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
   importPath: (path: string): Promise<ProjectMeta | null> =>
     ipcRenderer.invoke('project:importPath', path),
+  renameProject: (slug: string, title: string): Promise<ProjectMeta | null> =>
+    ipcRenderer.invoke('project:rename', slug, title),
   listProjects: (): Promise<ProjectMeta[]> => ipcRenderer.invoke('project:list'),
   getProject: (slug: string): Promise<ProjectMeta | null> =>
     ipcRenderer.invoke('project:get', slug),

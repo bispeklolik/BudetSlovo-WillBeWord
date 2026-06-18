@@ -18,6 +18,7 @@ const stub: RendererApi = {
   },
   getPathForFile: () => '',
   importPath: async () => null,
+  renameProject: async () => null,
   listProjects: async () => [],
   getProject: async () => null,
   getPeaks: async () => null,

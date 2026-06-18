@@ -46,6 +46,15 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
     }
   }
 
+  const rename = async (e: React.MouseEvent, p: ProjectMeta): Promise<void> => {
+    e.stopPropagation()
+    const name = window.prompt('Новое название записи:', p.title)
+    if (name && name.trim() && name.trim() !== p.title) {
+      await api.renameProject(p.slug, name.trim())
+      refresh()
+    }
+  }
+
   return (
     <main className="home">
       <div className="home-toolbar">
@@ -61,12 +70,25 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
       ) : (
         <div className="project-grid">
           {projects.map((p) => (
-            <button key={p.slug} className="project-card" onClick={() => onOpen(p.slug)}>
+            <div
+              key={p.slug}
+              className="project-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpen(p.slug)}
+            >
               <div className="project-card-title">{p.title}</div>
               <div className="project-card-meta">
                 {fmtDuration(p.audio.durationSec)} · {fmtDate(p.createdAt)}
               </div>
-            </button>
+              <button
+                className="project-rename"
+                title="Переименовать"
+                onClick={(e) => rename(e, p)}
+              >
+                ✏
+              </button>
+            </div>
           ))}
         </div>
       )}

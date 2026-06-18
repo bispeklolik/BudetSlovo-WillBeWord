@@ -110,6 +110,15 @@ ipcMain.handle('project:import', async () => {
 // Импорт по пути (перетаскивание файла в окно) — без диалога.
 ipcMain.handle('project:importPath', (_e, path: string) => importFromPath(path))
 
+// Переименование записи (меняем отображаемое название; папка-slug не трогается).
+ipcMain.handle('project:rename', (_e, slug: string, title: string) => {
+  const meta = getProject(slug)
+  if (!meta) return null
+  meta.title = title
+  saveProject(meta)
+  return meta
+})
+
 ipcMain.handle('project:list', () => listProjects())
 ipcMain.handle('project:get', (_e, slug: string) => {
   const meta = getProject(slug)
