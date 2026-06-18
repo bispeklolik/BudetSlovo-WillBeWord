@@ -51,10 +51,11 @@ const SUMMARY_LEVEL: Record<SummaryLevel, string> = {
 }
 
 const HIGHLIGHTS_SYSTEM =
-  'Найди НЕ БОЛЕЕ 6 самых ценных мыслей/моментов разговора (сильные формулировки, ключевые ' +
-  'выводы, поворотные фразы). Верни СТРОГО JSON {"highlights": string[]}. Каждая цитата — ' +
-  'ДОСЛОВНО из текста, 3–12 слов, без изменений и без пояснений. Не повторяйся. Опирайся ' +
-  'только на текст; если ценного мало — верни меньше.'
+  'Выдели САМЫЕ ценные мысли/моменты разговора: сильные формулировки, ключевые выводы, ' +
+  'поворотные и инсайтные фразы. Число НЕ ограничивай искусственно — столько, сколько ' +
+  'действительно ценно (обычно от нескольких до ~15), но только по-настоящему важное, не ' +
+  'проходное. Верни СТРОГО JSON {"highlights": string[]}: каждая цитата ДОСЛОВНО из текста ' +
+  '(3–15 слов, точно как в тексте), без изменений, без повторов, без пояснений.'
 
 function parseResult(raw: string, original: string): CleanupResult {
   try {
@@ -139,7 +140,7 @@ export const localLlamaProvider: AiProvider = {
         ],
         stream: false,
         format: 'json',
-        options: { temperature: 0.2, num_ctx: 16384, num_predict: 800 }
+        options: { temperature: 0.2, num_ctx: 16384, num_predict: 2000 }
       })
     })
     if (!r.ok) throw new Error(`Ollama HTTP ${r.status}`)
