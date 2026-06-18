@@ -51,8 +51,11 @@ const api = {
   aiHasBackup: (slug: string): Promise<boolean> => ipcRenderer.invoke('ai:hasBackup', slug),
   cleanupAi: (slug: string): Promise<ProjectMeta | null> => ipcRenderer.invoke('ai:cleanup', slug),
   revertAi: (slug: string): Promise<ProjectMeta | null> => ipcRenderer.invoke('ai:revert', slug),
-  summarizeAi: (slug: string, level: 'note' | 'medium' | 'detailed'): Promise<string | null> =>
-    ipcRenderer.invoke('ai:summarize', slug, level),
+  summarizeAi: (
+    slug: string,
+    level: 'note' | 'medium' | 'detailed',
+    domain: 'therapy' | 'business' | 'general'
+  ): Promise<string | null> => ipcRenderer.invoke('ai:summarize', slug, level, domain),
   onAiProgress: (cb: (p: { done: number; total: number; phase: string }) => void): (() => void) => {
     const handler = (_e: unknown, p: { done: number; total: number; phase: string }): void => cb(p)
     ipcRenderer.on('ai:progress', handler)

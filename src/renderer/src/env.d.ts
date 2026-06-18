@@ -33,7 +33,11 @@ export interface RendererApi {
   aiHasBackup: (slug: string) => Promise<boolean>
   cleanupAi: (slug: string) => Promise<ProjectMeta | null>
   revertAi: (slug: string) => Promise<ProjectMeta | null>
-  summarizeAi: (slug: string, level: 'note' | 'medium' | 'detailed') => Promise<string | null>
+  summarizeAi: (
+    slug: string,
+    level: 'note' | 'medium' | 'detailed',
+    domain: 'therapy' | 'business' | 'general'
+  ) => Promise<string | null>
   onAiProgress: (cb: (p: { done: number; total: number; phase: string }) => void) => () => void
   onImportProgress: (cb: (p: ImportProgress) => void) => () => void
   startTranscribe: (slug: string, opts: TranscribeOptions) => Promise<JobInfo>

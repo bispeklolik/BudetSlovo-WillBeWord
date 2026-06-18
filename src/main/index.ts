@@ -15,7 +15,7 @@ import {
 } from './project/store'
 import { mergeEngineOutputs } from './project/merge'
 import { exportTranscript, type ExportFormat } from './export'
-import { registerProvider, getProvider, type SummaryLevel } from './ai/provider'
+import { registerProvider, getProvider, type SummaryLevel, type SummaryDomain } from './ai/provider'
 import { localLlamaProvider } from './ai/localLlama'
 import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
 import { stopOllama, ensureOllama } from './ai/ollamaServer'
@@ -192,19 +192,22 @@ ipcMain.handle('ai:cleanup', (_e, slug: string) =>
   runCleanup(slug, 'local-llama', (p) => win?.webContents.send('ai:progress', p))
 )
 ipcMain.handle('ai:revert', (_e, slug: string) => revertCleanup(slug))
-ipcMain.handle('ai:summarize', async (_e, slug: string, level: SummaryLevel) => {
-  const meta = getProject(slug)
-  if (!meta?.turns) return null
-  if (!(await ensureOllama())) throw new Error('AI_UNAVAILABLE')
-  const provider = getProvider('local-llama')
-  if (!provider) throw new Error('AI_PROVIDER_NOT_FOUND')
-  if (!(await provider.isAvailable())) throw new Error('AI_MODEL_MISSING')
-  const name = (spk: string): string => meta.speakers?.find((s) => s.id === spk)?.name ?? spk
-  const text = meta.turns
-    .map((t) => name(t.spk) + ': ' + t.words.map((w) => w.t).join(' '))
-    .join('\n')
-  return provider.summarize(text, level)
-})
+ipcMain.handle(
+  'ai:summarize',
+  async (_e, slug: string, level: SummaryLevel, domain: SummaryDomain) => {
+    const meta = getProject(slug)
+    if (!meta?.turns) return null
+    if (!(await ensureOllama())) throw new Error('AI_UNAVAILABLE')
+    const provider = getProvider('local-llama')
+    if (!provider) throw new Error('AI_PROVIDER_NOT_FOUND')
+    if (!(await provider.isAvailable())) throw new Error('AI_MODEL_MISSING')
+    const name = (spk: string): string => meta.speakers?.find((s) => s.id === spk)?.name ?? spk
+    const text = meta.turns
+      .map((t) => name(t.spk) + ': ' + t.words.map((w) => w.t).join(' '))
+      .join('\n')
+    return provider.summarize(text, level, domain)
+  }
+)
 
 app.whenReady().then(() => {
   initQueue()

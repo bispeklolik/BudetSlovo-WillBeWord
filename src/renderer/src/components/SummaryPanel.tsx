@@ -8,6 +8,13 @@ const LABELS: Record<Level, string> = {
   detailed: 'Подробно'
 }
 
+type Domain = 'therapy' | 'business' | 'general'
+const DOMAINS: Record<Domain, string> = {
+  therapy: 'Терапия',
+  business: 'Переговоры',
+  general: 'Общее'
+}
+
 export default function SummaryPanel({
   slug,
   onClose
@@ -17,6 +24,7 @@ export default function SummaryPanel({
 }): React.JSX.Element {
   const [busy, setBusy] = useState<Level | null>(null)
   const [level, setLevel] = useState<Level | null>(null)
+  const [domain, setDomain] = useState<Domain>('therapy')
   const [result, setResult] = useState('')
   const [copied, setCopied] = useState(false)
 
@@ -26,7 +34,7 @@ export default function SummaryPanel({
     setResult('')
     setCopied(false)
     try {
-      const s = await api.summarizeAi(slug, lv)
+      const s = await api.summarizeAi(slug, lv, domain)
       setResult(s ?? '')
     } catch (err) {
       const m = String(err)
@@ -50,6 +58,21 @@ export default function SummaryPanel({
           <button className="btn" onClick={onClose}>
             Закрыть
           </button>
+        </div>
+        <div className="summary-levels">
+          <span className="panel-note" style={{ alignSelf: 'center', marginRight: 4 }}>
+            Тип записи:
+          </span>
+          {(['therapy', 'business', 'general'] as Domain[]).map((d) => (
+            <button
+              key={d}
+              className={'btn' + (domain === d ? ' btn-primary' : '')}
+              disabled={busy !== null}
+              onClick={() => setDomain(d)}
+            >
+              {DOMAINS[d]}
+            </button>
+          ))}
         </div>
         <div className="summary-levels">
           {(['note', 'medium', 'detailed'] as Level[]).map((lv) => (

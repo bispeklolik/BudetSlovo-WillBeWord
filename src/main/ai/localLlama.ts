@@ -1,4 +1,10 @@
-import type { AiProvider, CleanupOptions, CleanupResult, SummaryLevel } from './provider'
+import type {
+  AiProvider,
+  CleanupOptions,
+  CleanupResult,
+  SummaryLevel,
+  SummaryDomain
+} from './provider'
 
 // Локальный провайдер через Ollama (HTTP на 127.0.0.1:11434). Модель по
 // умолчанию — Qwen2.5-7B. За ОДИН проход модель и причёсывает реплику
@@ -22,21 +28,26 @@ const DEFAULT_SYSTEM =
   'распознавания (например «коблит», «водопряжение»). Если таких нет — пустой список. ' +
   'Не вписывай в suspect нормальные слова.'
 
-const SUMMARY_SYSTEM =
-  'Ты помогаешь психологу. Тебе дают расшифровку консультации (реплики Психолога и ' +
-  'Клиента). Опирайся ТОЛЬКО на текст, ничего не выдумывай. Пиши по-русски, нейтрально ' +
-  'и профессионально, без обращений и воды.'
+const SUMMARY_BASE =
+  'Ты помогаешь специалисту структурировать запись разговора. Опирайся ТОЛЬКО на текст, ' +
+  'ничего не выдумывай. Пиши по-русски, нейтрально и профессионально, без обращений и воды.'
 
-const SUMMARY_PROMPTS: Record<SummaryLevel, string> = {
-  note:
-    'Сделай ОЧЕНЬ КРАТКУЮ формальную заметку (как запись в карту): запрос/тема, ключевые ' +
-    'моменты, динамика/состояние, что дальше. 4–7 пунктов, сухо и по делу.',
+const SUMMARY_DOMAIN: Record<SummaryDomain, string> = {
+  therapy:
+    ' Это психологическая консультация (реплики Психолога и Клиента); выделяй запрос/тему, ' +
+    'состояние и динамику клиента, ключевые моменты и что дальше.',
+  business:
+    ' Это деловой разговор/переговоры; обязательно выдели договорённости и итог, конкретные ' +
+    'задачи (что сделать) и открытые вопросы (что обдумать).',
+  general: ' Это разговор; выдели суть, ключевые моменты и итог.'
+}
+
+const SUMMARY_LEVEL: Record<SummaryLevel, string> = {
+  note: ' Формат: ОЧЕНЬ КРАТКАЯ формальная заметка, 4–7 пунктов, сухо и по делу.',
   medium:
-    'Сделай КРАТКОЕ, но полное содержание: 2–4 абзаца связного пересказа, затем список ' +
-    'ключевых тезисов (главные мысли и моменты).',
+    ' Формат: краткое, но полное содержание — 2–4 абзаца пересказа, затем список ключевых тезисов.',
   detailed:
-    'Сделай ПОДРОБНОЕ содержание беседы: передай ход и смысл, убрав только лишнее, повторы ' +
-    'и слова-паразиты. Сохрани последовательность и важные детали.'
+    ' Формат: подробное содержание — передай ход и смысл, убрав только лишнее, повторы и паразиты.'
 }
 
 function parseResult(raw: string, original: string): CleanupResult {
@@ -90,14 +101,15 @@ export const localLlamaProvider: AiProvider = {
     return parseResult((d.message?.content || '').trim(), text)
   },
 
-  async summarize(text: string, level: SummaryLevel): Promise<string> {
+  async summarize(text: string, level: SummaryLevel, domain: SummaryDomain): Promise<string> {
+    const system = SUMMARY_BASE + SUMMARY_DOMAIN[domain] + SUMMARY_LEVEL[level]
     const r = await fetch(`${OLLAMA_URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: MODEL,
         messages: [
-          { role: 'system', content: SUMMARY_SYSTEM + '\n' + SUMMARY_PROMPTS[level] },
+          { role: 'system', content: system },
           { role: 'user', content: text }
         ],
         stream: false,

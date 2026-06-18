@@ -17,6 +17,9 @@ export interface CleanupOptions {
 // подробное содержание (выкинуто только лишнее).
 export type SummaryLevel = 'note' | 'medium' | 'detailed'
 
+// Тип записи — задаёт рамку выжимки (что выделять).
+export type SummaryDomain = 'therapy' | 'business' | 'general'
+
 export interface CleanupResult {
   /** Причёсанный текст реплики. */
   cleaned: string
@@ -38,8 +41,8 @@ export interface AiProvider {
   isAvailable(): Promise<boolean>
   /** Причёсывает реплику и помечает подозрительные слова (смысловой анализ). */
   cleanupTurn(text: string, opts: CleanupOptions): Promise<CleanupResult>
-  /** Краткое содержание всей расшифровки на выбранном уровне детализации. */
-  summarize(text: string, level: SummaryLevel): Promise<string>
+  /** Краткое содержание всей расшифровки на выбранном уровне детализации и под тип записи. */
+  summarize(text: string, level: SummaryLevel, domain: SummaryDomain): Promise<string>
 }
 
 const providers = new Map<string, AiProvider>()
