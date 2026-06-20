@@ -9,6 +9,7 @@ import TranscribePanel from '../components/TranscribePanel'
 import TranscriptView from '../components/TranscriptView'
 import ExportMenu from '../components/ExportMenu'
 import SummaryPanel from '../components/SummaryPanel'
+import HighlightsPanel from '../components/HighlightsPanel'
 import Icon from '../components/Icon'
 
 function fmtTime(sec: number): string {
@@ -46,6 +47,7 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
   const [aiProgress, setAiProgress] = useState<{ done: number; total: number } | null>(null)
   const [aiBackup, setAiBackup] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
+  const [hlPanelOpen, setHlPanelOpen] = useState(false)
   const [hlBusy, setHlBusy] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -415,8 +417,13 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
               {hlBusy ? 'Ищу…' : 'Лучшие мысли'}
             </button>
             {hasHl && !hlBusy && (
-              <button className="btn" onClick={clearHl}>
-                Убрать выделения
+              <button className="btn" onClick={() => setHlPanelOpen(true)}>
+                Список
+              </button>
+            )}
+            {hasHl && !hlBusy && (
+              <button className="btn" onClick={clearHl} title="Убрать выделения">
+                <Icon name="x" size={15} />
               </button>
             )}
             <button
@@ -558,6 +565,19 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
 
       {summaryOpen && (
         <SummaryPanel slug={slug} title={meta.title} onClose={() => setSummaryOpen(false)} />
+      )}
+
+      {hlPanelOpen && (
+        <HighlightsPanel
+          turns={meta.turns ?? []}
+          onJump={(sec) => {
+            seek(sec + 0.01)
+            setFollow(true)
+            audioRef.current?.play().catch(() => {})
+            setHlPanelOpen(false)
+          }}
+          onClose={() => setHlPanelOpen(false)}
+        />
       )}
     </main>
   )
