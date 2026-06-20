@@ -252,9 +252,16 @@ button {
 }
 
 .folder-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 15px;
   font-weight: 500;
   color: var(--text);
+}
+
+.folder-card-title svg {
+  color: var(--accent);
 }
 
 .breadcrumb {

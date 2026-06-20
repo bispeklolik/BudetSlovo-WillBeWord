@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ProjectMeta } from '../../../shared/types'
 import { api } from '../api'
+import Icon from '../components/Icon'
 
 function fmtDuration(sec: number): string {
   const t = Math.floor(sec)
@@ -133,7 +134,10 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
               tabIndex={0}
               onClick={() => setFolder(prefix + seg)}
             >
-              <div className="folder-card-title">📁 {seg}</div>
+              <div className="folder-card-title">
+                <Icon name="folder" size={18} />
+                <span>{seg}</span>
+              </div>
               <div className="project-card-meta">{countUnder(seg)} записей</div>
             </div>
           ))}
@@ -151,10 +155,10 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
               </div>
               <div className="card-actions">
                 <button title="Переименовать" onClick={(e) => rename(e, p)}>
-                  ✏
+                  <Icon name="edit" />
                 </button>
                 <button title="Положить в папку" onClick={(e) => move(e, p)}>
-                  📁
+                  <Icon name="folder" />
                 </button>
               </div>
             </div>
