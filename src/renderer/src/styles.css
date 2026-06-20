@@ -1,17 +1,21 @@
+@import '@fontsource-variable/inter/index.css';
+
 :root,
 :root[data-theme='light'] {
-  --bg: #faf9f5;
+  --bg: #f6f7f4;
   --surface: #ffffff;
-  --surface2: #f3f2ec;
-  --text: #2c2c2a;
-  --muted: #6b6a64;
-  --border: #e3e1d9;
-  --accent: #185fa5;
-  --accent-soft: #e6f1fb;
-  --wave: #b4b2a9;
-  --playhead: #d85a30;
-  --spk1: #378add;
-  --spk2: #1d9e75;
+  --surface2: #eef0ec;
+  --text: #1f2422;
+  --muted: #65706b;
+  --border: #e4e6e1;
+  --accent: #0f766e;
+  --accent-solid: #0f766e;
+  --accent-soft: #d9f0ec;
+  --shadow: 0 1px 2px rgba(20, 30, 28, 0.04), 0 4px 14px rgba(20, 30, 28, 0.06);
+  --wave: #b7bcb6;
+  --playhead: #e0613a;
+  --spk1: #2f74c0;
+  --spk2: #138a6e;
   --conf-mid-bg: #faeeda;
   --conf-mid-line: #ef9f27;
   --conf-mid-text: #633806;
@@ -26,18 +30,20 @@
 }
 
 :root[data-theme='dark'] {
-  --bg: #17171c;
-  --surface: #1f1f26;
-  --surface2: #24242c;
-  --text: #d8d8e0;
-  --muted: #8a8a96;
-  --border: #2e2e36;
-  --accent: #85b7eb;
-  --accent-soft: #142433;
-  --wave: #534ab7;
+  --bg: #14171a;
+  --surface: #1c2024;
+  --surface2: #232830;
+  --text: #e3e7e5;
+  --muted: #8c958f;
+  --border: #2c333a;
+  --accent: #4cc2b4;
+  --accent-solid: #0d8276;
+  --accent-soft: #133330;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 18px rgba(0, 0, 0, 0.35);
+  --wave: #5a6b86;
   --playhead: #f0997b;
-  --spk1: #85b7eb;
-  --spk2: #5dcaa5;
+  --spk1: #7db4ec;
+  --spk2: #5fd0a8;
   --conf-mid-bg: #3a2e14;
   --conf-mid-line: #ef9f27;
   --conf-mid-text: #fac775;
@@ -63,10 +69,22 @@ body,
 
 body {
   margin: 0;
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   background: var(--bg);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.app-title,
+.editor-title,
+.panel-title,
+.modal-title,
+.empty-title,
+.project-card-title,
+.folder-card-title {
+  letter-spacing: -0.012em;
 }
 
 button {
@@ -103,9 +121,13 @@ button {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 14px;
+  border-radius: 9px;
+  padding: 7px 14px;
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
 }
 
 .btn:hover:not(:disabled) {
@@ -119,8 +141,8 @@ button {
 }
 
 .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
   color: #fff;
 }
 
@@ -170,11 +192,16 @@ button {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: 15px 16px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  box-shadow: var(--shadow);
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .card-actions {
@@ -206,18 +233,22 @@ button {
 }
 
 .folder-card {
-  background: var(--surface);
+  background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: 15px 16px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
 }
 
 .folder-card:hover {
   border-color: var(--accent);
+  transform: translateY(-2px);
 }
 
 .folder-card-title {
@@ -254,6 +285,7 @@ button {
 
 .project-card:hover {
   border-color: var(--accent);
+  transform: translateY(-2px);
 }
 
 .project-card-title {
@@ -457,7 +489,7 @@ button {
 }
 
 .word.active {
-  background: var(--accent);
+  background: var(--accent-solid);
   color: #fff;
 }
 
@@ -645,15 +677,16 @@ button {
 
 .modal {
   background: var(--surface);
-  border: 0.5px solid var(--border);
-  border-radius: 12px;
-  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px;
   width: 100%;
   max-width: 680px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  box-shadow: var(--shadow);
 }
 
 .modal-head {
