@@ -54,10 +54,12 @@ export default function SettingsModal({
         <div className="settings-section">
           <div className="settings-label">Горячие клавиши</div>
           {[
+            ['Клик по слову', 'перейти к месту в аудио'],
             ['Пробел', 'играть / пауза'],
             ['← / →', '−5 / +5 секунд'],
-            ['Ctrl + F', 'поиск по тексту'],
-            ['Ctrl + Z / Ctrl + Y', 'отменить / повторить']
+            ['Ctrl + F', 'поиск и замена'],
+            ['Ctrl + Z / Ctrl + Y', 'отменить / повторить'],
+            ['Esc', 'закрыть поиск или окно']
           ].map(([k, v]) => (
             <div className="settings-row" key={k}>
               <span>{k}</span>
