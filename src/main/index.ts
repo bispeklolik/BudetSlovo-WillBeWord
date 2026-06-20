@@ -129,6 +129,22 @@ ipcMain.handle('project:setFolder', (_e, slug: string, folder: string) => {
   return meta
 })
 
+// Переименовать папку: обновить префикс пути у всех записей внутри неё.
+ipcMain.handle('project:renameFolder', (_e, oldPath: string, newPath: string) => {
+  if (!oldPath || !newPath || oldPath === newPath) return false
+  for (const p of listProjects()) {
+    const f = p.folder ?? ''
+    if (f === oldPath || f.startsWith(oldPath + '/')) {
+      const full = getProject(p.slug)
+      if (full) {
+        full.folder = newPath + f.slice(oldPath.length)
+        saveProject(full)
+      }
+    }
+  }
+  return true
+})
+
 ipcMain.handle('project:list', () => listProjects())
 ipcMain.handle('project:get', (_e, slug: string) => {
   const meta = getProject(slug)

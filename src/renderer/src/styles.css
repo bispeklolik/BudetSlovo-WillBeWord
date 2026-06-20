@@ -213,7 +213,8 @@ button {
   opacity: 0;
 }
 
-.project-card:hover .card-actions {
+.project-card:hover .card-actions,
+.folder-card:hover .card-actions {
   opacity: 0.85;
 }
 
@@ -233,6 +234,7 @@ button {
 }
 
 .folder-card {
+  position: relative;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 12px;

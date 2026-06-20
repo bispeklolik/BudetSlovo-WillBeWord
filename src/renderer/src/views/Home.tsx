@@ -69,6 +69,16 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
     }
   }
 
+  const renameFolder = async (e: React.MouseEvent, seg: string): Promise<void> => {
+    e.stopPropagation()
+    const name = window.prompt('Новое название папки:', seg)
+    if (name && name.trim() && name.trim() !== seg) {
+      const pfx = folder ? folder + '/' : ''
+      await api.renameFolder(pfx + seg, pfx + name.trim())
+      refresh()
+    }
+  }
+
   // Текущий уровень: подпапки + записи прямо в этой папке.
   const prefix = folder ? folder + '/' : ''
   const records = projects
@@ -139,6 +149,11 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
                 <span>{seg}</span>
               </div>
               <div className="project-card-meta">{countUnder(seg)} записей</div>
+              <div className="card-actions">
+                <button title="Переименовать папку" onClick={(e) => renameFolder(e, seg)}>
+                  <Icon name="edit" />
+                </button>
+              </div>
             </div>
           ))}
           {records.map((p) => (

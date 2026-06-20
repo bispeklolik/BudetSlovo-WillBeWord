@@ -20,6 +20,7 @@ const stub: RendererApi = {
   importPath: async () => null,
   renameProject: async () => null,
   setFolder: async () => null,
+  renameFolder: async () => false,
   listProjects: async () => [],
   getProject: async () => null,
   getPeaks: async () => null,
