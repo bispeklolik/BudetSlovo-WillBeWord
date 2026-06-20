@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { ProjectMeta } from '../../../shared/types'
 import { searchProjects } from '../../../shared/search'
+import { buildFolderTree, ancestorPaths } from '../../../shared/folders'
 import { api } from '../api'
 import Icon from '../components/Icon'
+import Sidebar, { NOTES_KEY } from '../components/Sidebar'
+import InputModal from '../components/InputModal'
+import MoveModal from '../components/MoveModal'
+import NotesPane from '../components/NotesPane'
 
 function fmtDuration(sec: number): string {
   const t = Math.floor(sec)
@@ -22,23 +27,46 @@ function fmtDate(iso: string): string {
   }
 }
 
+const SLUG_TYPE = 'text/slovo-slug'
+
+type Modal =
+  | { kind: 'createFolder' }
+  | { kind: 'renameFolder'; path: string }
+  | { kind: 'renameRecord'; p: ProjectMeta }
+  | { kind: 'moveRecord'; p: ProjectMeta }
+  | null
+
 export default function Home({
   onOpen
 }: {
   onOpen: (slug: string, search?: string) => void
 }): React.JSX.Element {
   const [projects, setProjects] = useState<ProjectMeta[]>([])
+  const [folderList, setFolderList] = useState<string[]>([])
+  const [notesCount, setNotesCount] = useState(0)
   const [busy, setBusy] = useState<string | null>(null)
-  const [folder, setFolder] = useState('') // текущая папка; '' = корень
-  const [dropKey, setDropKey] = useState<string | null>(null) // куда сейчас «целится» перетаскивание
-  const [gq, setGq] = useState('') // глобальный поиск по всем записям
+  const [folder, setFolder] = useState('') // '' = корень, '@notes' = конспекты, иначе путь
+  const [gq, setGq] = useState('') // глобальный поиск
+  const [dropKey, setDropKey] = useState<string | null>(null)
+  const [modal, setModal] = useState<Modal>(null)
 
   const refresh = (): void => {
     api.listProjects().then(setProjects)
   }
-
+  const refreshNotes = (): void => {
+    api.listNotes().then((n) => setNotesCount(n.length))
+  }
   useEffect(refresh, [])
+  useEffect(refreshNotes, [])
+  useEffect(() => {
+    api.getSettings().then((s) => setFolderList(s.folders ?? []))
+  }, [])
   useEffect(() => api.onImportProgress((p) => setBusy(p.phase === 'done' ? null : p.message)), [])
+
+  const persistFolders = async (next: string[]): Promise<void> => {
+    setFolderList(next)
+    await api.setSettings({ folders: next })
+  }
 
   const doImport = async (): Promise<void> => {
     setBusy('Открываю диалог…')
@@ -55,83 +83,85 @@ export default function Home({
     }
   }
 
-  const rename = async (e: React.MouseEvent, p: ProjectMeta): Promise<void> => {
-    e.stopPropagation()
-    const name = window.prompt('Новое название записи:', p.title)
-    if (name && name.trim() && name.trim() !== p.title) {
-      await api.renameProject(p.slug, name.trim())
-      refresh()
-    }
-  }
+  // --- дерево папок: явные + выведенные из записей + все предки ---
+  const allPaths = new Set<string>(folderList)
+  for (const p of projects) if (p.folder) allPaths.add(p.folder)
+  const withAnc = [...ancestorPaths([...allPaths])]
+  const tree = buildFolderTree(withAnc)
+  const count = (path: string): number =>
+    projects.filter((p) => {
+      const f = p.folder ?? ''
+      return f === path || f.startsWith(path + '/')
+    }).length
 
-  const move = async (e: React.MouseEvent, p: ProjectMeta): Promise<void> => {
-    e.stopPropagation()
-    const f = window.prompt(
-      'В какую папку положить? Например «Консультации/Ева». Пусто = в корень.',
-      p.folder ?? ''
+  const records = projects
+    .filter((p) => (p.folder ?? '') === folder)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const hits = gq.trim() ? searchProjects(projects, gq) : null
+
+  // --- действия с папками ---
+  const createFolder = (name: string): void => {
+    const base = folder && folder !== NOTES_KEY ? folder + '/' : ''
+    const np = base + name
+    if (!folderList.includes(np)) void persistFolders([...folderList, np])
+    setFolder(np)
+    setModal(null)
+  }
+  const renameFolder = async (oldPath: string, newName: string): Promise<void> => {
+    const parent = oldPath.includes('/') ? oldPath.slice(0, oldPath.lastIndexOf('/') + 1) : ''
+    const np = parent + newName
+    if (np === oldPath) {
+      setModal(null)
+      return
+    }
+    await api.renameFolder(oldPath, np) // переписывает префиксы у записей
+    const nl = folderList.map((f) =>
+      f === oldPath ? np : f.startsWith(oldPath + '/') ? np + f.slice(oldPath.length) : f
     )
-    if (f !== null) {
-      await api.setFolder(p.slug, f.trim())
-      refresh()
+    await persistFolders(nl)
+    if (folder === oldPath || folder.startsWith(oldPath + '/')) setFolder(np + folder.slice(oldPath.length))
+    refresh()
+    setModal(null)
+  }
+  const deleteFolder = (path: string): void => {
+    if (count(path) > 0) {
+      alert('В папке есть записи. Сначала переместите их в другую папку.')
+      return
     }
+    void persistFolders(folderList.filter((f) => f !== path && !f.startsWith(path + '/')))
+    if (folder === path || folder.startsWith(path + '/')) setFolder('')
   }
 
-  const renameFolder = async (e: React.MouseEvent, seg: string): Promise<void> => {
-    e.stopPropagation()
-    const name = window.prompt('Новое название папки:', seg)
-    if (name && name.trim() && name.trim() !== seg) {
-      const pfx = folder ? folder + '/' : ''
-      await api.renameFolder(pfx + seg, pfx + name.trim())
-      refresh()
-    }
+  // --- действия с записями ---
+  const renameRecord = async (slug: string, name: string): Promise<void> => {
+    await api.renameProject(slug, name)
+    refresh()
+    setModal(null)
   }
-
-  // --- Перетаскивание записи в папку/крошку ---
-  const SLUG_TYPE = 'text/slovo-slug'
-  const moveTo = async (slug: string, dest: string): Promise<void> => {
-    setDropKey(null)
-    const cur = projects.find((p) => p.slug === slug)
-    if (!cur || (cur.folder ?? '') === dest) return
+  const moveRecord = async (slug: string, dest: string): Promise<void> => {
     await api.setFolder(slug, dest)
     refresh()
+    setModal(null)
   }
+
+  // --- перетаскивание записи на папку дерева ---
   const allowDrop = (e: React.DragEvent, key: string): void => {
     if (e.dataTransfer.types.includes(SLUG_TYPE)) {
       e.preventDefault()
       if (dropKey !== key) setDropKey(key)
     }
   }
-  const dropSlug = (e: React.DragEvent, dest: string): void => {
+  const dropRecord = (e: React.DragEvent, dest: string): void => {
     e.preventDefault()
+    setDropKey(null)
     const slug = e.dataTransfer.getData(SLUG_TYPE)
-    if (slug) void moveTo(slug, dest)
-  }
-
-  // Текущий уровень: подпапки + записи прямо в этой папке.
-  const prefix = folder ? folder + '/' : ''
-  const records = projects
-    .filter((p) => (p.folder ?? '') === folder)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  const subSet = new Set<string>()
-  for (const p of projects) {
-    const f = p.folder ?? ''
-    if (f !== folder && (folder === '' || f.startsWith(prefix))) {
-      const seg = (folder === '' ? f : f.slice(prefix.length)).split('/')[0]
-      if (seg) subSet.add(seg)
+    if (slug) {
+      const cur = projects.find((p) => p.slug === slug)
+      if (cur && (cur.folder ?? '') !== dest) void moveRecord(slug, dest)
     }
   }
-  const subfolders = [...subSet].sort((a, b) => a.localeCompare(b))
-  const countUnder = (seg: string): number => {
-    const full = prefix + seg
-    return projects.filter((p) => {
-      const f = p.folder ?? ''
-      return f === full || f.startsWith(full + '/')
-    }).length
-  }
-  const crumbs = folder ? folder.split('/') : []
-  const hits = gq.trim() ? searchProjects(projects, gq) : null // null = режим папок
 
-  // Первый запуск: ни одной записи — показываем приветствие вместо пустой сетки.
+  // Первый запуск: ни одной записи — приветствие.
   if (projects.length === 0) {
     return (
       <main className="home">
@@ -157,6 +187,8 @@ export default function Home({
       </main>
     )
   }
+
+  const folderTitle = folder === '' ? 'Все записи' : folder.split('/').pop()
 
   return (
     <main className="home">
@@ -188,119 +220,146 @@ export default function Home({
         </div>
       </div>
 
-      {hits ? (
-        <div className="result-list">
-          <div className="result-head">Найдено записей: {hits.length}</div>
-          {hits.length === 0 ? (
-            <div className="empty">
-              <div className="empty-title">Ничего не найдено</div>
-              <div>Попробуйте другое слово</div>
-            </div>
-          ) : (
-            hits.map((h) => (
-              <button
-                key={h.slug}
-                className="result-item"
-                onClick={() => onOpen(h.slug, gq.trim())}
-              >
-                <div className="result-item-title">
-                  <span>{h.title}</span>
-                  <span className="result-count">{h.count}</span>
-                </div>
-                <div className="result-snippet">{h.snippet}</div>
-              </button>
-            ))
-          )}
-        </div>
-      ) : (
-        <>
-      <div className="breadcrumb">
-        <button
-          className={'crumb' + (dropKey === 'root' ? ' drop-hover' : '')}
-          onClick={() => setFolder('')}
-          onDragOver={(e) => allowDrop(e, 'root')}
+      <div className="home-body">
+        <Sidebar
+          tree={tree}
+          selected={folder}
+          totalCount={projects.length}
+          notesCount={notesCount}
+          count={count}
+          dropKey={dropKey}
+          onSelect={setFolder}
+          onCreateFolder={() => setModal({ kind: 'createFolder' })}
+          onRenameFolder={(path) => setModal({ kind: 'renameFolder', path })}
+          onDeleteFolder={deleteFolder}
+          onAllowDrop={allowDrop}
           onDragLeave={() => setDropKey(null)}
-          onDrop={(e) => dropSlug(e, '')}
-        >
-          Все записи
-        </button>
-        {crumbs.map((seg, i) => (
-          <span key={i}>
-            <span className="crumb-sep">/</span>
-            <button
-              className={'crumb' + (dropKey === 'c:' + i ? ' drop-hover' : '')}
-              onClick={() => setFolder(crumbs.slice(0, i + 1).join('/'))}
-              onDragOver={(e) => allowDrop(e, 'c:' + i)}
-              onDragLeave={() => setDropKey(null)}
-              onDrop={(e) => dropSlug(e, crumbs.slice(0, i + 1).join('/'))}
-            >
-              {seg}
-            </button>
-          </span>
-        ))}
+          onDropRecord={dropRecord}
+        />
+
+        <section className="records-pane">
+          {hits ? (
+            <>
+              <div className="pane-head">Найдено записей: {hits.length}</div>
+              {hits.length === 0 ? (
+                <div className="empty">
+                  <div className="empty-title">Ничего не найдено</div>
+                  <div>Попробуйте другое слово</div>
+                </div>
+              ) : (
+                <div className="result-list">
+                  {hits.map((h) => (
+                    <button
+                      key={h.slug}
+                      className="result-item"
+                      onClick={() => onOpen(h.slug, gq.trim())}
+                    >
+                      <div className="result-item-title">
+                        <span>{h.title}</span>
+                        <span className="result-count">{h.count}</span>
+                      </div>
+                      <div className="result-snippet">{h.snippet}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : folder === NOTES_KEY ? (
+            <NotesPane onCountChange={setNotesCount} />
+          ) : (
+            <>
+              <div className="pane-head">
+                {folderTitle} <span className="pane-count">{records.length}</span>
+              </div>
+              {records.length === 0 ? (
+                <div className="empty">
+                  <div className="empty-title">В этой папке пока нет записей</div>
+                  <div>Перетащите сюда запись или переместите её кнопкой «папка» на карточке</div>
+                </div>
+              ) : (
+                <div className="project-grid">
+                  {records.map((p) => (
+                    <div
+                      key={p.slug}
+                      className="project-card"
+                      role="button"
+                      tabIndex={0}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(SLUG_TYPE, p.slug)
+                        e.dataTransfer.effectAllowed = 'move'
+                      }}
+                      onDragEnd={() => setDropKey(null)}
+                      onClick={() => onOpen(p.slug)}
+                    >
+                      <div className="project-card-title">{p.title}</div>
+                      <div className="project-card-meta">
+                        {fmtDuration(p.audio.durationSec)} · {fmtDate(p.createdAt)}
+                      </div>
+                      <div className="card-actions">
+                        <button
+                          title="Переименовать"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setModal({ kind: 'renameRecord', p })
+                          }}
+                        >
+                          <Icon name="edit" />
+                        </button>
+                        <button
+                          title="Переместить в папку"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setModal({ kind: 'moveRecord', p })
+                          }}
+                        >
+                          <Icon name="folder" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </section>
       </div>
 
-      {subfolders.length === 0 && records.length === 0 ? (
-        <div className="empty">
-          <div className="empty-title">В этой папке пусто</div>
-          <div>Записи можно положить сюда из других папок</div>
-        </div>
-      ) : (
-        <div className="project-grid">
-          {subfolders.map((seg) => (
-            <div
-              key={'f:' + seg}
-              className={'folder-card' + (dropKey === 'f:' + seg ? ' drop-hover' : '')}
-              role="button"
-              tabIndex={0}
-              onClick={() => setFolder(prefix + seg)}
-              onDragOver={(e) => allowDrop(e, 'f:' + seg)}
-              onDragLeave={() => setDropKey(null)}
-              onDrop={(e) => dropSlug(e, prefix + seg)}
-            >
-              <div className="folder-card-title">
-                <Icon name="folder" size={18} />
-                <span>{seg}</span>
-              </div>
-              <div className="project-card-meta">{countUnder(seg)} записей</div>
-              <div className="card-actions">
-                <button title="Переименовать папку" onClick={(e) => renameFolder(e, seg)}>
-                  <Icon name="edit" />
-                </button>
-              </div>
-            </div>
-          ))}
-          {records.map((p) => (
-            <div
-              key={p.slug}
-              className="project-card"
-              role="button"
-              tabIndex={0}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData(SLUG_TYPE, p.slug)
-                e.dataTransfer.effectAllowed = 'move'
-              }}
-              onDragEnd={() => setDropKey(null)}
-              onClick={() => onOpen(p.slug)}
-            >
-              <div className="project-card-title">{p.title}</div>
-              <div className="project-card-meta">
-                {fmtDuration(p.audio.durationSec)} · {fmtDate(p.createdAt)}
-              </div>
-              <div className="card-actions">
-                <button title="Переименовать" onClick={(e) => rename(e, p)}>
-                  <Icon name="edit" />
-                </button>
-                <button title="Положить в папку" onClick={(e) => move(e, p)}>
-                  <Icon name="folder" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+      {modal?.kind === 'createFolder' && (
+        <InputModal
+          title="Новая папка"
+          label={folder && folder !== NOTES_KEY ? `Внутри «${folderTitle}»` : 'В корне'}
+          placeholder="Название папки"
+          submitLabel="Создать"
+          onSubmit={createFolder}
+          onClose={() => setModal(null)}
+        />
       )}
-        </>
+      {modal?.kind === 'renameFolder' && (
+        <InputModal
+          title="Переименовать папку"
+          initial={modal.path.split('/').pop()}
+          submitLabel="Сохранить"
+          onSubmit={(n) => void renameFolder(modal.path, n)}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.kind === 'renameRecord' && (
+        <InputModal
+          title="Переименовать запись"
+          initial={modal.p.title}
+          submitLabel="Сохранить"
+          onSubmit={(n) => void renameRecord(modal.p.slug, n)}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.kind === 'moveRecord' && (
+        <MoveModal
+          folders={withAnc}
+          current={modal.p.folder}
+          onPick={(d) => void moveRecord(modal.p.slug, d)}
+          onClose={() => setModal(null)}
+        />
       )}
     </main>
   )

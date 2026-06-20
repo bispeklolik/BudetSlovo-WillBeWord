@@ -2,9 +2,31 @@ export type Theme = 'light' | 'dark'
 
 export interface Settings {
   theme: Theme
+  folders?: string[] // явный список папок (включая пустые), чтобы они не исчезали
 }
 
-export const defaultSettings: Settings = { theme: 'light' }
+export const defaultSettings: Settings = { theme: 'light', folders: [] }
+
+// Конспект — сохранённая текстовая выжимка (саммари, лучшие мысли, заметка).
+export interface Note {
+  id: string
+  title: string
+  body: string
+  kind: 'summary' | 'thoughts' | 'note'
+  sourceSlug?: string
+  sourceTitle?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type NoteInput = {
+  id?: string
+  title: string
+  body: string
+  kind: Note['kind']
+  sourceSlug?: string
+  sourceTitle?: string
+}
 
 export interface ProjectAudio {
   file: string

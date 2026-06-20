@@ -31,6 +31,7 @@ export default function SummaryPanel({
   const [domain, setDomain] = useState<Domain>('therapy')
   const [result, setResult] = useState('')
   const [copied, setCopied] = useState(false)
+  const [savedNote, setSavedNote] = useState(false)
 
   const run = async (lv: Level): Promise<void> => {
     setBusy(lv)
@@ -110,6 +111,23 @@ export default function SummaryPanel({
               </button>
               <button className="btn" onClick={() => api.exportTextDocx('Саммари — ' + title, result)}>
                 Скачать .docx
+              </button>
+              <button
+                className="btn btn-primary"
+                style={{ marginLeft: 'auto' }}
+                onClick={async () => {
+                  await api.saveNote({
+                    kind: 'summary',
+                    title: 'Саммари — ' + title,
+                    body: result,
+                    sourceSlug: slug,
+                    sourceTitle: title
+                  })
+                  setSavedNote(true)
+                  setTimeout(() => setSavedNote(false), 1800)
+                }}
+              >
+                {savedNote ? 'В конспектах ✓' : 'Сохранить в конспекты'}
               </button>
             </div>
           </>

@@ -6,7 +6,9 @@ import type {
   JobInfo,
   TranscribeOptions,
   Turn,
-  SpeakerInfo
+  SpeakerInfo,
+  Note,
+  NoteInput
 } from '../shared/types'
 
 const api = {
@@ -54,6 +56,10 @@ const api = {
     ipcRenderer.invoke('export:audio', slug),
   exportTextDocx: (title: string, text: string): Promise<string | null> =>
     ipcRenderer.invoke('export:textDocx', title, text),
+
+  listNotes: (): Promise<Note[]> => ipcRenderer.invoke('notes:list'),
+  saveNote: (input: NoteInput): Promise<Note> => ipcRenderer.invoke('notes:save', input),
+  deleteNote: (id: string): Promise<void> => ipcRenderer.invoke('notes:delete', id),
 
   aiAvailable: (): Promise<boolean> => ipcRenderer.invoke('ai:available'),
   aiHasBackup: (slug: string): Promise<boolean> => ipcRenderer.invoke('ai:hasBackup', slug),

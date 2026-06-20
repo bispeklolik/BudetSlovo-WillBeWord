@@ -28,6 +28,11 @@ const stub: RendererApi = {
   exportTranscript: async () => null,
   exportAudio: async () => null,
   exportTextDocx: async () => null,
+  listNotes: async () => [],
+  saveNote: async () => {
+    throw new Error('Конспекты доступны только в приложении (Electron)')
+  },
+  deleteNote: async () => {},
   aiAvailable: async () => false,
   aiHasBackup: async () => false,
   cleanupAi: async () => null,

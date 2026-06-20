@@ -20,6 +20,7 @@ import { localLlamaProvider } from './ai/localLlama'
 import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
 import { stopOllama, ensureOllama } from './ai/ollamaServer'
 import { applyHighlights, clearHighlights } from './ai/highlight'
+import { listNotes, saveNote, deleteNote } from './notes/store'
 import {
   initQueue,
   setJobNotifier,
@@ -27,7 +28,7 @@ import {
   cancelJob,
   listJobs
 } from './jobs/queue'
-import type { Settings, TranscribeOptions, Turn, SpeakerInfo } from '../shared/types'
+import type { Settings, TranscribeOptions, Turn, SpeakerInfo, NoteInput } from '../shared/types'
 
 // Все данные Chromium-профиля строго на D: — C: почти полон.
 app.setPath('userData', join(DATA_DIR, 'electron'))
@@ -67,6 +68,11 @@ ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
   saveSettings(settings)
   return settings
 })
+
+// ---------- конспекты ----------
+ipcMain.handle('notes:list', () => listNotes())
+ipcMain.handle('notes:save', (_e, input: NoteInput) => saveNote(input))
+ipcMain.handle('notes:delete', (_e, id: string) => deleteNote(id))
 
 // ---------- проекты ----------
 function sendImportProgress(phase: string, message: string): void {

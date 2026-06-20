@@ -646,6 +646,8 @@ export default function Editor({
       {hlPanelOpen && (
         <HighlightsPanel
           turns={meta.turns ?? []}
+          slug={slug}
+          title={meta.title}
           onJump={(sec) => {
             seek(sec + 0.01)
             setFollow(true)

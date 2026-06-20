@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import type { Turn } from '../../../shared/types'
+import { api } from '../api'
 import { useEscClose } from '../useEscClose'
 
 interface Span {
@@ -34,18 +36,35 @@ function collectSpans(turns: Turn[]): Span[] {
 
 export default function HighlightsPanel({
   turns,
+  slug,
+  title,
   onJump,
   onClose
 }: {
   turns: Turn[]
+  slug: string
+  title: string
   onJump: (sec: number) => void
   onClose: () => void
 }): React.JSX.Element {
   useEscClose(onClose)
+  const [saved, setSaved] = useState(false)
   const spans = collectSpans(turns)
   const fmt = (sec: number): string => {
     const t = Math.floor(sec)
     return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`
+  }
+  const saveToNotes = async (): Promise<void> => {
+    const body = spans.map((s) => `[${fmt(s.sec)}] ${s.text}`).join('\n\n')
+    await api.saveNote({
+      kind: 'thoughts',
+      title: 'Лучшие мысли — ' + title,
+      body,
+      sourceSlug: slug,
+      sourceTitle: title
+    })
+    setSaved(true)
+    setTimeout(() => setSaved(false), 1800)
   }
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -61,14 +80,21 @@ export default function HighlightsPanel({
             Пока ничего не выделено. Нажмите «Лучшие мысли» в редакторе — ИИ найдёт ключевые места.
           </div>
         ) : (
-          <div className="hl-list">
-            {spans.map((s, i) => (
-              <button key={i} className="hl-item" onClick={() => onJump(s.sec)}>
-                <span className="hl-item-time">{fmt(s.sec)}</span>
-                <span className="hl-item-text">{s.text}</span>
+          <>
+            <div className="hl-list">
+              {spans.map((s, i) => (
+                <button key={i} className="hl-item" onClick={() => onJump(s.sec)}>
+                  <span className="hl-item-time">{fmt(s.sec)}</span>
+                  <span className="hl-item-text">{s.text}</span>
+                </button>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-primary" onClick={saveToNotes}>
+                {saved ? 'В конспектах ✓' : 'Сохранить в конспекты'}
               </button>
-            ))}
-          </div>
+            </div>
+          </>
         )}
       </div>
     </div>

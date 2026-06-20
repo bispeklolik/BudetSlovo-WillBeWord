@@ -6,7 +6,9 @@ import type {
   JobInfo,
   TranscribeOptions,
   Turn,
-  SpeakerInfo
+  SpeakerInfo,
+  Note,
+  NoteInput
 } from '../../shared/types'
 
 export interface RendererApi {
@@ -33,6 +35,9 @@ export interface RendererApi {
   ) => Promise<string | null>
   exportAudio: (slug: string) => Promise<string | null>
   exportTextDocx: (title: string, text: string) => Promise<string | null>
+  listNotes: () => Promise<Note[]>
+  saveNote: (input: NoteInput) => Promise<Note>
+  deleteNote: (id: string) => Promise<void>
   aiAvailable: () => Promise<boolean>
   aiHasBackup: (slug: string) => Promise<boolean>
   cleanupAi: (slug: string) => Promise<ProjectMeta | null>
