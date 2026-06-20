@@ -166,6 +166,47 @@ button {
   color: var(--text);
 }
 
+.welcome {
+  gap: 14px;
+  text-align: center;
+  padding: 24px;
+}
+
+.welcome-badge {
+  width: 68px;
+  height: 68px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.welcome .empty-title {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.welcome-sub {
+  max-width: 440px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.welcome .btn-primary {
+  margin-top: 6px;
+  padding: 11px 22px;
+  font-size: 15px;
+}
+
+.welcome-hint {
+  font-size: 13px;
+  color: var(--muted);
+  opacity: 0.85;
+}
+
 /* ---------- главная ---------- */
 
 .home {

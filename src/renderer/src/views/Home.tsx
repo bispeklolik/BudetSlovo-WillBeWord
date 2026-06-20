@@ -102,6 +102,33 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
   }
   const crumbs = folder ? folder.split('/') : []
 
+  // Первый запуск: ни одной записи — показываем приветствие вместо пустой сетки.
+  if (projects.length === 0) {
+    return (
+      <main className="home">
+        <div className="empty welcome">
+          <div className="welcome-badge">
+            <Icon name="sparkles" size={30} />
+          </div>
+          <div className="empty-title">Добро пожаловать в «Слово»</div>
+          <div className="welcome-sub">
+            Превращаю аудио и видео в текст — целиком на вашем компьютере. Записи никуда не
+            загружаются, всё остаётся у вас.
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={doImport}
+            disabled={busy !== null}
+            data-testid="import-btn"
+          >
+            {busy ?? 'Импортировать запись'}
+          </button>
+          <div className="welcome-hint">или перетащите файл аудио/видео прямо в это окно</div>
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="home">
       <div className="home-toolbar">
@@ -129,10 +156,10 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
         ))}
       </div>
 
-      {projects.length === 0 && !busy ? (
+      {subfolders.length === 0 && records.length === 0 ? (
         <div className="empty">
-          <div className="empty-title">Пока нет ни одной записи</div>
-          <div>Нажмите «Импортировать запись» или перетащите аудио/видео в окно</div>
+          <div className="empty-title">В этой папке пусто</div>
+          <div>Записи можно положить сюда из других папок</div>
         </div>
       ) : (
         <div className="project-grid">
