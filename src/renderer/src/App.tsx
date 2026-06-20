@@ -84,7 +84,12 @@ export default function App(): React.JSX.Element {
             ← Назад
           </button>
         )}
-        <span className="app-title">Слово</span>
+        <span className="app-brand">
+          <span className="app-logo" aria-hidden="true">
+            <Icon name="wave" size={17} />
+          </span>
+          <span className="app-title">Слово</span>
+        </span>
         <span className="app-sub">локальные расшифровки</span>
         <div style={{ marginLeft: 'auto' }}>
           <button

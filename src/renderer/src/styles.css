@@ -107,6 +107,23 @@ button {
   flex: 0 0 auto;
 }
 
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent-solid);
+  color: #fff;
+}
+
 .app-title {
   font-size: 16px;
   font-weight: 600;

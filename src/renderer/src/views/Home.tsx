@@ -130,7 +130,7 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
       <main className="home">
         <div className="empty welcome">
           <div className="welcome-badge">
-            <Icon name="sparkles" size={30} />
+            <Icon name="wave" size={32} />
           </div>
           <div className="empty-title">Добро пожаловать в «Слово»</div>
           <div className="welcome-sub">
