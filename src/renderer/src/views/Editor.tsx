@@ -10,6 +10,7 @@ import TranscriptView from '../components/TranscriptView'
 import ExportMenu from '../components/ExportMenu'
 import SummaryPanel from '../components/SummaryPanel'
 import HighlightsPanel from '../components/HighlightsPanel'
+import AiMenu from '../components/AiMenu'
 import Icon from '../components/Icon'
 
 function fmtTime(sec: number): string {
@@ -400,32 +401,30 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
         </span>
         {hasText && !reproc && (
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button className="btn" disabled={aiBusy} onClick={runAiCleanup}>
-              {aiBusy
-                ? `Причёсываю${aiProgress && aiProgress.total ? ` ${aiProgress.done}/${aiProgress.total}` : '…'}`
-                : 'Причесать ИИ'}
+            <button
+              className="btn btn-icon"
+              onClick={() => setSearchOpen(true)}
+              title="Поиск по тексту (Ctrl+F)"
+            >
+              <Icon name="search" size={16} />
             </button>
-            {aiBackup && !aiBusy && (
-              <button className="btn" onClick={revertAiCleanup}>
-                Отменить ИИ
-              </button>
-            )}
-            <button className="btn" onClick={() => setSummaryOpen(true)}>
-              Саммари
-            </button>
-            <button className="btn" disabled={hlBusy} onClick={runHighlights}>
-              {hlBusy ? 'Ищу…' : 'Лучшие мысли'}
-            </button>
-            {hasHl && !hlBusy && (
-              <button className="btn" onClick={() => setHlPanelOpen(true)}>
-                Список
-              </button>
-            )}
-            {hasHl && !hlBusy && (
-              <button className="btn" onClick={clearHl} title="Убрать выделения">
-                <Icon name="x" size={15} />
-              </button>
-            )}
+            <AiMenu
+              busyLabel={
+                aiBusy
+                  ? `Причёсываю${aiProgress && aiProgress.total ? ` ${aiProgress.done}/${aiProgress.total}` : '…'}`
+                  : hlBusy
+                    ? 'Ищу мысли…'
+                    : null
+              }
+              hasBackup={!!aiBackup}
+              hasHl={hasHl}
+              onCleanup={runAiCleanup}
+              onRevert={revertAiCleanup}
+              onSummary={() => setSummaryOpen(true)}
+              onHighlights={runHighlights}
+              onShowList={() => setHlPanelOpen(true)}
+              onClearHl={clearHl}
+            />
             <button
               className="btn"
               onClick={() => {

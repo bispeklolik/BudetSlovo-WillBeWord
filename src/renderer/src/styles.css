@@ -914,6 +914,12 @@ button {
   color: var(--accent);
 }
 
+.menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 2px;
+}
+
 .player {
   flex: 0 0 auto;
   border-top: 1px solid var(--border);
