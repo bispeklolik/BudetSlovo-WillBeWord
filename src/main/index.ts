@@ -119,6 +119,16 @@ ipcMain.handle('project:rename', (_e, slug: string, title: string) => {
   return meta
 })
 
+// Положить запись в папку организации (метаданные; файлы на диске не двигаются).
+ipcMain.handle('project:setFolder', (_e, slug: string, folder: string) => {
+  const meta = getProject(slug)
+  if (!meta) return null
+  if (folder) meta.folder = folder
+  else delete meta.folder
+  saveProject(meta)
+  return meta
+})
+
 ipcMain.handle('project:list', () => listProjects())
 ipcMain.handle('project:get', (_e, slug: string) => {
   const meta = getProject(slug)

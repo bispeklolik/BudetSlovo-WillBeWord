@@ -55,6 +55,8 @@ export interface ProjectMeta {
   title: string
   createdAt: string
   updatedAt: string
+  /** Папка для организации (напр. «Консультации/Ева»); пусто/нет = корень. */
+  folder?: string
   audio: ProjectAudio
   transcription?: {
     numSpeakers: number

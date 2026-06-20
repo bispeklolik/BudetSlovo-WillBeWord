@@ -21,6 +21,8 @@ const api = {
     ipcRenderer.invoke('project:importPath', path),
   renameProject: (slug: string, title: string): Promise<ProjectMeta | null> =>
     ipcRenderer.invoke('project:rename', slug, title),
+  setFolder: (slug: string, folder: string): Promise<ProjectMeta | null> =>
+    ipcRenderer.invoke('project:setFolder', slug, folder),
   listProjects: (): Promise<ProjectMeta[]> => ipcRenderer.invoke('project:list'),
   getProject: (slug: string): Promise<ProjectMeta | null> =>
     ipcRenderer.invoke('project:get', slug),

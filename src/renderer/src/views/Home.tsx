@@ -23,6 +23,7 @@ function fmtDate(iso: string): string {
 export default function Home({ onOpen }: { onOpen: (slug: string) => void }): React.JSX.Element {
   const [projects, setProjects] = useState<ProjectMeta[]>([])
   const [busy, setBusy] = useState<string | null>(null)
+  const [folder, setFolder] = useState('') // текущая папка; '' = корень
 
   const refresh = (): void => {
     api.listProjects().then(setProjects)
@@ -55,21 +56,88 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
     }
   }
 
+  const move = async (e: React.MouseEvent, p: ProjectMeta): Promise<void> => {
+    e.stopPropagation()
+    const f = window.prompt(
+      'В какую папку положить? Например «Консультации/Ева». Пусто = в корень.',
+      p.folder ?? ''
+    )
+    if (f !== null) {
+      await api.setFolder(p.slug, f.trim())
+      refresh()
+    }
+  }
+
+  // Текущий уровень: подпапки + записи прямо в этой папке.
+  const prefix = folder ? folder + '/' : ''
+  const records = projects
+    .filter((p) => (p.folder ?? '') === folder)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const subSet = new Set<string>()
+  for (const p of projects) {
+    const f = p.folder ?? ''
+    if (f !== folder && (folder === '' || f.startsWith(prefix))) {
+      const seg = (folder === '' ? f : f.slice(prefix.length)).split('/')[0]
+      if (seg) subSet.add(seg)
+    }
+  }
+  const subfolders = [...subSet].sort((a, b) => a.localeCompare(b))
+  const countUnder = (seg: string): number => {
+    const full = prefix + seg
+    return projects.filter((p) => {
+      const f = p.folder ?? ''
+      return f === full || f.startsWith(full + '/')
+    }).length
+  }
+  const crumbs = folder ? folder.split('/') : []
+
   return (
     <main className="home">
       <div className="home-toolbar">
-        <button className="btn btn-primary" onClick={doImport} disabled={busy !== null} data-testid="import-btn">
+        <button
+          className="btn btn-primary"
+          onClick={doImport}
+          disabled={busy !== null}
+          data-testid="import-btn"
+        >
           {busy ?? 'Импортировать запись'}
         </button>
       </div>
+
+      <div className="breadcrumb">
+        <button className="crumb" onClick={() => setFolder('')}>
+          Все записи
+        </button>
+        {crumbs.map((seg, i) => (
+          <span key={i}>
+            <span className="crumb-sep">/</span>
+            <button className="crumb" onClick={() => setFolder(crumbs.slice(0, i + 1).join('/'))}>
+              {seg}
+            </button>
+          </span>
+        ))}
+      </div>
+
       {projects.length === 0 && !busy ? (
         <div className="empty">
           <div className="empty-title">Пока нет ни одной записи</div>
-          <div>Нажмите «Импортировать запись» и выберите аудио- или видеофайл</div>
+          <div>Нажмите «Импортировать запись» или перетащите аудио/видео в окно</div>
         </div>
       ) : (
         <div className="project-grid">
-          {projects.map((p) => (
+          {subfolders.map((seg) => (
+            <div
+              key={'f:' + seg}
+              className="folder-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => setFolder(prefix + seg)}
+            >
+              <div className="folder-card-title">📁 {seg}</div>
+              <div className="project-card-meta">{countUnder(seg)} записей</div>
+            </div>
+          ))}
+          {records.map((p) => (
             <div
               key={p.slug}
               className="project-card"
@@ -81,13 +149,14 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
               <div className="project-card-meta">
                 {fmtDuration(p.audio.durationSec)} · {fmtDate(p.createdAt)}
               </div>
-              <button
-                className="project-rename"
-                title="Переименовать"
-                onClick={(e) => rename(e, p)}
-              >
-                ✏
-              </button>
+              <div className="card-actions">
+                <button title="Переименовать" onClick={(e) => rename(e, p)}>
+                  ✏
+                </button>
+                <button title="Положить в папку" onClick={(e) => move(e, p)}>
+                  📁
+                </button>
+              </div>
             </div>
           ))}
         </div>

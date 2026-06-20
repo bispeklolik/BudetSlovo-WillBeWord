@@ -16,6 +16,7 @@ export interface RendererApi {
   getPathForFile: (file: File) => string
   importPath: (path: string) => Promise<ProjectMeta | null>
   renameProject: (slug: string, title: string) => Promise<ProjectMeta | null>
+  setFolder: (slug: string, folder: string) => Promise<ProjectMeta | null>
   listProjects: () => Promise<ProjectMeta[]>
   getProject: (slug: string) => Promise<ProjectMeta | null>
   getPeaks: (slug: string) => Promise<Uint8Array | null>

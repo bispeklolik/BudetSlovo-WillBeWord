@@ -177,27 +177,79 @@ button {
   gap: 6px;
 }
 
-.project-rename {
+.card-actions {
   position: absolute;
   top: 8px;
   right: 8px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+}
+
+.project-card:hover .card-actions {
+  opacity: 0.85;
+}
+
+.card-actions button {
   border: none;
   background: none;
   color: var(--muted);
   cursor: pointer;
   font-size: 14px;
-  opacity: 0;
   padding: 2px 6px;
   border-radius: 6px;
 }
 
-.project-card:hover .project-rename {
-  opacity: 0.8;
-}
-
-.project-rename:hover {
+.card-actions button:hover {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+.folder-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.folder-card:hover {
+  border-color: var(--accent);
+}
+
+.folder-card-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 0 16px 10px;
+  font-size: 14px;
+}
+
+.crumb {
+  border: none;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.crumb:hover {
+  background: var(--accent-soft);
+}
+
+.crumb-sep {
+  color: var(--muted);
 }
 
 .project-card:hover {
