@@ -619,6 +619,18 @@ button {
   text-align: right;
 }
 
+.search-panel {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  padding: 4px 0 6px;
+}
+
+.search-replace-label {
+  font-size: 13px;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
 .btn-follow {
   border-color: var(--accent);
   color: var(--accent);

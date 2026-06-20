@@ -61,6 +61,7 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
   const [hlBusy, setHlBusy] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [replace, setReplace] = useState('')
   const [matchIdx, setMatchIdx] = useState(0)
   const audioRef = useRef<HTMLAudioElement>(null)
   const rafRef = useRef(0)
@@ -395,6 +396,16 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
     setSearchOpen(false)
     setSearch('')
   }
+  const doReplaceAll = (): void => {
+    const find = search.trim()
+    const n = searchMatches.length
+    if (!find || !n) return
+    const ok = window.confirm(
+      `Заменить «${find}» на «${replace}» в ${n} ${plural(n, 'слове', 'словах', 'словах')}? Можно отменить через Ctrl+Z.`
+    )
+    if (!ok) return
+    edit({ op: 'replaceAll', find, replace })
+  }
 
   const hasText = (meta.turns?.length ?? 0) > 0
   const hasHl = !!meta.turns?.some((t) => t.words.some((w) => w.hl))
@@ -458,34 +469,71 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
       </div>
 
       {searchOpen && (
-        <div className="search-bar">
-          <Icon name="search" size={15} />
-          <input
-            className="search-input"
-            autoFocus
-            placeholder="Поиск по тексту…"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setMatchIdx(0)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') stepMatch(e.shiftKey ? -1 : 1)
-              else if (e.key === 'Escape') closeSearch()
-            }}
-          />
-          <span className="search-count">
-            {searchMatches.length ? `${matchIdx + 1} из ${searchMatches.length}` : search ? 'нет' : ''}
-          </span>
-          <button className="btn" onClick={() => stepMatch(-1)} title="Назад" disabled={!searchMatches.length}>
-            ↑
-          </button>
-          <button className="btn" onClick={() => stepMatch(1)} title="Вперёд" disabled={!searchMatches.length}>
-            ↓
-          </button>
-          <button className="btn" onClick={closeSearch} title="Закрыть (Esc)">
-            <Icon name="x" size={15} />
-          </button>
+        <div className="search-panel">
+          <div className="search-bar">
+            <Icon name="search" size={15} />
+            <input
+              className="search-input"
+              autoFocus
+              placeholder="Поиск по тексту…"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setMatchIdx(0)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') stepMatch(e.shiftKey ? -1 : 1)
+                else if (e.key === 'Escape') closeSearch()
+              }}
+            />
+            <span className="search-count">
+              {searchMatches.length
+                ? `${matchIdx + 1} из ${searchMatches.length}`
+                : search
+                  ? 'нет'
+                  : ''}
+            </span>
+            <button
+              className="btn"
+              onClick={() => stepMatch(-1)}
+              title="Назад"
+              disabled={!searchMatches.length}
+            >
+              ↑
+            </button>
+            <button
+              className="btn"
+              onClick={() => stepMatch(1)}
+              title="Вперёд"
+              disabled={!searchMatches.length}
+            >
+              ↓
+            </button>
+            <button className="btn" onClick={closeSearch} title="Закрыть (Esc)">
+              <Icon name="x" size={15} />
+            </button>
+          </div>
+          <div className="search-bar">
+            <span className="search-replace-label">Заменить на</span>
+            <input
+              className="search-input"
+              placeholder="…новый текст (можно пусто — удалить)"
+              value={replace}
+              onChange={(e) => setReplace(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') doReplaceAll()
+                else if (e.key === 'Escape') closeSearch()
+              }}
+            />
+            <button
+              className="btn"
+              onClick={doReplaceAll}
+              disabled={!searchMatches.length}
+              title="Заменить все вхождения"
+            >
+              Заменить всё
+            </button>
+          </div>
         </div>
       )}
 

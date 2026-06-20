@@ -17,6 +17,27 @@ export type Patch =
       spk: string
       startSec: number
     }
+  | { op: 'replaceAll'; find: string; replace: string }
+
+// Замена всех вхождений подстроки в одном слове, без учёта регистра.
+// Регистр незатронутых частей сохраняется; replace вставляется как есть.
+export function replaceCI(text: string, find: string, replace: string): string {
+  if (!find) return text
+  const lower = text.toLowerCase()
+  const f = find.toLowerCase()
+  let out = ''
+  let i = 0
+  while (i < text.length) {
+    const idx = lower.indexOf(f, i)
+    if (idx === -1) {
+      out += text.slice(i)
+      break
+    }
+    out += text.slice(i, idx) + replace
+    i = idx + f.length
+  }
+  return out
+}
 
 export function applyPatch(meta: ProjectMeta, p: Patch): void {
   const turns = meta.turns ?? []
@@ -77,6 +98,19 @@ export function applyPatch(meta: ProjectMeta, p: Patch): void {
         startSec: p.startSec,
         words: moved
       })
+      return
+    }
+    case 'replaceAll': {
+      if (!p.find) return
+      for (const t of turns) {
+        for (const w of t.words) {
+          if (!w.t) continue
+          const next = replaceCI(w.t, p.find, p.replace)
+          if (next === w.t) continue
+          if (w.t0 === undefined) w.t0 = w.t // запоминаем оригинал движка для отката/тултипа
+          w.t = next
+        }
+      }
       return
     }
   }
