@@ -17,9 +17,11 @@ const DOMAINS: Record<Domain, string> = {
 
 export default function SummaryPanel({
   slug,
+  title,
   onClose
 }: {
   slug: string
+  title: string
   onClose: () => void
 }): React.JSX.Element {
   const [busy, setBusy] = useState<Level | null>(null)
@@ -94,7 +96,7 @@ export default function SummaryPanel({
         {result && (
           <>
             <textarea className="summary-result" readOnly value={result} />
-            <div>
+            <div style={{ display: 'flex', gap: 8 }}>
               <button
                 className="btn"
                 onClick={() => {
@@ -103,6 +105,9 @@ export default function SummaryPanel({
                 }}
               >
                 {copied ? 'Скопировано ✓' : 'Копировать'}
+              </button>
+              <button className="btn" onClick={() => api.exportTextDocx('Саммари — ' + title, result)}>
+                Скачать .docx
               </button>
             </div>
           </>

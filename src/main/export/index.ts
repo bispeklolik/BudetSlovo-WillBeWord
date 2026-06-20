@@ -136,6 +136,25 @@ function buildTxt(meta: ProjectMeta): string {
 
 const BOM = '﻿'
 
+// Простой docx из произвольного текста (для экспорта саммари/тезисов/мыслей).
+export async function buildTextDocx(title: string, text: string): Promise<Buffer> {
+  const children: Paragraph[] = [
+    new Paragraph({
+      spacing: { after: 140 },
+      children: [new TextRun({ text: title, bold: true, size: 32 })]
+    })
+  ]
+  for (const line of text.split('\n')) {
+    children.push(
+      new Paragraph({ spacing: { after: 80 }, children: [new TextRun({ text: line })] })
+    )
+  }
+  const doc = new Document({
+    sections: [{ properties: { page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } }, children }]
+  })
+  return Packer.toBuffer(doc)
+}
+
 export async function exportTranscript(
   meta: ProjectMeta,
   outPath: string,

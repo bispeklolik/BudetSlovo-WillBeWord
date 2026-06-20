@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { join } from 'path'
-import { existsSync, copyFileSync } from 'fs'
+import { existsSync, copyFileSync, writeFileSync } from 'fs'
 import { autoUpdater } from 'electron-updater'
 import { DATA_DIR, loadSettings, saveSettings } from './settings'
 import { registerMediaScheme, installMediaProtocol } from './protocol'
@@ -14,7 +14,7 @@ import {
   projectDir
 } from './project/store'
 import { mergeEngineOutputs } from './project/merge'
-import { exportTranscript, type ExportFormat } from './export'
+import { exportTranscript, buildTextDocx, type ExportFormat } from './export'
 import { registerProvider, getProvider, type SummaryLevel, type SummaryDomain } from './ai/provider'
 import { localLlamaProvider } from './ai/localLlama'
 import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
@@ -198,6 +198,20 @@ ipcMain.handle('export:audio', async (_e, slug: string) => {
   })
   if (res.canceled || !res.filePath) return null
   copyFileSync(srcAudio, res.filePath)
+  shell.showItemInFolder(res.filePath)
+  return res.filePath
+})
+
+// Экспорт произвольного текста (саммари/тезисы/мысли) в Word.
+ipcMain.handle('export:textDocx', async (_e, title: string, text: string) => {
+  if (!win) return null
+  const res = await dialog.showSaveDialog(win, {
+    title: 'Сохранить в Word',
+    defaultPath: join(app.getPath('documents'), `${title}.docx`),
+    filters: [{ name: 'DOCX', extensions: ['docx'] }]
+  })
+  if (res.canceled || !res.filePath) return null
+  writeFileSync(res.filePath, await buildTextDocx(title, text))
   shell.showItemInFolder(res.filePath)
   return res.filePath
 })

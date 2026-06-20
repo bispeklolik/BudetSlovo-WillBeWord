@@ -50,6 +50,8 @@ const api = {
   ): Promise<string | null> => ipcRenderer.invoke('export:run', slug, format, highlight),
   exportAudio: (slug: string): Promise<string | null> =>
     ipcRenderer.invoke('export:audio', slug),
+  exportTextDocx: (title: string, text: string): Promise<string | null> =>
+    ipcRenderer.invoke('export:textDocx', title, text),
 
   aiAvailable: (): Promise<boolean> => ipcRenderer.invoke('ai:available'),
   aiHasBackup: (slug: string): Promise<boolean> => ipcRenderer.invoke('ai:hasBackup', slug),

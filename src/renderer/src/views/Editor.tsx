@@ -556,7 +556,9 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
         />
       </div>
 
-      {summaryOpen && <SummaryPanel slug={slug} onClose={() => setSummaryOpen(false)} />}
+      {summaryOpen && (
+        <SummaryPanel slug={slug} title={meta.title} onClose={() => setSummaryOpen(false)} />
+      )}
     </main>
   )
 }

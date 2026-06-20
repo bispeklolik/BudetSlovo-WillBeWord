@@ -31,6 +31,7 @@ export interface RendererApi {
     highlight: boolean
   ) => Promise<string | null>
   exportAudio: (slug: string) => Promise<string | null>
+  exportTextDocx: (title: string, text: string) => Promise<string | null>
   aiAvailable: () => Promise<boolean>
   aiHasBackup: (slug: string) => Promise<boolean>
   cleanupAi: (slug: string) => Promise<ProjectMeta | null>

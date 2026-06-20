@@ -26,6 +26,7 @@ const stub: RendererApi = {
   saveTranscript: async () => null,
   exportTranscript: async () => null,
   exportAudio: async () => null,
+  exportTextDocx: async () => null,
   aiAvailable: async () => false,
   aiHasBackup: async () => false,
   cleanupAi: async () => null,
