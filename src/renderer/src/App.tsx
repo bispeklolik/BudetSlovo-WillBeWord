@@ -24,7 +24,11 @@ export default function App(): React.JSX.Element {
 
   // Перетаскивание файла в окно → импорт и сразу расшифровка (без диалога).
   useEffect(() => {
+    // Реагируем только на перетаскивание файлов из ОС, а не на внутренние
+    // перетаскивания карточек (у тех нет типа 'Files').
+    const isFiles = (e: DragEvent): boolean => !!e.dataTransfer?.types?.includes('Files')
     const onDragOver = (e: DragEvent): void => {
+      if (!isFiles(e)) return
       e.preventDefault()
       setDragging(true)
     }
@@ -32,6 +36,7 @@ export default function App(): React.JSX.Element {
       if (e.relatedTarget === null) setDragging(false)
     }
     const onDrop = async (e: DragEvent): Promise<void> => {
+      if (!isFiles(e)) return
       e.preventDefault()
       setDragging(false)
       const file = e.dataTransfer?.files?.[0]

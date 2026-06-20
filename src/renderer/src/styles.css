@@ -294,6 +294,18 @@ button {
   transform: translateY(-2px);
 }
 
+.folder-card.drop-hover {
+  border-color: var(--accent);
+  border-style: dashed;
+  background: var(--accent-soft);
+  transform: scale(1.02);
+}
+
+.crumb.drop-hover {
+  background: var(--accent-soft);
+  outline: 1px dashed var(--accent);
+}
+
 .folder-card-title {
   display: flex;
   align-items: center;

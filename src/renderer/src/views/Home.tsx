@@ -25,6 +25,7 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
   const [projects, setProjects] = useState<ProjectMeta[]>([])
   const [busy, setBusy] = useState<string | null>(null)
   const [folder, setFolder] = useState('') // текущая папка; '' = корень
+  const [dropKey, setDropKey] = useState<string | null>(null) // куда сейчас «целится» перетаскивание
 
   const refresh = (): void => {
     api.listProjects().then(setProjects)
@@ -77,6 +78,27 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
       await api.renameFolder(pfx + seg, pfx + name.trim())
       refresh()
     }
+  }
+
+  // --- Перетаскивание записи в папку/крошку ---
+  const SLUG_TYPE = 'text/slovo-slug'
+  const moveTo = async (slug: string, dest: string): Promise<void> => {
+    setDropKey(null)
+    const cur = projects.find((p) => p.slug === slug)
+    if (!cur || (cur.folder ?? '') === dest) return
+    await api.setFolder(slug, dest)
+    refresh()
+  }
+  const allowDrop = (e: React.DragEvent, key: string): void => {
+    if (e.dataTransfer.types.includes(SLUG_TYPE)) {
+      e.preventDefault()
+      if (dropKey !== key) setDropKey(key)
+    }
+  }
+  const dropSlug = (e: React.DragEvent, dest: string): void => {
+    e.preventDefault()
+    const slug = e.dataTransfer.getData(SLUG_TYPE)
+    if (slug) void moveTo(slug, dest)
   }
 
   // Текущий уровень: подпапки + записи прямо в этой папке.
@@ -143,13 +165,25 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
       </div>
 
       <div className="breadcrumb">
-        <button className="crumb" onClick={() => setFolder('')}>
+        <button
+          className={'crumb' + (dropKey === 'root' ? ' drop-hover' : '')}
+          onClick={() => setFolder('')}
+          onDragOver={(e) => allowDrop(e, 'root')}
+          onDragLeave={() => setDropKey(null)}
+          onDrop={(e) => dropSlug(e, '')}
+        >
           Все записи
         </button>
         {crumbs.map((seg, i) => (
           <span key={i}>
             <span className="crumb-sep">/</span>
-            <button className="crumb" onClick={() => setFolder(crumbs.slice(0, i + 1).join('/'))}>
+            <button
+              className={'crumb' + (dropKey === 'c:' + i ? ' drop-hover' : '')}
+              onClick={() => setFolder(crumbs.slice(0, i + 1).join('/'))}
+              onDragOver={(e) => allowDrop(e, 'c:' + i)}
+              onDragLeave={() => setDropKey(null)}
+              onDrop={(e) => dropSlug(e, crumbs.slice(0, i + 1).join('/'))}
+            >
               {seg}
             </button>
           </span>
@@ -166,10 +200,13 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
           {subfolders.map((seg) => (
             <div
               key={'f:' + seg}
-              className="folder-card"
+              className={'folder-card' + (dropKey === 'f:' + seg ? ' drop-hover' : '')}
               role="button"
               tabIndex={0}
               onClick={() => setFolder(prefix + seg)}
+              onDragOver={(e) => allowDrop(e, 'f:' + seg)}
+              onDragLeave={() => setDropKey(null)}
+              onDrop={(e) => dropSlug(e, prefix + seg)}
             >
               <div className="folder-card-title">
                 <Icon name="folder" size={18} />
@@ -189,6 +226,12 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
               className="project-card"
               role="button"
               tabIndex={0}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData(SLUG_TYPE, p.slug)
+                e.dataTransfer.effectAllowed = 'move'
+              }}
+              onDragEnd={() => setDropKey(null)}
               onClick={() => onOpen(p.slug)}
             >
               <div className="project-card-title">{p.title}</div>
