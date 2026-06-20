@@ -6,7 +6,7 @@ import Editor from './views/Editor'
 import Icon from './components/Icon'
 import SettingsModal from './components/SettingsModal'
 
-type View = { page: 'home' } | { page: 'editor'; slug: string }
+type View = { page: 'home' } | { page: 'editor'; slug: string; search?: string }
 
 export default function App(): React.JSX.Element {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -103,9 +103,9 @@ export default function App(): React.JSX.Element {
         </div>
       </header>
       {view.page === 'home' ? (
-        <Home onOpen={(slug) => setView({ page: 'editor', slug })} />
+        <Home onOpen={(slug, search) => setView({ page: 'editor', slug, search })} />
       ) : (
-        <Editor slug={view.slug} />
+        <Editor slug={view.slug} initialSearch={view.search} />
       )}
       {(dragging || importing) && (
         <div className="drop-overlay">

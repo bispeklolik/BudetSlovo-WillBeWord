@@ -41,7 +41,13 @@ interface IndexEntry {
   turnIdx: number
 }
 
-export default function Editor({ slug }: { slug: string }): React.JSX.Element {
+export default function Editor({
+  slug,
+  initialSearch
+}: {
+  slug: string
+  initialSearch?: string
+}): React.JSX.Element {
   const [meta, setMeta] = useState<ProjectMeta | null>(null)
   const [peaks, setPeaks] = useState<Int8Array | null>(null)
   const [cur, setCur] = useState(0)
@@ -83,6 +89,15 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
     })
     return out
   }, [search, meta])
+
+  // Переход из глобального поиска: открыть строку поиска с этим словом.
+  useEffect(() => {
+    if (initialSearch) {
+      setSearch(initialSearch)
+      setSearchOpen(true)
+      setMatchIdx(0)
+    }
+  }, [initialSearch])
 
   const loadMeta = useCallback((m: ProjectMeta | null): void => {
     undoRef.current = []

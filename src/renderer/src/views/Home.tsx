@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ProjectMeta } from '../../../shared/types'
+import { searchProjects } from '../../../shared/search'
 import { api } from '../api'
 import Icon from '../components/Icon'
 
@@ -21,11 +22,16 @@ function fmtDate(iso: string): string {
   }
 }
 
-export default function Home({ onOpen }: { onOpen: (slug: string) => void }): React.JSX.Element {
+export default function Home({
+  onOpen
+}: {
+  onOpen: (slug: string, search?: string) => void
+}): React.JSX.Element {
   const [projects, setProjects] = useState<ProjectMeta[]>([])
   const [busy, setBusy] = useState<string | null>(null)
   const [folder, setFolder] = useState('') // текущая папка; '' = корень
   const [dropKey, setDropKey] = useState<string | null>(null) // куда сейчас «целится» перетаскивание
+  const [gq, setGq] = useState('') // глобальный поиск по всем записям
 
   const refresh = (): void => {
     api.listProjects().then(setProjects)
@@ -123,6 +129,7 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
     }).length
   }
   const crumbs = folder ? folder.split('/') : []
+  const hits = gq.trim() ? searchProjects(projects, gq) : null // null = режим папок
 
   // Первый запуск: ни одной записи — показываем приветствие вместо пустой сетки.
   if (projects.length === 0) {
@@ -162,8 +169,51 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
         >
           {busy ?? 'Импортировать запись'}
         </button>
+        <div className="global-search">
+          <Icon name="search" size={16} />
+          <input
+            className="global-search-input"
+            placeholder="Поиск по всем записям…"
+            value={gq}
+            onChange={(e) => setGq(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setGq('')
+            }}
+          />
+          {gq && (
+            <button className="btn-icon" onClick={() => setGq('')} title="Очистить">
+              <Icon name="x" size={15} />
+            </button>
+          )}
+        </div>
       </div>
 
+      {hits ? (
+        <div className="result-list">
+          <div className="result-head">Найдено записей: {hits.length}</div>
+          {hits.length === 0 ? (
+            <div className="empty">
+              <div className="empty-title">Ничего не найдено</div>
+              <div>Попробуйте другое слово</div>
+            </div>
+          ) : (
+            hits.map((h) => (
+              <button
+                key={h.slug}
+                className="result-item"
+                onClick={() => onOpen(h.slug, gq.trim())}
+              >
+                <div className="result-item-title">
+                  <span>{h.title}</span>
+                  <span className="result-count">{h.count}</span>
+                </div>
+                <div className="result-snippet">{h.snippet}</div>
+              </button>
+            ))
+          )}
+        </div>
+      ) : (
+        <>
       <div className="breadcrumb">
         <button
           className={'crumb' + (dropKey === 'root' ? ' drop-hover' : '')}
@@ -249,6 +299,8 @@ export default function Home({ onOpen }: { onOpen: (slug: string) => void }): Re
             </div>
           ))}
         </div>
+      )}
+        </>
       )}
     </main>
   )
