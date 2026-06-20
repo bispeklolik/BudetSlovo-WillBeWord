@@ -1,4 +1,5 @@
 import type { Turn } from '../../../shared/types'
+import { useEscClose } from '../useEscClose'
 
 interface Span {
   text: string
@@ -40,6 +41,7 @@ export default function HighlightsPanel({
   onJump: (sec: number) => void
   onClose: () => void
 }): React.JSX.Element {
+  useEscClose(onClose)
   const spans = collectSpans(turns)
   const fmt = (sec: number): string => {
     const t = Math.floor(sec)

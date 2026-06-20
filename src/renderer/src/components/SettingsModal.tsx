@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import type { Theme } from '../../../shared/types'
+import { useEscClose } from '../useEscClose'
 
 export default function SettingsModal({
   theme,
@@ -11,6 +12,7 @@ export default function SettingsModal({
   onToggleTheme: () => void
   onClose: () => void
 }): React.JSX.Element {
+  useEscClose(onClose)
   const [aiReady, setAiReady] = useState<boolean | null>(null)
   useEffect(() => {
     api.aiAvailable().then(setAiReady)

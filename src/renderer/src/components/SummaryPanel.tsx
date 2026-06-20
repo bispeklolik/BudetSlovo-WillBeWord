@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api'
+import { useEscClose } from '../useEscClose'
 
 type Level = 'note' | 'medium' | 'detailed'
 const LABELS: Record<Level, string> = {
@@ -24,6 +25,7 @@ export default function SummaryPanel({
   title: string
   onClose: () => void
 }): React.JSX.Element {
+  useEscClose(onClose)
   const [busy, setBusy] = useState<Level | null>(null)
   const [level, setLevel] = useState<Level | null>(null)
   const [domain, setDomain] = useState<Domain>('therapy')
