@@ -32,6 +32,9 @@ interface Props {
   onSetTurnSpeaker: (turnId: string, spk: string) => void
   onMergeTurn: (turnId: string) => void
   onSplitTurn: (turnId: string, wordId: number) => void
+  matchIds: Set<number>
+  currentMatchId: number | null
+  searchTurnIndex: number | null
 }
 
 export default function TranscriptView(props: Props): React.JSX.Element {
@@ -54,6 +57,12 @@ export default function TranscriptView(props: Props): React.JSX.Element {
       ref.current.scrollToIndex({ index: activeTurnIndex, align: 'center', behavior: 'smooth' })
     }
   }, [activeTurnIndex, follow])
+
+  useEffect(() => {
+    if (props.searchTurnIndex !== null && ref.current) {
+      ref.current.scrollToIndex({ index: props.searchTurnIndex, align: 'center', behavior: 'smooth' })
+    }
+  }, [props.searchTurnIndex, props.currentMatchId])
 
   const startEdit = (w: Word): void => {
     setEditId(w.id)
@@ -167,6 +176,11 @@ export default function TranscriptView(props: Props): React.JSX.Element {
                     confClass(w) +
                     (w.src ? ' ' + w.src : '') +
                     (w.hl ? ' hl' : '') +
+                    (props.matchIds.has(w.id)
+                      ? w.id === props.currentMatchId
+                        ? ' match-current'
+                        : ' match'
+                      : '') +
                     (w.id === activeWordId ? ' active' : '')
                   }
                   data-word={w.id}

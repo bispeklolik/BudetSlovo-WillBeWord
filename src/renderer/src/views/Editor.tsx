@@ -9,6 +9,7 @@ import TranscribePanel from '../components/TranscribePanel'
 import TranscriptView from '../components/TranscriptView'
 import ExportMenu from '../components/ExportMenu'
 import SummaryPanel from '../components/SummaryPanel'
+import Icon from '../components/Icon'
 
 function fmtTime(sec: number): string {
   const t = Math.floor(sec)
@@ -46,6 +47,9 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
   const [aiBackup, setAiBackup] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [hlBusy, setHlBusy] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [matchIdx, setMatchIdx] = useState(0)
   const audioRef = useRef<HTMLAudioElement>(null)
   const rafRef = useRef(0)
   const indexRef = useRef<IndexEntry[]>([])
@@ -54,6 +58,18 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const metaRef = useRef<ProjectMeta | null>(null)
   metaRef.current = meta
+
+  const searchMatches = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q || !meta?.turns) return [] as { turnIndex: number; wordId: number }[]
+    const out: { turnIndex: number; wordId: number }[] = []
+    meta.turns.forEach((t, ti) => {
+      t.words.forEach((w) => {
+        if (w.t.toLowerCase().includes(q)) out.push({ turnIndex: ti, wordId: w.id })
+      })
+    })
+    return out
+  }, [search, meta])
 
   const loadMeta = useCallback((m: ProjectMeta | null): void => {
     undoRef.current = []
@@ -216,6 +232,11 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const el = e.target as HTMLElement | null
+      if (e.ctrlKey && e.code === 'KeyF') {
+        e.preventDefault()
+        setSearchOpen(true)
+        return
+      }
       if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA' || el?.isContentEditable) return
       // e.code (раскладко-независимо): на RU-раскладке e.key для Z = 'я'.
       if (e.ctrlKey && e.code === 'KeyZ') {
@@ -352,6 +373,17 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
     if (m) loadMeta(m)
   }
 
+  const matchIds = new Set(searchMatches.map((m) => m.wordId))
+  const curMatch = searchMatches[matchIdx]
+  const stepMatch = (d: number): void => {
+    if (searchMatches.length)
+      setMatchIdx((i) => (i + d + searchMatches.length) % searchMatches.length)
+  }
+  const closeSearch = (): void => {
+    setSearchOpen(false)
+    setSearch('')
+  }
+
   const hasText = (meta.turns?.length ?? 0) > 0
   const hasHl = !!meta.turns?.some((t) => t.words.some((w) => w.hl))
 
@@ -405,6 +437,38 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
         )}
       </div>
 
+      {searchOpen && (
+        <div className="search-bar">
+          <Icon name="search" size={15} />
+          <input
+            className="search-input"
+            autoFocus
+            placeholder="Поиск по тексту…"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setMatchIdx(0)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') stepMatch(e.shiftKey ? -1 : 1)
+              else if (e.key === 'Escape') closeSearch()
+            }}
+          />
+          <span className="search-count">
+            {searchMatches.length ? `${matchIdx + 1} из ${searchMatches.length}` : search ? 'нет' : ''}
+          </span>
+          <button className="btn" onClick={() => stepMatch(-1)} title="Назад" disabled={!searchMatches.length}>
+            ↑
+          </button>
+          <button className="btn" onClick={() => stepMatch(1)} title="Вперёд" disabled={!searchMatches.length}>
+            ↓
+          </button>
+          <button className="btn" onClick={closeSearch} title="Закрыть (Esc)">
+            <Icon name="x" size={15} />
+          </button>
+        </div>
+      )}
+
       <div className="editor-body">
         {reproc ? (
           <TranscribePanel
@@ -430,6 +494,9 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
             onSetTurnSpeaker={(turnId, spk) => edit({ op: 'setTurnSpeaker', turnId, spk })}
             onMergeTurn={(turnId) => edit({ op: 'mergeTurnIntoPrev', turnId })}
             onSplitTurn={onSplitTurn}
+            matchIds={matchIds}
+            currentMatchId={curMatch?.wordId ?? null}
+            searchTurnIndex={searchOpen ? (curMatch?.turnIndex ?? null) : null}
           />
         ) : meta.engine?.completedAt ? (
           <div className="transcript-placeholder">

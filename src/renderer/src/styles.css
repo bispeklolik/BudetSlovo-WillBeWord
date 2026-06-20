@@ -500,6 +500,53 @@ button {
   color: #fff;
 }
 
+.word.match {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.word.match-current {
+  background: var(--accent-solid);
+  color: #fff;
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 8px 24px;
+}
+
+.search-bar > svg {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.search-input {
+  flex: 1;
+  font: inherit;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 7px 12px;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.search-count {
+  font-size: 13px;
+  color: var(--muted);
+  min-width: 56px;
+  text-align: right;
+}
+
 .btn-follow {
   border-color: var(--accent);
   color: var(--accent);
