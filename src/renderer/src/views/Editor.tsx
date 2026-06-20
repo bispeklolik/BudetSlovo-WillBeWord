@@ -438,7 +438,7 @@ export default function Editor({ slug }: { slug: string }): React.JSX.Element {
             >
               Перераспознать
             </button>
-            <ExportMenu slug={slug} />
+            <ExportMenu slug={slug} meta={meta} />
           </div>
         )}
       </div>

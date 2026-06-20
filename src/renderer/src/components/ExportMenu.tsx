@@ -1,11 +1,45 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ProjectMeta } from '../../../shared/types'
 import { api } from '../api'
 
-export default function ExportMenu({ slug }: { slug: string }): React.JSX.Element {
+export default function ExportMenu({
+  slug,
+  meta
+}: {
+  slug: string
+  meta: ProjectMeta
+}): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [highlight, setHighlight] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
+
+  // Текст с именами говорящих — для вставки в черновик/заметки.
+  const plainText = (): string => {
+    const name = (spk: string): string =>
+      meta.speakers?.find((s) => s.id === spk)?.name ?? spk
+    return (meta.turns ?? [])
+      .map(
+        (t) =>
+          `${name(t.spk)}:\n${t.words
+            .map((w) => w.t)
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim()}`
+      )
+      .join('\n\n')
+  }
+
+  const copyText = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(plainText())
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    } catch (err) {
+      alert('Не удалось скопировать: ' + String(err))
+    }
+  }
 
   useEffect(() => {
     const onDoc = (e: MouseEvent): void => {
@@ -46,6 +80,10 @@ export default function ExportMenu({ slug }: { slug: string }): React.JSX.Elemen
       </button>
       {open && (
         <div className="export-menu">
+          <button className="export-item" onClick={copyText}>
+            {copied ? 'Скопировано ✓' : 'Скопировать текст'}
+          </button>
+          <div className="menu-sep" />
           <label className="export-check">
             <input
               type="checkbox"
