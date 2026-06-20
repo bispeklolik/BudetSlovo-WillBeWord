@@ -3,6 +3,8 @@ import type { Settings, Theme } from '../../shared/types'
 import { api } from './api'
 import Home from './views/Home'
 import Editor from './views/Editor'
+import Icon from './components/Icon'
+import SettingsModal from './components/SettingsModal'
 
 type View = { page: 'home' } | { page: 'editor'; slug: string }
 
@@ -11,6 +13,7 @@ export default function App(): React.JSX.Element {
   const [view, setView] = useState<View>({ page: 'home' })
   const [dragging, setDragging] = useState(false)
   const [importing, setImporting] = useState<string | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   useEffect(() => {
     api.getSettings().then((s) => {
@@ -79,8 +82,13 @@ export default function App(): React.JSX.Element {
         <span className="app-title">Слово</span>
         <span className="app-sub">локальные расшифровки</span>
         <div style={{ marginLeft: 'auto' }}>
-          <button className="btn" onClick={toggleTheme} data-testid="theme-toggle">
-            {settings?.theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+          <button
+            className="btn btn-icon"
+            onClick={() => setSettingsOpen(true)}
+            title="Настройки"
+            data-testid="settings-btn"
+          >
+            <Icon name="settings" size={18} />
           </button>
         </div>
       </header>
@@ -95,6 +103,13 @@ export default function App(): React.JSX.Element {
             {importing ?? 'Отпустите файл, чтобы импортировать'}
           </div>
         </div>
+      )}
+      {settingsOpen && (
+        <SettingsModal
+          theme={settings?.theme ?? 'light'}
+          onToggleTheme={toggleTheme}
+          onClose={() => setSettingsOpen(false)}
+        />
       )}
     </div>
   )

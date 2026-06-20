@@ -774,6 +774,40 @@ button {
   white-space: pre-wrap;
 }
 
+.btn-icon {
+  padding: 7px 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-section {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-label {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.settings-status {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .word-input {
   font: inherit;
   font-size: 15px;
