@@ -27,7 +27,7 @@ export interface RendererApi {
   ) => Promise<ProjectMeta | null>
   exportTranscript: (
     slug: string,
-    format: 'docx' | 'md' | 'txt',
+    format: 'docx' | 'md' | 'txt' | 'srt' | 'vtt',
     highlight: boolean
   ) => Promise<string | null>
   exportAudio: (slug: string) => Promise<string | null>

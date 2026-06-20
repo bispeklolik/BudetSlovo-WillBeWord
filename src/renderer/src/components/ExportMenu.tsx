@@ -15,7 +15,7 @@ export default function ExportMenu({ slug }: { slug: string }): React.JSX.Elemen
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
 
-  const run = async (format: 'docx' | 'md' | 'txt'): Promise<void> => {
+  const run = async (format: 'docx' | 'md' | 'txt' | 'srt' | 'vtt'): Promise<void> => {
     setBusy(true)
     try {
       await api.exportTranscript(slug, format, format === 'docx' ? highlight : false)
@@ -62,6 +62,12 @@ export default function ExportMenu({ slug }: { slug: string }): React.JSX.Elemen
           </button>
           <button className="export-item" disabled={busy} onClick={() => run('txt')}>
             Текст (.txt)
+          </button>
+          <button className="export-item" disabled={busy} onClick={() => run('srt')}>
+            Субтитры (.srt)
+          </button>
+          <button className="export-item" disabled={busy} onClick={() => run('vtt')}>
+            Субтитры (.vtt)
           </button>
           <button className="export-item" disabled={busy} onClick={runAudio}>
             Аудио (.m4a)

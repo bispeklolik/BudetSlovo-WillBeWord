@@ -1,8 +1,9 @@
 import { Document, Packer, Paragraph, TextRun, BorderStyle } from 'docx'
 import { writeFileSync } from 'fs'
 import type { ProjectMeta, Word } from '../../shared/types'
+import { toSubtitles } from './subtitles'
 
-export type ExportFormat = 'docx' | 'md' | 'txt'
+export type ExportFormat = 'docx' | 'md' | 'txt' | 'srt' | 'vtt'
 
 function fmtTime(sec: number): string {
   const t = Math.floor(sec)
@@ -146,6 +147,8 @@ export async function exportTranscript(
     writeFileSync(outPath, buf)
   } else if (format === 'md') {
     writeFileSync(outPath, BOM + buildMd(meta), 'utf8')
+  } else if (format === 'srt' || format === 'vtt') {
+    writeFileSync(outPath, toSubtitles(meta.turns ?? [], format), 'utf8')
   } else {
     writeFileSync(outPath, BOM + buildTxt(meta), 'utf8')
   }
