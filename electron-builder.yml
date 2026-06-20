@@ -8,6 +8,7 @@ files:
   - package.json
 win:
   target: nsis
+  icon: build/icon.ico
   artifactName: Slovo-Setup-${version}.${ext}
 nsis:
   oneClick: false
@@ -15,6 +16,8 @@ nsis:
   allowToChangeInstallationDirectory: true
   shortcutName: Слово
   deleteAppDataOnUninstall: false
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
 # Источник автообновлений и публикации релизов.
 # owner будет проставлен реальным GitHub-логином перед публикацией.
 publish:
