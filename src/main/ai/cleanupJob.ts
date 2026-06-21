@@ -32,7 +32,7 @@ export async function runCleanup(
   if (!meta || !meta.turns) return null
   const provider = getProvider(providerId)
   if (!provider) throw new Error('AI_PROVIDER_NOT_FOUND')
-  if (!(await ensureOllama())) throw new Error('AI_UNAVAILABLE')
+  if (provider.isLocal && !(await ensureOllama())) throw new Error('AI_UNAVAILABLE')
   if (!(await provider.isAvailable())) throw new Error('AI_MODEL_MISSING')
 
   // База для чистки = оригинал. Если бэкап уже есть (чистили раньше) — чистим от

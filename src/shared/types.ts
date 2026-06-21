@@ -1,11 +1,21 @@
 export type Theme = 'light' | 'dark'
 
+export type AiEngine = 'local-llama' | 'claude'
+
 export interface Settings {
   theme: Theme
   folders?: string[] // явный список папок (включая пустые), чтобы они не исчезали
+  aiEngine?: AiEngine // чем обрабатывать: локально или облачный Claude
+  anthropicKey?: string // ключ Anthropic API (хранится локально), для движка Claude
+  claudeModel?: string // модель Claude (по умолчанию sonnet)
 }
 
-export const defaultSettings: Settings = { theme: 'light', folders: [] }
+export const defaultSettings: Settings = {
+  theme: 'light',
+  folders: [],
+  aiEngine: 'local-llama',
+  claudeModel: 'claude-sonnet-4-6'
+}
 
 // Конспект — сохранённая текстовая выжимка (саммари, лучшие мысли, заметка).
 export interface Note {

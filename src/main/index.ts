@@ -15,8 +15,15 @@ import {
 } from './project/store'
 import { mergeEngineOutputs } from './project/merge'
 import { exportTranscript, buildTextDocx, type ExportFormat } from './export'
-import { registerProvider, getProvider, type SummaryLevel, type SummaryDomain } from './ai/provider'
+import {
+  registerProvider,
+  getProvider,
+  type SummaryLevel,
+  type SummaryDomain,
+  type AiProvider
+} from './ai/provider'
 import { localLlamaProvider } from './ai/localLlama'
+import { claudeProvider, setClaudeConfig } from './ai/claude'
 import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
 import { stopOllama, ensureOllama } from './ai/ollamaServer'
 import { applyHighlights, clearHighlights } from './ai/highlight'
@@ -41,10 +48,22 @@ import type {
 app.setPath('userData', join(DATA_DIR, 'electron'))
 registerMediaScheme()
 registerProvider(localLlamaProvider)
+registerProvider(claudeProvider)
 app.on('before-quit', () => stopOllama())
 
 let win: BrowserWindow | null = null
 let settings: Settings = loadSettings()
+setClaudeConfig(settings.anthropicKey, settings.claudeModel)
+
+// Готовит выбранный движок для одиночных вызовов (саммари/мысли): для локального
+// поднимает Ollama; проверяет доступность (ключ/модель). Обезличивание — всегда локально.
+async function prepareEngine(): Promise<AiProvider> {
+  const provider = getProvider(settings.aiEngine ?? 'local-llama')
+  if (!provider) throw new Error('AI_PROVIDER_NOT_FOUND')
+  if (provider.isLocal && !(await ensureOllama())) throw new Error('AI_UNAVAILABLE')
+  if (!(await provider.isAvailable())) throw new Error('AI_MODEL_MISSING')
+  return provider
+}
 
 function createWindow(): void {
   win = new BrowserWindow({
@@ -73,6 +92,7 @@ ipcMain.handle('settings:get', () => settings)
 ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
   settings = { ...settings, ...patch }
   saveSettings(settings)
+  setClaudeConfig(settings.anthropicKey, settings.claudeModel)
   return settings
 })
 
@@ -253,7 +273,9 @@ ipcMain.handle('ai:available', async () => {
 })
 ipcMain.handle('ai:hasBackup', (_e, slug: string) => hasAiBackup(slug))
 ipcMain.handle('ai:cleanup', (_e, slug: string) =>
-  runCleanup(slug, 'local-llama', (p) => win?.webContents.send('ai:progress', p))
+  runCleanup(slug, settings.aiEngine ?? 'local-llama', (p) =>
+    win?.webContents.send('ai:progress', p)
+  )
 )
 ipcMain.handle('ai:revert', (_e, slug: string) => revertCleanup(slug))
 ipcMain.handle(
@@ -261,10 +283,7 @@ ipcMain.handle(
   async (_e, slug: string, level: SummaryLevel, domain: SummaryDomain) => {
     const meta = getProject(slug)
     if (!meta?.turns) return null
-    if (!(await ensureOllama())) throw new Error('AI_UNAVAILABLE')
-    const provider = getProvider('local-llama')
-    if (!provider) throw new Error('AI_PROVIDER_NOT_FOUND')
-    if (!(await provider.isAvailable())) throw new Error('AI_MODEL_MISSING')
+    const provider = await prepareEngine()
     const name = (spk: string): string => meta.speakers?.find((s) => s.id === spk)?.name ?? spk
     const text = meta.turns
       .map((t) => name(t.spk) + ': ' + t.words.map((w) => w.t).join(' '))
@@ -275,10 +294,7 @@ ipcMain.handle(
 ipcMain.handle('ai:highlights', async (_e, slug: string) => {
   const meta = getProject(slug)
   if (!meta?.turns) return null
-  if (!(await ensureOllama())) throw new Error('AI_UNAVAILABLE')
-  const provider = getProvider('local-llama')
-  if (!provider) throw new Error('AI_PROVIDER_NOT_FOUND')
-  if (!(await provider.isAvailable())) throw new Error('AI_MODEL_MISSING')
+  const provider = await prepareEngine()
   const name = (spk: string): string => meta.speakers?.find((s) => s.id === spk)?.name ?? spk
   const text = meta.turns
     .map((t) => name(t.spk) + ': ' + t.words.map((w) => w.t).join(' '))

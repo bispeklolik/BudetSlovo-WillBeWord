@@ -16,7 +16,7 @@ import type { AnonRule } from '../../shared/anon'
 const OLLAMA_URL = 'http://127.0.0.1:11434'
 const MODEL = 'qwen2.5:7b-instruct'
 
-const DEFAULT_SYSTEM =
+export const DEFAULT_SYSTEM =
   'Ты — редактор расшифровок устной речи. Тебе дают одну реплику из диалога, ' +
   'распознанную автоматически (возможны ошибки распознавания). Верни СТРОГО JSON ' +
   'вида {"cleaned": string, "suspect": string[]}.\n' +
@@ -29,11 +29,11 @@ const DEFAULT_SYSTEM =
   'распознавания (например «коблит», «водопряжение»). Если таких нет — пустой список. ' +
   'Не вписывай в suspect нормальные слова.'
 
-const SUMMARY_BASE =
+export const SUMMARY_BASE =
   'Ты помогаешь специалисту структурировать запись разговора. Опирайся ТОЛЬКО на текст, ' +
   'ничего не выдумывай. Пиши по-русски, нейтрально и профессионально, без обращений и воды.'
 
-const SUMMARY_DOMAIN: Record<SummaryDomain, string> = {
+export const SUMMARY_DOMAIN: Record<SummaryDomain, string> = {
   therapy:
     ' Это психологическая консультация (реплики Психолога и Клиента); выделяй запрос/тему, ' +
     'состояние и динамику клиента, ключевые моменты и что дальше.',
@@ -43,7 +43,7 @@ const SUMMARY_DOMAIN: Record<SummaryDomain, string> = {
   general: ' Это разговор; выдели суть, ключевые моменты и итог.'
 }
 
-const SUMMARY_LEVEL: Record<SummaryLevel, string> = {
+export const SUMMARY_LEVEL: Record<SummaryLevel, string> = {
   note: ' Формат: ОЧЕНЬ КРАТКАЯ формальная заметка, 4–7 пунктов, сухо и по делу.',
   medium:
     ' Формат: краткое, но полное содержание — 2–4 абзаца пересказа, затем список ключевых тезисов.',
@@ -51,14 +51,14 @@ const SUMMARY_LEVEL: Record<SummaryLevel, string> = {
     ' Формат: подробное содержание — передай ход и смысл, убрав только лишнее, повторы и паразиты.'
 }
 
-const HIGHLIGHTS_SYSTEM =
+export const HIGHLIGHTS_SYSTEM =
   'Выдели САМЫЕ ценные мысли/моменты разговора: сильные формулировки, ключевые выводы, ' +
   'поворотные и инсайтные фразы. Число НЕ ограничивай искусственно — столько, сколько ' +
   'действительно ценно (обычно от нескольких до ~15), но только по-настоящему важное, не ' +
   'проходное. Верни СТРОГО JSON {"highlights": string[]}: каждая цитата ДОСЛОВНО из текста ' +
   '(3–15 слов, точно как в тексте), без изменений, без повторов, без пояснений.'
 
-const ANON_SYSTEM =
+export const ANON_SYSTEM =
   'Ты — фильтр приватности для расшифровки разговора. Найди в тексте ВСЁ, по чему можно ' +
   'опознать человека: имена и прозвища людей; географию (города, районы, улицы, заведения); ' +
   'организации и учреждения (ВУЗы, компании, школы); прочие явные идентификаторы (телефоны, ' +
@@ -75,7 +75,7 @@ const ANON_SYSTEM =
 
 const ANON_KINDS = new Set(['name', 'place', 'org', 'other'])
 
-function parseAnon(raw: string): AnonRule[] {
+export function parseAnon(raw: string): AnonRule[] {
   try {
     const o = JSON.parse(raw || '{}') as { rules?: unknown }
     if (!Array.isArray(o.rules)) return []
@@ -95,7 +95,20 @@ function parseAnon(raw: string): AnonRule[] {
   }
 }
 
-function parseResult(raw: string, original: string): CleanupResult {
+export function parseHighlights(raw: string): string[] {
+  try {
+    const o = JSON.parse(raw || '{}') as { highlights?: unknown }
+    return Array.isArray(o.highlights)
+      ? o.highlights
+          .filter((x): x is string => typeof x === 'string' && x.trim() !== '')
+          .map((x) => x.trim())
+      : []
+  } catch {
+    return []
+  }
+}
+
+export function parseResult(raw: string, original: string): CleanupResult {
   try {
     const o = JSON.parse(raw) as { cleaned?: unknown; suspect?: unknown }
     const cleaned =
@@ -183,16 +196,7 @@ export const localLlamaProvider: AiProvider = {
     })
     if (!r.ok) throw new Error(`Ollama HTTP ${r.status}`)
     const d = (await r.json()) as { message?: { content?: string } }
-    try {
-      const o = JSON.parse(d.message?.content || '{}') as { highlights?: unknown }
-      return Array.isArray(o.highlights)
-        ? o.highlights
-            .filter((x): x is string => typeof x === 'string' && x.trim() !== '')
-            .map((x) => x.trim())
-        : []
-    } catch {
-      return []
-    }
+    return parseHighlights(d.message?.content || '{}')
   },
 
   async anonymize(text: string): Promise<AnonRule[]> {

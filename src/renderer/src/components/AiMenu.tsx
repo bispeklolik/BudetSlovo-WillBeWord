@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon'
+import { api } from '../api'
 
 interface AiMenuProps {
   busyLabel: string | null // когда идёт долгая операция — текст на кнопке, меню закрыто
@@ -19,7 +20,12 @@ interface AiMenuProps {
 export default function AiMenu(props: AiMenuProps): React.JSX.Element {
   const { busyLabel, hasBackup, hasHl } = props
   const [open, setOpen] = useState(false)
+  const [engineCloud, setEngineCloud] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (open) api.getSettings().then((s) => setEngineCloud(s.aiEngine === 'claude'))
+  }, [open])
 
   useEffect(() => {
     const onDoc = (e: MouseEvent): void => {
@@ -51,6 +57,10 @@ export default function AiMenu(props: AiMenuProps): React.JSX.Element {
       </button>
       {open && (
         <div className="export-menu">
+          <div className="export-note">
+            Движок: {engineCloud ? 'Claude (облако)' : 'Локально'}
+          </div>
+          <div className="menu-sep" />
           <button className="export-item" onClick={() => pick(props.onCleanup)}>
             Причесать текст
           </button>
