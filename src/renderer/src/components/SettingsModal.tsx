@@ -54,6 +54,12 @@ export default function SettingsModal({
               {theme === 'dark' ? 'Тёмная' : 'Светлая'}
             </button>
           </div>
+          <div className="settings-row">
+            <span>Папка с записями и данными</span>
+            <button className="btn" onClick={() => void api.openDataDir()}>
+              Открыть
+            </button>
+          </div>
         </div>
 
         <div className="settings-section">

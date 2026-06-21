@@ -179,6 +179,12 @@ ipcMain.handle('project:renameFolder', (_e, oldPath: string, newPath: string) =>
 })
 
 ipcMain.handle('project:list', () => listProjects())
+// Удаление записи — в Корзину (не безвозвратно), чтобы можно было восстановить.
+ipcMain.handle('project:delete', async (_e, slug: string) => {
+  await shell.trashItem(projectDir(slug))
+  return true
+})
+ipcMain.handle('app:openDataDir', () => shell.openPath(DATA_DIR))
 ipcMain.handle('project:get', (_e, slug: string) => {
   const meta = getProject(slug)
   // Ленивый merge: результат движка на диске есть, а слитого транскрипта нет.

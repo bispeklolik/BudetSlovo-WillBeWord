@@ -29,6 +29,8 @@ const api = {
   renameFolder: (oldPath: string, newPath: string): Promise<boolean> =>
     ipcRenderer.invoke('project:renameFolder', oldPath, newPath),
   listProjects: (): Promise<ProjectMeta[]> => ipcRenderer.invoke('project:list'),
+  deleteProject: (slug: string): Promise<boolean> => ipcRenderer.invoke('project:delete', slug),
+  openDataDir: (): Promise<string> => ipcRenderer.invoke('app:openDataDir'),
   getProject: (slug: string): Promise<ProjectMeta | null> =>
     ipcRenderer.invoke('project:get', slug),
   getPeaks: (slug: string): Promise<Uint8Array | null> =>

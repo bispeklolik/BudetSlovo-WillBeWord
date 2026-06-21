@@ -22,6 +22,8 @@ export interface RendererApi {
   setFolder: (slug: string, folder: string) => Promise<ProjectMeta | null>
   renameFolder: (oldPath: string, newPath: string) => Promise<boolean>
   listProjects: () => Promise<ProjectMeta[]>
+  deleteProject: (slug: string) => Promise<boolean>
+  openDataDir: () => Promise<string>
   getProject: (slug: string) => Promise<ProjectMeta | null>
   getPeaks: (slug: string) => Promise<Uint8Array | null>
   saveTranscript: (

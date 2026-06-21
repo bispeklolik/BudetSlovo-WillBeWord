@@ -315,6 +315,21 @@ export default function Home({
                         >
                           <Icon name="folder" />
                         </button>
+                        <button
+                          title="Удалить запись"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (
+                              window.confirm(
+                                `Удалить запись «${p.title}»? Она переедет в Корзину — можно восстановить.`
+                              )
+                            ) {
+                              api.deleteProject(p.slug).then(refresh)
+                            }
+                          }}
+                        >
+                          <Icon name="x" />
+                        </button>
                       </div>
                     </div>
                   ))}
