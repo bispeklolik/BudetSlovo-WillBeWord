@@ -196,18 +196,19 @@ ipcMain.handle('job:list', () => listJobs())
 // ---------- экспорт ----------
 ipcMain.handle(
   'export:run',
-  async (_e, slug: string, format: ExportFormat, highlight: boolean) => {
+  async (_e, slug: string, format: ExportFormat, highlight: boolean, anon?: boolean) => {
     if (!win) return null
     const meta = getProject(slug)
     if (!meta) return null
     const ext = format
+    const suffix = anon ? ' (обезличено)' : ''
     const res = await dialog.showSaveDialog(win, {
       title: 'Сохранить расшифровку',
-      defaultPath: join(projectDir(slug), `${meta.title}.${ext}`),
+      defaultPath: join(projectDir(slug), `${meta.title}${suffix}.${ext}`),
       filters: [{ name: ext.toUpperCase(), extensions: [ext] }]
     })
     if (res.canceled || !res.filePath) return null
-    await exportTranscript(meta, res.filePath, format, highlight)
+    await exportTranscript(meta, res.filePath, format, highlight, anon)
     shell.showItemInFolder(res.filePath)
     return res.filePath
   }

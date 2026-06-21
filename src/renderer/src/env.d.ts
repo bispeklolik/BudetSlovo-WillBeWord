@@ -32,7 +32,8 @@ export interface RendererApi {
   exportTranscript: (
     slug: string,
     format: 'docx' | 'md' | 'txt' | 'srt' | 'vtt',
-    highlight: boolean
+    highlight: boolean,
+    anon?: boolean
   ) => Promise<string | null>
   exportAudio: (slug: string) => Promise<string | null>
   exportTextDocx: (title: string, text: string) => Promise<string | null>

@@ -5,12 +5,15 @@ interface AiMenuProps {
   busyLabel: string | null // когда идёт долгая операция — текст на кнопке, меню закрыто
   hasBackup: boolean // есть бэкап причёсывания → можно отменить
   hasHl: boolean // есть выделенные «лучшие мысли»
+  hasAnon: boolean // есть правила обезличивания
   onCleanup: () => void
   onRevert: () => void
   onSummary: () => void
   onHighlights: () => void
   onShowList: () => void
   onClearHl: () => void
+  onAnonymize: () => void
+  onAnonList: () => void
 }
 
 export default function AiMenu(props: AiMenuProps): React.JSX.Element {
@@ -72,6 +75,15 @@ export default function AiMenu(props: AiMenuProps): React.JSX.Element {
           {hasHl && (
             <button className="export-item" onClick={() => pick(props.onClearHl)}>
               Убрать выделения
+            </button>
+          )}
+          <div className="menu-sep" />
+          <button className="export-item" onClick={() => pick(props.onAnonymize)}>
+            {props.hasAnon ? 'Обновить обезличивание' : 'Обезличить (убрать имена)'}
+          </button>
+          {props.hasAnon && (
+            <button className="export-item" onClick={() => pick(props.onAnonList)}>
+              Список замен…
             </button>
           )}
         </div>

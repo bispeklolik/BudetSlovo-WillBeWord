@@ -910,6 +910,82 @@ button {
   color: #fff;
 }
 
+.word.anon {
+  background: var(--accent-soft);
+  color: var(--accent-solid);
+  border-radius: 4px;
+  padding: 0 3px;
+  font-weight: 500;
+}
+
+.anon-banner {
+  margin: 8px 16px 0;
+  padding: 9px 13px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.45;
+  flex: 0 0 auto;
+}
+
+.anon-banner button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.anon-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  max-height: 46vh;
+}
+
+.anon-rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--surface2);
+}
+
+.anon-find {
+  color: var(--text);
+}
+
+.anon-replace {
+  color: var(--accent-solid);
+  font-weight: 500;
+}
+
+.anon-arrow {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.anon-rule .note-badge {
+  margin-left: auto;
+}
+
+.anon-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.anon-add .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
 .search-bar {
   display: flex;
   align-items: center;
@@ -1401,6 +1477,12 @@ button {
   height: 1px;
   background: var(--border);
   margin: 4px 2px;
+}
+
+.export-note {
+  font-size: 12px;
+  color: var(--accent);
+  padding: 4px 8px;
 }
 
 .player {

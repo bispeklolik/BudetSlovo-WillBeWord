@@ -51,8 +51,9 @@ const api = {
   exportTranscript: (
     slug: string,
     format: 'docx' | 'md' | 'txt' | 'srt' | 'vtt',
-    highlight: boolean
-  ): Promise<string | null> => ipcRenderer.invoke('export:run', slug, format, highlight),
+    highlight: boolean,
+    anon?: boolean
+  ): Promise<string | null> => ipcRenderer.invoke('export:run', slug, format, highlight, anon),
   exportAudio: (slug: string): Promise<string | null> =>
     ipcRenderer.invoke('export:audio', slug),
   exportTextDocx: (title: string, text: string): Promise<string | null> =>

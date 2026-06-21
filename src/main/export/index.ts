@@ -2,8 +2,23 @@ import { Document, Packer, Paragraph, TextRun, BorderStyle } from 'docx'
 import { writeFileSync } from 'fs'
 import type { ProjectMeta, Word } from '../../shared/types'
 import { toSubtitles } from './subtitles'
+import { buildAnonOverlay } from '../../shared/anon'
 
 export type ExportFormat = 'docx' | 'md' | 'txt' | 'srt' | 'vtt'
+
+// Обезличенная копия проекта: слова заменяются по правилам meta.anon, скрытые
+// хвосты многословных замен выбрасываются. Замены становятся «чистыми» словами.
+function anonymizeMeta(meta: ProjectMeta): ProjectMeta {
+  if (!meta.anon?.length || !meta.turns) return meta
+  const overlay = buildAnonOverlay(meta.turns, meta.anon)
+  const turns = meta.turns.map((t) => ({
+    ...t,
+    words: t.words
+      .filter((w) => overlay.get(w.id) !== '')
+      .map((w): Word => (overlay.has(w.id) ? { id: w.id, t: overlay.get(w.id)! } : w))
+  }))
+  return { ...meta, turns }
+}
 
 function fmtTime(sec: number): string {
   const t = Math.floor(sec)
@@ -159,16 +174,18 @@ export async function exportTranscript(
   meta: ProjectMeta,
   outPath: string,
   format: ExportFormat,
-  highlight: boolean
+  highlight: boolean,
+  anon = false
 ): Promise<void> {
+  const m = anon ? anonymizeMeta(meta) : meta
   if (format === 'docx') {
-    const buf = await buildDocx(meta, highlight)
+    const buf = await buildDocx(m, anon ? false : highlight)
     writeFileSync(outPath, buf)
   } else if (format === 'md') {
-    writeFileSync(outPath, BOM + buildMd(meta), 'utf8')
+    writeFileSync(outPath, BOM + buildMd(m), 'utf8')
   } else if (format === 'srt' || format === 'vtt') {
-    writeFileSync(outPath, toSubtitles(meta.turns ?? [], format), 'utf8')
+    writeFileSync(outPath, toSubtitles(m.turns ?? [], format), 'utf8')
   } else {
-    writeFileSync(outPath, BOM + buildTxt(meta), 'utf8')
+    writeFileSync(outPath, BOM + buildTxt(m), 'utf8')
   }
 }

@@ -35,6 +35,8 @@ interface Props {
   matchIds: Set<number>
   currentMatchId: number | null
   searchTurnIndex: number | null
+  anonMode: boolean
+  anonOverlay: Map<number, string>
 }
 
 export default function TranscriptView(props: Props): React.JSX.Element {
@@ -132,7 +134,28 @@ export default function TranscriptView(props: Props): React.JSX.Element {
           )}
         </div>
         <p className="turn-text">
-          {turn.words.map((w, i) => (
+          {turn.words.map((w, i) => {
+            if (props.anonMode) {
+              const ov = props.anonOverlay.get(w.id)
+              if (ov === '') return null // скрытый хвост многословной замены
+              const replaced = ov !== undefined
+              return (
+                <span className="wtok" key={w.id}>
+                  <span
+                    className={
+                      'word' +
+                      (replaced ? ' anon' : '') +
+                      (w.id === activeWordId ? ' active' : '')
+                    }
+                    data-word={w.id}
+                    onClick={() => props.onWordClick(w)}
+                  >
+                    {replaced ? ov : w.t}
+                  </span>{' '}
+                </span>
+              )
+            }
+            return (
             <span className="wtok" key={w.id}>
               <button
                 className="ins"
@@ -213,19 +236,22 @@ export default function TranscriptView(props: Props): React.JSX.Element {
                 </span>
               )}{' '}
             </span>
-          ))}
-          <button
-            className="ins ins-end"
-            title="Добавить слово в конец"
-            tabIndex={-1}
-            onClick={() => {
-              const id = props.onInsertBefore(turn.id, turn.words.length)
-              setEditId(id)
-              setDraft('')
-            }}
-          >
-            +
-          </button>
+            )
+          })}
+          {!props.anonMode && (
+            <button
+              className="ins ins-end"
+              title="Добавить слово в конец"
+              tabIndex={-1}
+              onClick={() => {
+                const id = props.onInsertBefore(turn.id, turn.words.length)
+                setEditId(id)
+                setDraft('')
+              }}
+            >
+              +
+            </button>
+          )}
         </p>
       </div>
     )

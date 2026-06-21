@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ProjectMeta, Word } from '../../../shared/types'
+import type { ProjectMeta, Word, AnonRule } from '../../../shared/types'
 import type { Patch } from '../../../shared/patches'
 import { nextWordId } from '../../../shared/patches'
 import { withPatch } from '../editing'
@@ -10,6 +10,8 @@ import TranscriptView from '../components/TranscriptView'
 import ExportMenu from '../components/ExportMenu'
 import SummaryPanel from '../components/SummaryPanel'
 import HighlightsPanel from '../components/HighlightsPanel'
+import AnonPanel from '../components/AnonPanel'
+import { buildAnonOverlay } from '../../../shared/anon'
 import AiMenu from '../components/AiMenu'
 import Icon from '../components/Icon'
 
@@ -65,6 +67,9 @@ export default function Editor({
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [hlPanelOpen, setHlPanelOpen] = useState(false)
   const [hlBusy, setHlBusy] = useState(false)
+  const [anonMode, setAnonMode] = useState(false)
+  const [anonBusy, setAnonBusy] = useState(false)
+  const [anonPanelOpen, setAnonPanelOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [replace, setReplace] = useState('')
@@ -401,6 +406,28 @@ export default function Editor({
     if (m) loadMeta(m)
   }
 
+  const runAnonymize = async (): Promise<void> => {
+    setAnonBusy(true)
+    try {
+      const m = await api.anonymizeAi(slug)
+      if (m) {
+        loadMeta(m)
+        setAnonMode(true) // сразу показываем результат
+      }
+    } catch (err) {
+      const s = String(err)
+      if (s.includes('AI_UNAVAILABLE')) alert('Не удалось запустить локальный ИИ (Ollama).')
+      else if (s.includes('AI_MODEL_MISSING')) alert('ИИ-модель не найдена — её нужно скачать.')
+      else alert('Не удалось обезличить: ' + s)
+    } finally {
+      setAnonBusy(false)
+    }
+  }
+  const saveAnonRules = async (rules: AnonRule[]): Promise<void> => {
+    const m = await api.setAnonRules(slug, rules)
+    if (m) loadMeta(m)
+  }
+
   const matchIds = new Set(searchMatches.map((m) => m.wordId))
   const curMatch = searchMatches[matchIdx]
   const stepMatch = (d: number): void => {
@@ -428,6 +455,12 @@ export default function Editor({
     (n, t) => n + t.words.filter((w) => w.t.trim()).length,
     0
   )
+  const anonRules = meta.anon ?? []
+  const hasAnon = anonRules.length > 0
+  const anonOverlay = useMemo(
+    () => buildAnonOverlay(meta.turns ?? [], anonRules),
+    [meta.turns, meta.anon]
+  )
 
   return (
     <main className="editor">
@@ -448,22 +481,36 @@ export default function Editor({
             >
               <Icon name="search" size={16} />
             </button>
+            {hasAnon && (
+              <button
+                className={'btn' + (anonMode ? ' btn-primary' : '')}
+                onClick={() => setAnonMode((v) => !v)}
+                title="Показать/скрыть обезличенную версию"
+              >
+                {anonMode ? '🕶 Обезличено' : 'Обезличено'}
+              </button>
+            )}
             <AiMenu
               busyLabel={
                 aiBusy
                   ? `Причёсываю${aiProgress && aiProgress.total ? ` ${aiProgress.done}/${aiProgress.total}` : '…'}`
                   : hlBusy
                     ? 'Ищу мысли…'
-                    : null
+                    : anonBusy
+                      ? 'Обезличиваю…'
+                      : null
               }
               hasBackup={!!aiBackup}
               hasHl={hasHl}
+              hasAnon={hasAnon}
               onCleanup={runAiCleanup}
               onRevert={revertAiCleanup}
               onSummary={() => setSummaryOpen(true)}
               onHighlights={runHighlights}
               onShowList={() => setHlPanelOpen(true)}
               onClearHl={clearHl}
+              onAnonymize={runAnonymize}
+              onAnonList={() => setAnonPanelOpen(true)}
             />
             <button
               className="btn"
@@ -478,7 +525,7 @@ export default function Editor({
             >
               Перераспознать
             </button>
-            <ExportMenu slug={slug} meta={meta} />
+            <ExportMenu slug={slug} meta={meta} anon={anonMode} />
           </div>
         )}
       </div>
@@ -564,23 +611,33 @@ export default function Editor({
             }}
           />
         ) : hasText ? (
-          <TranscriptView
-            meta={meta}
-            activeWordId={activeWordId}
-            activeTurnIndex={activeTurnIndex}
-            follow={follow && playing}
-            onWordClick={onWordClick}
-            onUserScroll={() => setFollow(false)}
-            onCommitWord={onCommitWord}
-            onInsertBefore={onInsertBefore}
-            onRenameSpeaker={(speakerId, name) => edit({ op: 'renameSpeaker', speakerId, name })}
-            onSetTurnSpeaker={(turnId, spk) => edit({ op: 'setTurnSpeaker', turnId, spk })}
-            onMergeTurn={(turnId) => edit({ op: 'mergeTurnIntoPrev', turnId })}
-            onSplitTurn={onSplitTurn}
-            matchIds={matchIds}
-            currentMatchId={curMatch?.wordId ?? null}
-            searchTurnIndex={searchOpen ? (curMatch?.turnIndex ?? null) : null}
-          />
+          <>
+            {anonMode && (
+              <div className="anon-banner">
+                🕶 Обезличенный вид. Подсвечено то, что заменил ИИ — пробегись глазами, он мог
+                что-то пропустить. <button onClick={() => setAnonPanelOpen(true)}>Список замен</button>
+              </div>
+            )}
+            <TranscriptView
+              meta={meta}
+              activeWordId={activeWordId}
+              activeTurnIndex={activeTurnIndex}
+              follow={follow && playing}
+              onWordClick={onWordClick}
+              onUserScroll={() => setFollow(false)}
+              onCommitWord={onCommitWord}
+              onInsertBefore={onInsertBefore}
+              onRenameSpeaker={(speakerId, name) => edit({ op: 'renameSpeaker', speakerId, name })}
+              onSetTurnSpeaker={(turnId, spk) => edit({ op: 'setTurnSpeaker', turnId, spk })}
+              onMergeTurn={(turnId) => edit({ op: 'mergeTurnIntoPrev', turnId })}
+              onSplitTurn={onSplitTurn}
+              matchIds={matchIds}
+              currentMatchId={curMatch?.wordId ?? null}
+              searchTurnIndex={searchOpen ? (curMatch?.turnIndex ?? null) : null}
+              anonMode={anonMode}
+              anonOverlay={anonOverlay}
+            />
+          </>
         ) : meta.engine?.completedAt ? (
           <div className="transcript-placeholder">
             <div className="empty-title">Собираю текст…</div>
@@ -655,6 +712,17 @@ export default function Editor({
             setHlPanelOpen(false)
           }}
           onClose={() => setHlPanelOpen(false)}
+        />
+      )}
+
+      {anonPanelOpen && (
+        <AnonPanel
+          rules={anonRules}
+          onSave={(rules) => {
+            void saveAnonRules(rules)
+            setAnonPanelOpen(false)
+          }}
+          onClose={() => setAnonPanelOpen(false)}
         />
       )}
     </main>
