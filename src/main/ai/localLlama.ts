@@ -5,6 +5,7 @@ import type {
   SummaryLevel,
   SummaryDomain
 } from './provider'
+import type { AnonRule } from '../../shared/anon'
 
 // Локальный провайдер через Ollama (HTTP на 127.0.0.1:11434). Модель по
 // умолчанию — Qwen2.5-7B. За ОДИН проход модель и причёсывает реплику
@@ -56,6 +57,43 @@ const HIGHLIGHTS_SYSTEM =
   'действительно ценно (обычно от нескольких до ~15), но только по-настоящему важное, не ' +
   'проходное. Верни СТРОГО JSON {"highlights": string[]}: каждая цитата ДОСЛОВНО из текста ' +
   '(3–15 слов, точно как в тексте), без изменений, без повторов, без пояснений.'
+
+const ANON_SYSTEM =
+  'Ты — фильтр приватности для расшифровки разговора. Найди в тексте ВСЁ, по чему можно ' +
+  'опознать человека: имена и прозвища людей; географию (города, районы, улицы, заведения); ' +
+  'организации и учреждения (ВУЗы, компании, школы); прочие явные идентификаторы (телефоны, ' +
+  'адреса, точные даты рождения, уникальные приметы). Верни СТРОГО JSON {"rules": [{"find": ' +
+  'string, "replace": string, "kind": "name"|"place"|"org"|"other"}]}.\n' +
+  '- find: подстрока ТОЧНО как в тексте. Для каждого человека верни КАЖДУЮ встретившуюся форму ' +
+  'ОТДЕЛЬНЫМ правилом (Ева, Евы, Еве, Еву, Евой) — все формы одного человека на ОДНУ и ту же замену.\n' +
+  '- replace: нейтральная замена. Люди → «Клиент»/«Клиентка» (по полу); если людей несколько — ' +
+  '«Клиент 2», «Коллега», «Имя» и т.п.; города/места → «город»/«место»; учебные заведения → «вуз»; ' +
+  'организации → «организация».\n' +
+  '- kind: name | place | org | other.\n' +
+  'НЕ трогай обычные слова, общие понятия и профессии без привязки к конкретному человеку. ' +
+  'Если опознаваемого нет — {"rules": []}.'
+
+const ANON_KINDS = new Set(['name', 'place', 'org', 'other'])
+
+function parseAnon(raw: string): AnonRule[] {
+  try {
+    const o = JSON.parse(raw || '{}') as { rules?: unknown }
+    if (!Array.isArray(o.rules)) return []
+    const out: AnonRule[] = []
+    for (const r of o.rules) {
+      if (!r || typeof r !== 'object') continue
+      const rec = r as Record<string, unknown>
+      const find = typeof rec.find === 'string' ? rec.find.trim() : ''
+      const replace = typeof rec.replace === 'string' ? rec.replace.trim() : ''
+      if (!find || !replace) continue
+      const kind = ANON_KINDS.has(rec.kind as string) ? (rec.kind as AnonRule['kind']) : 'other'
+      out.push({ find, replace, kind })
+    }
+    return out
+  } catch {
+    return []
+  }
+}
 
 function parseResult(raw: string, original: string): CleanupResult {
   try {
@@ -155,5 +193,25 @@ export const localLlamaProvider: AiProvider = {
     } catch {
       return []
     }
+  },
+
+  async anonymize(text: string): Promise<AnonRule[]> {
+    const r = await fetch(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: 'system', content: ANON_SYSTEM },
+          { role: 'user', content: text }
+        ],
+        stream: false,
+        format: 'json',
+        options: { temperature: 0.1, num_ctx: 32768, num_predict: 2000 }
+      })
+    })
+    if (!r.ok) throw new Error(`Ollama HTTP ${r.status}`)
+    const d = (await r.json()) as { message?: { content?: string } }
+    return parseAnon(d.message?.content || '{}')
   }
 }

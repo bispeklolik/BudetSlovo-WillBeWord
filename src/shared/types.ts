@@ -90,6 +90,15 @@ export interface ProjectMeta {
   }
   speakers?: SpeakerInfo[]
   turns?: Turn[]
+  /** Правила обезличивания (ИИ нашёл имена/места/организации). Оригинал не меняется. */
+  anon?: AnonRule[]
+}
+
+// Правило обезличивания: подстрока как в тексте → нейтральная замена.
+export interface AnonRule {
+  find: string
+  replace: string
+  kind: 'name' | 'place' | 'org' | 'other'
 }
 
 export type ImportProgress =

@@ -8,7 +8,8 @@ import type {
   Turn,
   SpeakerInfo,
   Note,
-  NoteInput
+  NoteInput,
+  AnonRule
 } from '../../shared/types'
 
 export interface RendererApi {
@@ -49,6 +50,8 @@ export interface RendererApi {
   ) => Promise<string | null>
   highlightAi: (slug: string) => Promise<ProjectMeta | null>
   clearHighlightsAi: (slug: string) => Promise<ProjectMeta | null>
+  anonymizeAi: (slug: string) => Promise<ProjectMeta | null>
+  setAnonRules: (slug: string, rules: AnonRule[]) => Promise<ProjectMeta | null>
   onAiProgress: (cb: (p: { done: number; total: number; phase: string }) => void) => () => void
   onImportProgress: (cb: (p: ImportProgress) => void) => () => void
   startTranscribe: (slug: string, opts: TranscribeOptions) => Promise<JobInfo>

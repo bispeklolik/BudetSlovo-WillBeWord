@@ -40,6 +40,8 @@ const stub: RendererApi = {
   summarizeAi: async () => null,
   highlightAi: async () => null,
   clearHighlightsAi: async () => null,
+  anonymizeAi: async () => null,
+  setAnonRules: async () => null,
   onAiProgress: () => () => {},
   onImportProgress: () => () => {},
   startTranscribe: async () => {

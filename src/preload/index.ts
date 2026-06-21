@@ -8,7 +8,8 @@ import type {
   Turn,
   SpeakerInfo,
   Note,
-  NoteInput
+  NoteInput,
+  AnonRule
 } from '../shared/types'
 
 const api = {
@@ -74,6 +75,10 @@ const api = {
     ipcRenderer.invoke('ai:highlights', slug),
   clearHighlightsAi: (slug: string): Promise<ProjectMeta | null> =>
     ipcRenderer.invoke('ai:clearHighlights', slug),
+  anonymizeAi: (slug: string): Promise<ProjectMeta | null> =>
+    ipcRenderer.invoke('ai:anonymize', slug),
+  setAnonRules: (slug: string, rules: AnonRule[]): Promise<ProjectMeta | null> =>
+    ipcRenderer.invoke('ai:setAnon', slug, rules),
   onAiProgress: (cb: (p: { done: number; total: number; phase: string }) => void): (() => void) => {
     const handler = (_e: unknown, p: { done: number; total: number; phase: string }): void => cb(p)
     ipcRenderer.on('ai:progress', handler)

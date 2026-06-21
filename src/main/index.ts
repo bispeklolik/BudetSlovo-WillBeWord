@@ -28,7 +28,14 @@ import {
   cancelJob,
   listJobs
 } from './jobs/queue'
-import type { Settings, TranscribeOptions, Turn, SpeakerInfo, NoteInput } from '../shared/types'
+import type {
+  Settings,
+  TranscribeOptions,
+  Turn,
+  SpeakerInfo,
+  NoteInput,
+  AnonRule
+} from '../shared/types'
 
 // Все данные Chromium-профиля строго на D: — C: почти полон.
 app.setPath('userData', join(DATA_DIR, 'electron'))
@@ -282,6 +289,25 @@ ipcMain.handle('ai:clearHighlights', (_e, slug: string) => {
   const meta = getProject(slug)
   if (!meta?.turns) return null
   return saveTranscript(slug, clearHighlights(meta.turns), meta.speakers ?? [])
+})
+ipcMain.handle('ai:anonymize', async (_e, slug: string) => {
+  const meta = getProject(slug)
+  if (!meta?.turns) return null
+  if (!(await ensureOllama())) throw new Error('AI_UNAVAILABLE')
+  const provider = getProvider('local-llama')
+  if (!provider) throw new Error('AI_PROVIDER_NOT_FOUND')
+  if (!(await provider.isAvailable())) throw new Error('AI_MODEL_MISSING')
+  const text = meta.turns.map((t) => t.words.map((w) => w.t).join(' ')).join('\n')
+  meta.anon = await provider.anonymize(text)
+  saveProject(meta)
+  return meta
+})
+ipcMain.handle('ai:setAnon', (_e, slug: string, rules: AnonRule[]) => {
+  const meta = getProject(slug)
+  if (!meta) return null
+  meta.anon = rules
+  saveProject(meta)
+  return meta
 })
 
 app.whenReady().then(() => {

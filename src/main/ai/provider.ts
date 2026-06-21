@@ -1,3 +1,5 @@
+import type { AnonRule } from '../../shared/anon'
+
 // Провайдер-агностичная точка расширения ИИ-слоя: локально (llama.cpp/Ollama)
 // сейчас, облако (Claude) — позже, выбор за пользователем. Сырой diff и наложение
 // правок делает вызывающий код (diff.ts / apply.ts); провайдер лишь возвращает
@@ -45,6 +47,8 @@ export interface AiProvider {
   summarize(text: string, level: SummaryLevel, domain: SummaryDomain): Promise<string>
   /** Самые ценные мысли/моменты — дословные цитаты из текста (для подсветки). */
   highlights(text: string): Promise<string[]>
+  /** Находит идентифицирующие данные (имена/места/организации) и предлагает замены. */
+  anonymize(text: string): Promise<AnonRule[]>
 }
 
 const providers = new Map<string, AiProvider>()
