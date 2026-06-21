@@ -95,6 +95,12 @@ export default function Editor({
     return out
   }, [search, meta])
 
+  // Наложение обезличивания (до раннего return — иначе нарушится порядок хуков).
+  const anonOverlay = useMemo(
+    () => buildAnonOverlay(meta?.turns ?? [], meta?.anon ?? []),
+    [meta]
+  )
+
   // Переход из глобального поиска: открыть строку поиска с этим словом.
   useEffect(() => {
     if (initialSearch) {
@@ -457,10 +463,6 @@ export default function Editor({
   )
   const anonRules = meta.anon ?? []
   const hasAnon = anonRules.length > 0
-  const anonOverlay = useMemo(
-    () => buildAnonOverlay(meta.turns ?? [], anonRules),
-    [meta.turns, meta.anon]
-  )
 
   return (
     <main className="editor">
