@@ -93,7 +93,7 @@ export default function SettingsModal({
               <div className="settings-row">
                 <span>Локальная модель</span>
                 <span className="settings-status">
-                  {aiReady === null ? '…' : aiReady ? 'qwen2.5:7b — готова' : 'не найдена'}
+                  {aiReady === null ? '…' : aiReady ? 'qwen2.5:7b · готова' : 'не найдена'}
                 </span>
               </div>
               <div className="panel-note">Обработка на вашем компьютере — ничего не уходит наружу.</div>
