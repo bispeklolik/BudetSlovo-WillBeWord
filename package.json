@@ -1,6 +1,6 @@
 {
   "name": "slovo",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "Слово — локальный редактор расшифровок аудио (психолог/клиент)",
   "author": "Matvey Bogatyrev <bispeklolik@gmail.com>",
