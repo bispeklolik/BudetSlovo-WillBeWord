@@ -13,6 +13,7 @@ import HighlightsPanel from '../components/HighlightsPanel'
 import AnonPanel from '../components/AnonPanel'
 import StatsPanel from '../components/StatsPanel'
 import { buildAnonOverlay } from '../../../shared/anon'
+import { rateForKey } from '../../../shared/playback'
 import AiMenu from '../components/AiMenu'
 import Icon from '../components/Icon'
 
@@ -294,6 +295,15 @@ export default function Editor({
         skip(-5)
       } else if (e.code === 'ArrowRight') {
         skip(5)
+      } else if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+        // Цифры 1–4 — скорость воспроизведения (1× / 1.25× / 1.5× / 2×).
+        const r = rateForKey(e.code)
+        if (r !== null) {
+          e.preventDefault()
+          setRate(r)
+          const a = audioRef.current
+          if (a) a.playbackRate = r
+        }
       }
     }
     window.addEventListener('keydown', onKey)
@@ -689,7 +699,7 @@ export default function Editor({
             className="rate"
             value={rate}
             onChange={(e) => changeRate(Number(e.target.value))}
-            title="Скорость воспроизведения"
+            title="Скорость воспроизведения (клавиши 1–4)"
           >
             {RATES.map((r) => (
               <option key={r} value={r}>
