@@ -11,6 +11,7 @@ import ExportMenu from '../components/ExportMenu'
 import SummaryPanel from '../components/SummaryPanel'
 import HighlightsPanel from '../components/HighlightsPanel'
 import AnonPanel from '../components/AnonPanel'
+import StatsPanel from '../components/StatsPanel'
 import { buildAnonOverlay } from '../../../shared/anon'
 import AiMenu from '../components/AiMenu'
 import Icon from '../components/Icon'
@@ -70,6 +71,7 @@ export default function Editor({
   const [anonMode, setAnonMode] = useState(false)
   const [anonBusy, setAnonBusy] = useState(false)
   const [anonPanelOpen, setAnonPanelOpen] = useState(false)
+  const [statsOpen, setStatsOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [replace, setReplace] = useState('')
@@ -483,6 +485,13 @@ export default function Editor({
             >
               <Icon name="search" size={16} />
             </button>
+            <button
+              className="btn btn-icon"
+              onClick={() => setStatsOpen(true)}
+              title="Статистика записи (баланс речи)"
+            >
+              <Icon name="chart" size={16} />
+            </button>
             {hasAnon && (
               <button
                 className={'btn' + (anonMode ? ' btn-primary' : '')}
@@ -727,6 +736,8 @@ export default function Editor({
           onClose={() => setAnonPanelOpen(false)}
         />
       )}
+
+      {statsOpen && <StatsPanel meta={meta} onClose={() => setStatsOpen(false)} />}
     </main>
   )
 }
