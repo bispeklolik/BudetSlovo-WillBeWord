@@ -351,10 +351,30 @@ app.whenReady().then(() => {
   createWindow()
 
   // Автообновление: только в собранном приложении (в dev нет app-update.yml).
+  // Проверяем при запуске, тихо качаем в фоне, а когда готово — показываем
+  // АКТИВНЫЙ диалог с кнопкой «Перезапустить сейчас» (пассивное системное
+  // уведомление пользователи пропускают). «Позже» — обновление всё равно
+  // поставится при следующем выходе (autoInstallOnAppQuit по умолчанию вкл).
   if (app.isPackaged) {
-    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-      console.error('[updater]', err)
+    autoUpdater.autoDownload = true
+    autoUpdater.on('update-downloaded', (info) => {
+      void dialog
+        .showMessageBox({
+          type: 'info',
+          buttons: ['Перезапустить сейчас', 'Позже'],
+          defaultId: 0,
+          cancelId: 1,
+          title: 'Обновление готово',
+          message: `Доступна новая версия «Слово» ${info.version}.`,
+          detail: 'Перезапустить приложение, чтобы установить обновление? Ваши записи не пострадают.'
+        })
+        .then((res) => {
+          if (res.response === 0) autoUpdater.quitAndInstall()
+        })
+        .catch(() => {})
     })
+    autoUpdater.on('error', (err) => console.error('[updater]', err))
+    autoUpdater.checkForUpdates().catch((err) => console.error('[updater]', err))
   }
 
   // Dev-хук: headless-проверка пайплайна импорта без диалога.
