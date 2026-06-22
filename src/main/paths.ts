@@ -11,8 +11,8 @@ export const STT_TEMP = 'D:\\STT\\temp'
 
 // Локальный ИИ (Ollama). Установлен в D:\Apps\ollama (junction → F).
 // Модели ИИ — в slovo-data\models (D:\Apps\slovo-data — junction → F:, т.е. уже на SSD).
-// NB: скачанные huihui_ai/qwen2.5-abliterate (F:\ollama-models) выдавали мусор — битые,
-// не используем; останавливаемся на рабочей qwen2.5:7b-instruct.
+// Остаёмся на qwen2.5:7b-instruct: проверено, что она корректно обрабатывает тяжёлый/
+// чувствительный контент (саммари сессии про насилие — без отказов), расцензуренная не нужна.
 export const OLLAMA_EXE = 'D:\\Apps\\ollama\\ollama.exe'
 export const OLLAMA_ADDR = '127.0.0.1:11434'
 export const OLLAMA_MODELS_DIR = join(DATA_DIR, 'models')
