@@ -3,8 +3,8 @@ export type Theme = 'light' | 'dark'
 export type AiEngine = 'local-llama' | 'claude'
 
 // Движок расшифровки: локальный Whisper (приватно, на этом компьютере) или
-// облачный Deepgram (быстрее, но аудио уходит на их серверы).
-export type SttEngine = 'local' | 'deepgram'
+// один из облачных (быстрее, но аудио уходит на их серверы).
+export type SttEngine = 'local' | 'deepgram' | 'assemblyai' | 'elevenlabs' | 'openai' | 'groq'
 
 export interface Settings {
   theme: Theme
@@ -12,8 +12,8 @@ export interface Settings {
   aiEngine?: AiEngine // чем обрабатывать: локально или облачный Claude
   anthropicKey?: string // ключ Anthropic API (хранится локально), для движка Claude
   claudeModel?: string // модель Claude (по умолчанию sonnet)
-  sttEngine?: SttEngine // чем расшифровывать: локально или Deepgram
-  deepgramKey?: string // ключ Deepgram API (хранится локально)
+  sttEngine?: SttEngine // чем расшифровывать: локально или облачный движок
+  sttKeys?: Record<string, string> // ключи облачных STT по id движка (хранятся локально)
 }
 
 export const defaultSettings: Settings = {

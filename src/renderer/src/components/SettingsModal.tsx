@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import type { Theme, AiEngine, SttEngine, Settings } from '../../../shared/types'
+import { STT_ENGINES, sttMeta } from '../../../shared/sttEngines'
 import { useEscClose } from '../useEscClose'
 
 const MODELS: { id: string; label: string }[] = [
@@ -24,7 +25,7 @@ export default function SettingsModal({
   const [key, setKey] = useState('')
   const [model, setModel] = useState('claude-sonnet-4-6')
   const [stt, setStt] = useState<SttEngine>('local')
-  const [dgKey, setDgKey] = useState('')
+  const [sttKeys, setSttKeys] = useState<Record<string, string>>({})
 
   useEffect(() => {
     api.aiAvailable().then(setAiReady)
@@ -33,9 +34,11 @@ export default function SettingsModal({
       setKey(s.anthropicKey ?? '')
       setModel(s.claudeModel ?? 'claude-sonnet-4-6')
       setStt(s.sttEngine ?? 'local')
-      setDgKey(s.deepgramKey ?? '')
+      setSttKeys(s.sttKeys ?? {})
     })
   }, [])
+
+  const sm = sttMeta(stt)
 
   const save = (patch: Partial<Settings>): void => {
     void api.setSettings(patch)
@@ -70,45 +73,45 @@ export default function SettingsModal({
           <div className="settings-label">Расшифровка</div>
           <div className="settings-row">
             <span>Движок</span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button
-                className={'btn' + (stt === 'local' ? ' btn-primary' : '')}
-                onClick={() => {
-                  setStt('local')
-                  save({ sttEngine: 'local' })
-                }}
-              >
-                Локально (Whisper)
-              </button>
-              <button
-                className={'btn' + (stt === 'deepgram' ? ' btn-primary' : '')}
-                onClick={() => {
-                  setStt('deepgram')
-                  save({ sttEngine: 'deepgram' })
-                }}
-              >
-                Deepgram (облако)
-              </button>
-            </div>
+            <select
+              className="rate"
+              value={stt}
+              onChange={(e) => {
+                const id = e.target.value as SttEngine
+                setStt(id)
+                save({ sttEngine: id })
+              }}
+            >
+              {STT_ENGINES.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                  {m.diarize ? '' : ' · один голос'}
+                </option>
+              ))}
+            </select>
           </div>
-          {stt === 'local' ? (
-            <div className="panel-note">Расшифровка на вашем компьютере — аудио никуда не уходит.</div>
-          ) : (
+          {sm?.cloud ? (
             <>
-              <div className="input-label">Ключ Deepgram API (вставьте свой; хранится локально)</div>
+              <div className="input-label">Ключ {sm.label} (вставьте свой; хранится локально)</div>
               <input
                 className="text-input"
                 type="password"
-                placeholder="вставьте ключ Deepgram"
-                value={dgKey}
-                onChange={(e) => setDgKey(e.target.value)}
-                onBlur={() => save({ deepgramKey: dgKey.trim() })}
+                placeholder={sm.keyHint ? 'ключ · ' + sm.keyHint : 'вставьте ключ'}
+                value={sttKeys[stt] ?? ''}
+                onChange={(e) => setSttKeys({ ...sttKeys, [stt]: e.target.value })}
+                onBlur={() => save({ sttKeys: { ...sttKeys, [stt]: (sttKeys[stt] ?? '').trim() } })}
               />
               <div className="panel-note">
-                Быстрее локального движка, но аудио записи уходит на серверы Deepgram (облако). Для
-                клиентских сессий выбирайте осознанно.
+                {sm.price} ·{' '}
+                {sm.diarize
+                  ? 'разделяет говорящих (Психолог/Клиент).'
+                  : 'без разделения — один голос.'}{' '}
+                Аудио уходит на серверы {sm.label} (облако). Для клиентских сессий выбирайте
+                осознанно{sm.keyHint ? `; ключ — на ${sm.keyHint}` : ''}.
               </div>
             </>
+          ) : (
+            <div className="panel-note">Расшифровка на вашем компьютере — аудио никуда не уходит.</div>
           )}
         </div>
 

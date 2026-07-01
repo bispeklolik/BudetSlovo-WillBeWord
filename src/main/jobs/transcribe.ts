@@ -5,7 +5,8 @@ import { ENGINE_EXE, ENGINE_DIR, MODELS_DIR, STT_TEMP } from '../paths'
 import { projectDir, getProject, saveProject } from '../project/store'
 import { mergeEngineOutputs } from '../project/merge'
 import { loadSettings } from '../settings'
-import { transcribeWithDeepgram } from '../stt/deepgram'
+import { CLOUD_RUN } from '../stt'
+import { sttMeta } from '../../shared/sttEngines'
 import type { JobInfo } from '../../shared/types'
 
 const procs = new Map<string, ChildProcess>()
@@ -50,17 +51,20 @@ function parseTimecodeSec(tc: string): number {
   return sec
 }
 
-async function runDeepgram(
+async function runCloud(
+  engineId: string,
   job: JobInfo,
   emit: (patch: Partial<JobInfo>) => void
 ): Promise<void> {
-  const key = (loadSettings().deepgramKey ?? '').trim()
-  if (!key) throw new Error('Не указан ключ Deepgram — вставьте его в Настройках.')
+  const run = CLOUD_RUN[engineId]
+  const label = sttMeta(engineId)?.label ?? engineId
+  const key = (loadSettings().sttKeys?.[engineId] ?? '').trim()
+  if (!key) throw new Error(`Не указан ключ «${label}» — вставьте его в Настройках.`)
   const audio = join(projectDir(job.slug), 'audio.m4a')
   if (!existsSync(audio)) throw new Error('Аудио не найдено: ' + audio)
 
-  emit({ phase: 'Отправка в Deepgram', percent: null })
-  const result = await transcribeWithDeepgram(audio, key)
+  emit({ phase: `Отправка в ${label}`, percent: null })
+  const result = await run(audio, key, emit)
   // ponytail: облачную задачу нельзя прервать на середине запроса — если за это
   // время нажали «отмена», просто не сохраняем результат.
   if (job.cancelRequested) return
@@ -69,7 +73,7 @@ async function runDeepgram(
   const fresh = getProject(job.slug)
   if (fresh) {
     fresh.transcription = { numSpeakers: job.options?.numSpeakers ?? 2, enhance: false }
-    fresh.engine = { model: 'deepgram:nova-2', completedAt: new Date().toISOString() }
+    fresh.engine = { model: engineId, completedAt: new Date().toISOString() }
     fresh.speakers = result.speakers
     fresh.turns = result.turns
     saveProject(fresh)
@@ -87,9 +91,10 @@ export function runTranscribe(
       return
     }
 
-    // Облачный движок: не спавним локальный exe, а грузим аудио в Deepgram.
-    if (loadSettings().sttEngine === 'deepgram') {
-      runDeepgram(job, emit).then(resolve, reject)
+    // Облачный движок: не спавним локальный exe, а грузим аудио в облако.
+    const engineId = loadSettings().sttEngine ?? 'local'
+    if (engineId !== 'local' && CLOUD_RUN[engineId]) {
+      runCloud(engineId, job, emit).then(resolve, reject)
       return
     }
 
