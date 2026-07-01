@@ -4,6 +4,8 @@ import { join } from 'path'
 import { ENGINE_EXE, ENGINE_DIR, MODELS_DIR, STT_TEMP } from '../paths'
 import { projectDir, getProject, saveProject } from '../project/store'
 import { mergeEngineOutputs } from '../project/merge'
+import { loadSettings } from '../settings'
+import { transcribeWithDeepgram } from '../stt/deepgram'
 import type { JobInfo } from '../../shared/types'
 
 const procs = new Map<string, ChildProcess>()
@@ -48,6 +50,32 @@ function parseTimecodeSec(tc: string): number {
   return sec
 }
 
+async function runDeepgram(
+  job: JobInfo,
+  emit: (patch: Partial<JobInfo>) => void
+): Promise<void> {
+  const key = (loadSettings().deepgramKey ?? '').trim()
+  if (!key) throw new Error('Не указан ключ Deepgram — вставьте его в Настройках.')
+  const audio = join(projectDir(job.slug), 'audio.m4a')
+  if (!existsSync(audio)) throw new Error('Аудио не найдено: ' + audio)
+
+  emit({ phase: 'Отправка в Deepgram', percent: null })
+  const result = await transcribeWithDeepgram(audio, key)
+  // ponytail: облачную задачу нельзя прервать на середине запроса — если за это
+  // время нажали «отмена», просто не сохраняем результат.
+  if (job.cancelRequested) return
+
+  emit({ phase: 'Сохранение результата', percent: null })
+  const fresh = getProject(job.slug)
+  if (fresh) {
+    fresh.transcription = { numSpeakers: job.options?.numSpeakers ?? 2, enhance: false }
+    fresh.engine = { model: 'deepgram:nova-2', completedAt: new Date().toISOString() }
+    fresh.speakers = result.speakers
+    fresh.turns = result.turns
+    saveProject(fresh)
+  }
+}
+
 export function runTranscribe(
   job: JobInfo,
   emit: (patch: Partial<JobInfo>) => void
@@ -58,6 +86,13 @@ export function runTranscribe(
       reject(new Error('Проект не найден: ' + job.slug))
       return
     }
+
+    // Облачный движок: не спавним локальный exe, а грузим аудио в Deepgram.
+    if (loadSettings().sttEngine === 'deepgram') {
+      runDeepgram(job, emit).then(resolve, reject)
+      return
+    }
+
     if (!existsSync(ENGINE_EXE)) {
       reject(new Error('Движок не найден: ' + ENGINE_EXE))
       return

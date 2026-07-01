@@ -2,19 +2,26 @@ export type Theme = 'light' | 'dark'
 
 export type AiEngine = 'local-llama' | 'claude'
 
+// Движок расшифровки: локальный Whisper (приватно, на этом компьютере) или
+// облачный Deepgram (быстрее, но аудио уходит на их серверы).
+export type SttEngine = 'local' | 'deepgram'
+
 export interface Settings {
   theme: Theme
   folders?: string[] // явный список папок (включая пустые), чтобы они не исчезали
   aiEngine?: AiEngine // чем обрабатывать: локально или облачный Claude
   anthropicKey?: string // ключ Anthropic API (хранится локально), для движка Claude
   claudeModel?: string // модель Claude (по умолчанию sonnet)
+  sttEngine?: SttEngine // чем расшифровывать: локально или Deepgram
+  deepgramKey?: string // ключ Deepgram API (хранится локально)
 }
 
 export const defaultSettings: Settings = {
   theme: 'light',
   folders: [],
   aiEngine: 'local-llama',
-  claudeModel: 'claude-sonnet-4-6'
+  claudeModel: 'claude-sonnet-4-6',
+  sttEngine: 'local'
 }
 
 // Конспект — сохранённая текстовая выжимка (саммари, лучшие мысли, заметка).

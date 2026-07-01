@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import type { Theme, AiEngine, Settings } from '../../../shared/types'
+import type { Theme, AiEngine, SttEngine, Settings } from '../../../shared/types'
 import { useEscClose } from '../useEscClose'
 
 const MODELS: { id: string; label: string }[] = [
@@ -23,6 +23,8 @@ export default function SettingsModal({
   const [engine, setEngine] = useState<AiEngine>('local-llama')
   const [key, setKey] = useState('')
   const [model, setModel] = useState('claude-sonnet-4-6')
+  const [stt, setStt] = useState<SttEngine>('local')
+  const [dgKey, setDgKey] = useState('')
 
   useEffect(() => {
     api.aiAvailable().then(setAiReady)
@@ -30,6 +32,8 @@ export default function SettingsModal({
       setEngine(s.aiEngine ?? 'local-llama')
       setKey(s.anthropicKey ?? '')
       setModel(s.claudeModel ?? 'claude-sonnet-4-6')
+      setStt(s.sttEngine ?? 'local')
+      setDgKey(s.deepgramKey ?? '')
     })
   }, [])
 
@@ -60,6 +64,52 @@ export default function SettingsModal({
               Открыть
             </button>
           </div>
+        </div>
+
+        <div className="settings-section">
+          <div className="settings-label">Расшифровка</div>
+          <div className="settings-row">
+            <span>Движок</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                className={'btn' + (stt === 'local' ? ' btn-primary' : '')}
+                onClick={() => {
+                  setStt('local')
+                  save({ sttEngine: 'local' })
+                }}
+              >
+                Локально (Whisper)
+              </button>
+              <button
+                className={'btn' + (stt === 'deepgram' ? ' btn-primary' : '')}
+                onClick={() => {
+                  setStt('deepgram')
+                  save({ sttEngine: 'deepgram' })
+                }}
+              >
+                Deepgram (облако)
+              </button>
+            </div>
+          </div>
+          {stt === 'local' ? (
+            <div className="panel-note">Расшифровка на вашем компьютере — аудио никуда не уходит.</div>
+          ) : (
+            <>
+              <div className="input-label">Ключ Deepgram API (вставьте свой; хранится локально)</div>
+              <input
+                className="text-input"
+                type="password"
+                placeholder="вставьте ключ Deepgram"
+                value={dgKey}
+                onChange={(e) => setDgKey(e.target.value)}
+                onBlur={() => save({ deepgramKey: dgKey.trim() })}
+              />
+              <div className="panel-note">
+                Быстрее локального движка, но аудио записи уходит на серверы Deepgram (облако). Для
+                клиентских сессий выбирайте осознанно.
+              </div>
+            </>
+          )}
         </div>
 
         <div className="settings-section">

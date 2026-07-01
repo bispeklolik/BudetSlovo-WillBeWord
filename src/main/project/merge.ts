@@ -69,29 +69,21 @@ export interface MergeResult {
   turns: Turn[]
 }
 
+// Одно слово с уже определённым говорящим (label). Общий вход для локального
+// движка (label — по перекрытию с диаризацией) и Deepgram (label — его speaker).
+export interface FlatWord {
+  s: number
+  e: number
+  p: number
+  t: string
+  label: string
+}
+
 const DEFAULT_NAMES = ['Психолог', 'Клиент']
 
-export function mergeEngineOutputs(slug: string): MergeResult {
-  const dir = join(projectDir(slug), 'engine')
-  const data = JSON.parse(readFileSync(join(dir, 'audio.json'), 'utf8')) as {
-    segments: EngineSegment[]
-  }
-  const txt = readFileSync(join(dir, 'audio.txt'), 'utf8')
-  const intervals = parseSpeakerIntervals(txt)
-
-  // Плоский список слов; сегменты без words[] превращаем в одно «слово»-блок.
-  const flat: Array<{ s: number; e: number; p: number; t: string }> = []
-  for (const seg of data.segments ?? []) {
-    if (seg.words && seg.words.length > 0) {
-      for (const w of seg.words) {
-        const t = w.word.trim()
-        if (t) flat.push({ s: w.start, e: w.end, p: w.probability ?? 1, t })
-      }
-    } else if (seg.text?.trim()) {
-      flat.push({ s: seg.start, e: seg.end, p: 1, t: seg.text.trim() })
-    }
-  }
-
+// Группирует плоский список слов в реплики (подряд идущие слова одного
+// говорящего) и строит список говорящих в порядке появления.
+export function buildTurns(flat: FlatWord[]): MergeResult {
   const labels: string[] = []
   const speakerOf = (label: string): string => {
     let idx = labels.indexOf(label)
@@ -106,7 +98,7 @@ export function mergeEngineOutputs(slug: string): MergeResult {
   let wordId = 0
   let cur: Turn | null = null
   for (const w of flat) {
-    const spk = speakerOf(speakerForWord(w.s, w.e, intervals))
+    const spk = speakerOf(w.label)
     if (!cur || cur.spk !== spk) {
       cur = { id: 'T' + turns.length, spk, startSec: w.s, words: [] }
       turns.push(cur)
@@ -123,4 +115,43 @@ export function mergeEngineOutputs(slug: string): MergeResult {
   }))
 
   return { speakers, turns }
+}
+
+export function mergeEngineOutputs(slug: string): MergeResult {
+  const dir = join(projectDir(slug), 'engine')
+  const data = JSON.parse(readFileSync(join(dir, 'audio.json'), 'utf8')) as {
+    segments: EngineSegment[]
+  }
+  const txt = readFileSync(join(dir, 'audio.txt'), 'utf8')
+  const intervals = parseSpeakerIntervals(txt)
+
+  // Плоский список слов; говорящий — по максимальному перекрытию с диаризацией.
+  // Сегменты без words[] превращаем в одно «слово»-блок.
+  const flat: FlatWord[] = []
+  for (const seg of data.segments ?? []) {
+    if (seg.words && seg.words.length > 0) {
+      for (const w of seg.words) {
+        const t = w.word.trim()
+        if (t) {
+          flat.push({
+            s: w.start,
+            e: w.end,
+            p: w.probability ?? 1,
+            t,
+            label: speakerForWord(w.start, w.end, intervals)
+          })
+        }
+      }
+    } else if (seg.text?.trim()) {
+      flat.push({
+        s: seg.start,
+        e: seg.end,
+        p: 1,
+        t: seg.text.trim(),
+        label: speakerForWord(seg.start, seg.end, intervals)
+      })
+    }
+  }
+
+  return buildTurns(flat)
 }
