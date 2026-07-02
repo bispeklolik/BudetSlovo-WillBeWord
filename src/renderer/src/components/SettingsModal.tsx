@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import type { Theme, AiEngine, SttEngine, Settings } from '../../../shared/types'
-import { STT_ENGINES, sttMeta } from '../../../shared/sttEngines'
+import { STT_ENGINES, sttMeta, sttModeLabel } from '../../../shared/sttEngines'
 import { useEscClose } from '../useEscClose'
 
 const MODELS: { id: string; label: string }[] = [
@@ -26,6 +26,7 @@ export default function SettingsModal({
   const [model, setModel] = useState('claude-sonnet-4-6')
   const [stt, setStt] = useState<SttEngine>('local')
   const [sttKeys, setSttKeys] = useState<Record<string, string>>({})
+  const [showAllStt, setShowAllStt] = useState(false)
 
   useEffect(() => {
     api.aiAvailable().then(setAiReady)
@@ -82,9 +83,9 @@ export default function SettingsModal({
                 save({ sttEngine: id })
               }}
             >
-              {STT_ENGINES.map((m) => (
+              {STT_ENGINES.filter((m) => showAllStt || !m.advanced || m.id === stt).map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.label}
+                  {sttModeLabel(m)}
                   {m.diarize ? '' : ' · один голос'}
                 </option>
               ))}
@@ -113,6 +114,9 @@ export default function SettingsModal({
           ) : (
             <div className="panel-note">Расшифровка на вашем компьютере — аудио никуда не уходит.</div>
           )}
+          <button className="text-link" onClick={() => setShowAllStt((v) => !v)}>
+            {showAllStt ? 'Скрыть дополнительные движки' : 'Показать все движки (OpenAI, Groq, AssemblyAI)'}
+          </button>
         </div>
 
         <div className="settings-section">

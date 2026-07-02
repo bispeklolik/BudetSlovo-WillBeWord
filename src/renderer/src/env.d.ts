@@ -51,6 +51,7 @@ export interface RendererApi {
     level: 'note' | 'medium' | 'detailed',
     domain: 'therapy' | 'business' | 'general'
   ) => Promise<string | null>
+  runPromptAi: (slug: string, system: string) => Promise<string | null>
   highlightAi: (slug: string) => Promise<ProjectMeta | null>
   clearHighlightsAi: (slug: string) => Promise<ProjectMeta | null>
   anonymizeAi: (slug: string) => Promise<ProjectMeta | null>

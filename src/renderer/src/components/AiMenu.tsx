@@ -71,7 +71,7 @@ export default function AiMenu(props: AiMenuProps): React.JSX.Element {
           )}
           <div className="menu-sep" />
           <button className="export-item" onClick={() => pick(props.onSummary)}>
-            Саммари…
+            Сделать из текста…
           </button>
           <div className="menu-sep" />
           <button className="export-item" onClick={() => pick(props.onHighlights)}>

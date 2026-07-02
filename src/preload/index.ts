@@ -74,6 +74,8 @@ const api = {
     level: 'note' | 'medium' | 'detailed',
     domain: 'therapy' | 'business' | 'general'
   ): Promise<string | null> => ipcRenderer.invoke('ai:summarize', slug, level, domain),
+  runPromptAi: (slug: string, system: string): Promise<string | null> =>
+    ipcRenderer.invoke('ai:runPrompt', slug, system),
   highlightAi: (slug: string): Promise<ProjectMeta | null> =>
     ipcRenderer.invoke('ai:highlights', slug),
   clearHighlightsAi: (slug: string): Promise<ProjectMeta | null> =>

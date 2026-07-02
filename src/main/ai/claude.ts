@@ -83,6 +83,10 @@ export const claudeProvider: AiProvider = {
     return ask(SUMMARY_BASE + SUMMARY_DOMAIN[domain] + SUMMARY_LEVEL[level], text, 2000)
   },
 
+  async generate(system: string, text: string): Promise<string> {
+    return ask(system, text, 4000)
+  },
+
   async highlights(text: string): Promise<string[]> {
     return parseHighlights(jsonText(await ask(HIGHLIGHTS_SYSTEM, text, 2000)))
   },

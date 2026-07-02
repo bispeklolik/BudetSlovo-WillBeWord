@@ -1,5 +1,7 @@
 export type Theme = 'light' | 'dark'
 
+import type { CustomPrompt } from './prompts'
+
 export type AiEngine = 'local-llama' | 'claude'
 
 // Движок расшифровки: локальный Whisper (приватно, на этом компьютере) или
@@ -14,6 +16,7 @@ export interface Settings {
   claudeModel?: string // модель Claude (по умолчанию sonnet)
   sttEngine?: SttEngine // чем расшифровывать: локально или облачный движок
   sttKeys?: Record<string, string> // ключи облачных STT по id движка (хранятся локально)
+  customPrompts?: CustomPrompt[] // пользовательские карточки-промты для библиотеки
 }
 
 export const defaultSettings: Settings = {

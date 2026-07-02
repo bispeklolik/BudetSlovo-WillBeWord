@@ -41,7 +41,8 @@ import type {
   Turn,
   SpeakerInfo,
   NoteInput,
-  AnonRule
+  AnonRule,
+  ProjectMeta
 } from '../shared/types'
 
 // Все данные Chromium-профиля строго на D: — C: почти полон.
@@ -63,6 +64,14 @@ async function prepareEngine(): Promise<AiProvider> {
   if (provider.isLocal && !(await ensureOllama())) throw new Error('AI_UNAVAILABLE')
   if (!(await provider.isAvailable())) throw new Error('AI_MODEL_MISSING')
   return provider
+}
+
+// Расшифровка как плоский текст «Говорящий: реплика» — вход для ИИ-задач.
+function transcriptText(meta: ProjectMeta): string {
+  const name = (spk: string): string => meta.speakers?.find((s) => s.id === spk)?.name ?? spk
+  return (meta.turns ?? [])
+    .map((t) => name(t.spk) + ': ' + t.words.map((w) => w.t).join(' '))
+    .join('\n')
 }
 
 function createWindow(): void {
@@ -290,22 +299,20 @@ ipcMain.handle(
     const meta = getProject(slug)
     if (!meta?.turns) return null
     const provider = await prepareEngine()
-    const name = (spk: string): string => meta.speakers?.find((s) => s.id === spk)?.name ?? spk
-    const text = meta.turns
-      .map((t) => name(t.spk) + ': ' + t.words.map((w) => w.t).join(' '))
-      .join('\n')
-    return provider.summarize(text, level, domain)
+    return provider.summarize(transcriptText(meta), level, domain)
   }
 )
+ipcMain.handle('ai:runPrompt', async (_e, slug: string, system: string) => {
+  const meta = getProject(slug)
+  if (!meta?.turns) return null
+  const provider = await prepareEngine()
+  return provider.generate(system, transcriptText(meta))
+})
 ipcMain.handle('ai:highlights', async (_e, slug: string) => {
   const meta = getProject(slug)
   if (!meta?.turns) return null
   const provider = await prepareEngine()
-  const name = (spk: string): string => meta.speakers?.find((s) => s.id === spk)?.name ?? spk
-  const text = meta.turns
-    .map((t) => name(t.spk) + ': ' + t.words.map((w) => w.t).join(' '))
-    .join('\n')
-  const phrases = await provider.highlights(text)
+  const phrases = await provider.highlights(transcriptText(meta))
   return saveTranscript(slug, applyHighlights(meta.turns, phrases), meta.speakers ?? [])
 })
 ipcMain.handle('ai:clearHighlights', (_e, slug: string) => {

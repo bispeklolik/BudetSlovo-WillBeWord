@@ -45,6 +45,8 @@ export interface AiProvider {
   cleanupTurn(text: string, opts: CleanupOptions): Promise<CleanupResult>
   /** Краткое содержание всей расшифровки на выбранном уровне детализации и под тип записи. */
   summarize(text: string, level: SummaryLevel, domain: SummaryDomain): Promise<string>
+  /** Прогнать произвольный system-промт по расшифровке → текст (библиотека промтов). */
+  generate(system: string, text: string): Promise<string>
   /** Самые ценные мысли/моменты — дословные цитаты из текста (для подсветки). */
   highlights(text: string): Promise<string[]>
   /** Находит идентифицирующие данные (имена/места/организации) и предлагает замены. */

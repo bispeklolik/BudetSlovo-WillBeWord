@@ -123,6 +123,27 @@ export function parseResult(raw: string, original: string): CleanupResult {
   }
 }
 
+// Один system+user чат к Ollama (num_ctx под длинную расшифровку). Общий для
+// summarize и generate (библиотека промтов).
+async function ollamaChat(system: string, text: string): Promise<string> {
+  const r = await fetch(`${OLLAMA_URL}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: MODEL,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: text }
+      ],
+      stream: false,
+      options: { temperature: 0.3, num_ctx: 16384 }
+    })
+  })
+  if (!r.ok) throw new Error(`Ollama HTTP ${r.status}`)
+  const d = (await r.json()) as { message?: { content?: string } }
+  return (d.message?.content || '').trim()
+}
+
 export const localLlamaProvider: AiProvider = {
   id: 'local-llama',
   name: 'Локально (Ollama)',
@@ -160,23 +181,11 @@ export const localLlamaProvider: AiProvider = {
   },
 
   async summarize(text: string, level: SummaryLevel, domain: SummaryDomain): Promise<string> {
-    const system = SUMMARY_BASE + SUMMARY_DOMAIN[domain] + SUMMARY_LEVEL[level]
-    const r = await fetch(`${OLLAMA_URL}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: text }
-        ],
-        stream: false,
-        options: { temperature: 0.3, num_ctx: 16384 }
-      })
-    })
-    if (!r.ok) throw new Error(`Ollama HTTP ${r.status}`)
-    const d = (await r.json()) as { message?: { content?: string } }
-    return (d.message?.content || '').trim()
+    return ollamaChat(SUMMARY_BASE + SUMMARY_DOMAIN[domain] + SUMMARY_LEVEL[level], text)
+  },
+
+  async generate(system: string, text: string): Promise<string> {
+    return ollamaChat(system, text)
   },
 
   async highlights(text: string): Promise<string[]> {

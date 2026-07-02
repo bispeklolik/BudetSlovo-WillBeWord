@@ -8,7 +8,7 @@ import Waveform, { type Lane } from '../components/Waveform'
 import TranscribePanel from '../components/TranscribePanel'
 import TranscriptView from '../components/TranscriptView'
 import ExportMenu from '../components/ExportMenu'
-import SummaryPanel from '../components/SummaryPanel'
+import PromptLibraryPanel from '../components/PromptLibraryPanel'
 import HighlightsPanel from '../components/HighlightsPanel'
 import AnonPanel from '../components/AnonPanel'
 import StatsPanel from '../components/StatsPanel'
@@ -66,7 +66,7 @@ export default function Editor({
   const [aiBusy, setAiBusy] = useState(false)
   const [aiProgress, setAiProgress] = useState<{ done: number; total: number } | null>(null)
   const [aiBackup, setAiBackup] = useState(false)
-  const [summaryOpen, setSummaryOpen] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const [hlPanelOpen, setHlPanelOpen] = useState(false)
   const [hlBusy, setHlBusy] = useState(false)
   const [anonMode, setAnonMode] = useState(false)
@@ -526,7 +526,7 @@ export default function Editor({
               hasAnon={hasAnon}
               onCleanup={runAiCleanup}
               onRevert={revertAiCleanup}
-              onSummary={() => setSummaryOpen(true)}
+              onSummary={() => setLibraryOpen(true)}
               onHighlights={runHighlights}
               onShowList={() => setHlPanelOpen(true)}
               onClearHl={clearHl}
@@ -717,8 +717,8 @@ export default function Editor({
         />
       </div>
 
-      {summaryOpen && (
-        <SummaryPanel slug={slug} title={meta.title} onClose={() => setSummaryOpen(false)} />
+      {libraryOpen && (
+        <PromptLibraryPanel slug={slug} title={meta.title} onClose={() => setLibraryOpen(false)} />
       )}
 
       {hlPanelOpen && (
