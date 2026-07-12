@@ -32,6 +32,7 @@ interface Props {
   onSetTurnSpeaker: (turnId: string, spk: string) => void
   onMergeTurn: (turnId: string) => void
   onSplitTurn: (turnId: string, wordId: number) => void
+  onRedictate: (turnId: string) => void
   matchIds: Set<number>
   currentMatchId: number | null
   searchTurnIndex: number | null
@@ -132,6 +133,13 @@ export default function TranscriptView(props: Props): React.JSX.Element {
               ⌃ объединить
             </button>
           )}
+          <button
+            className="turn-merge"
+            title="Надиктовать реплику заново с микрофона (текст будет заменён)"
+            onClick={() => props.onRedictate(turn.id)}
+          >
+            🎙 надиктовать
+          </button>
         </div>
         <p className="turn-text">
           {turn.words.map((w, i) => {

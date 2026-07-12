@@ -9,7 +9,6 @@ interface AiMenuProps {
   hasAnon: boolean // есть правила обезличивания
   onCleanup: () => void
   onRevert: () => void
-  onSummary: () => void
   onHighlights: () => void
   onShowList: () => void
   onClearHl: () => void
@@ -69,10 +68,6 @@ export default function AiMenu(props: AiMenuProps): React.JSX.Element {
               Отменить причёсывание
             </button>
           )}
-          <div className="menu-sep" />
-          <button className="export-item" onClick={() => pick(props.onSummary)}>
-            Сделать из текста…
-          </button>
           <div className="menu-sep" />
           <button className="export-item" onClick={() => pick(props.onHighlights)}>
             {hasHl ? 'Обновить «лучшие мысли»' : 'Найти «лучшие мысли»'}

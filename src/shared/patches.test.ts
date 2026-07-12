@@ -22,6 +22,30 @@ describe('replaceCI', () => {
   })
 })
 
+describe('applyPatch setTurnWords', () => {
+  it('заменяет все слова реплики новыми (надиктовка), не трогая spk/startSec', () => {
+    const m = meta([W(0, 'старый'), W(1, 'текст')])
+    applyPatch(m, {
+      op: 'setTurnWords',
+      turnId: 'T0',
+      words: [
+        { id: 10, t: 'новый', src: 'ai' },
+        { id: 11, t: 'текст', src: 'ai' }
+      ]
+    })
+    const t = m.turns![0]
+    expect(t.words.map((w) => w.t)).toEqual(['новый', 'текст'])
+    expect(t.words[0].s).toBeUndefined() // надиктованные слова без таймкодов
+    expect(t.spk).toBe('S0')
+    expect(t.startSec).toBe(0)
+  })
+  it('несуществующая реплика — no-op', () => {
+    const m = meta([W(0, 'а')])
+    applyPatch(m, { op: 'setTurnWords', turnId: 'T9', words: [{ id: 5, t: 'б' }] })
+    expect(m.turns![0].words[0].t).toBe('а')
+  })
+})
+
 describe('applyPatch replaceAll', () => {
   it('меняет в нескольких словах и запоминает оригинал в t0', () => {
     const m = meta([W(0, 'Ева'), W(1, 'и'), W(2, 'ева?')])

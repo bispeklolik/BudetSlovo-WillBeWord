@@ -41,6 +41,9 @@ const stub: RendererApi = {
   revertAi: async () => null,
   summarizeAi: async () => null,
   runPromptAi: async () => null,
+  transcribeClip: async () => {
+    throw new Error('Голосовая правка доступна только в приложении (Electron)')
+  },
   highlightAi: async () => null,
   clearHighlightsAi: async () => null,
   anonymizeAi: async () => null,

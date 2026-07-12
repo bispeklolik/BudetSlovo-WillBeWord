@@ -6,6 +6,7 @@ export type Patch =
   | { op: 'setWordText'; turnId: string; wordId: number; t: string; t0: string | null }
   | { op: 'deleteWords'; turnId: string; wordIds: number[] }
   | { op: 'insertWords'; turnId: string; atIndex: number; words: Word[] }
+  | { op: 'setTurnWords'; turnId: string; words: Word[] }
   | { op: 'renameSpeaker'; speakerId: string; name: string }
   | { op: 'setTurnSpeaker'; turnId: string; spk: string }
   | { op: 'mergeTurnIntoPrev'; turnId: string }
@@ -65,6 +66,14 @@ export function applyPatch(meta: ProjectMeta, p: Patch): void {
       if (!t) return
       const at = Math.max(0, Math.min(t.words.length, p.atIndex))
       t.words.splice(at, 0, ...p.words)
+      return
+    }
+    // Полная замена слов реплики (надиктовка заново): слова без таймкодов —
+    // караоке их пропускает, как и вставленные вручную.
+    case 'setTurnWords': {
+      const t = turns[turnIdx(p.turnId)]
+      if (!t) return
+      t.words = p.words
       return
     }
     case 'renameSpeaker': {

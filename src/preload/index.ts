@@ -17,7 +17,7 @@ const api = {
   setSettings: (patch: Partial<Settings>): Promise<Settings> =>
     ipcRenderer.invoke('settings:set', patch),
 
-  importAudio: (): Promise<ProjectMeta | null> => ipcRenderer.invoke('project:import'),
+  importAudio: (): Promise<ProjectMeta[] | null> => ipcRenderer.invoke('project:import'),
   // Путь к перетащенному файлу (в новых Electron — только через webUtils).
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
   importPath: (path: string): Promise<ProjectMeta | null> =>
@@ -76,6 +76,7 @@ const api = {
   ): Promise<string | null> => ipcRenderer.invoke('ai:summarize', slug, level, domain),
   runPromptAi: (slug: string, system: string): Promise<string | null> =>
     ipcRenderer.invoke('ai:runPrompt', slug, system),
+  transcribeClip: (data: ArrayBuffer): Promise<string> => ipcRenderer.invoke('stt:clip', data),
   highlightAi: (slug: string): Promise<ProjectMeta | null> =>
     ipcRenderer.invoke('ai:highlights', slug),
   clearHighlightsAi: (slug: string): Promise<ProjectMeta | null> =>

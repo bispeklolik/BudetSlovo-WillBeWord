@@ -28,6 +28,7 @@ import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
 import { stopOllama, ensureOllama } from './ai/ollamaServer'
 import { applyHighlights, clearHighlights } from './ai/highlight'
 import { listNotes, saveNote, deleteNote } from './notes/store'
+import { transcribeClip } from './stt/clip'
 import {
   initQueue,
   setJobNotifier,
@@ -130,8 +131,8 @@ async function importFromPath(src: string) {
 ipcMain.handle('project:import', async () => {
   if (!win) return null
   const res = await dialog.showOpenDialog(win, {
-    title: 'Выберите аудио- или видеозапись',
-    properties: ['openFile'],
+    title: 'Выберите одну или несколько записей',
+    properties: ['openFile', 'multiSelections'],
     filters: [
       {
         name: 'Аудио и видео',
@@ -146,7 +147,17 @@ ipcMain.handle('project:import', async () => {
     ]
   })
   if (res.canceled || res.filePaths.length === 0) return null
-  return importFromPath(res.filePaths[0])
+  // Пакетный импорт: несколько файлов → каждый импортируем и сразу ставим в
+  // очередь расшифровки с настройками по умолчанию (очередь FIFO, по одному).
+  const metas: ProjectMeta[] = []
+  for (const p of res.filePaths) {
+    const meta = await importFromPath(p)
+    metas.push(meta)
+  }
+  if (metas.length > 1) {
+    for (const m of metas) enqueueTranscribe(m.slug, { numSpeakers: 2, enhance: true })
+  }
+  return metas
 })
 
 // Импорт по пути (перетаскивание файла в окно) — без диалога.
@@ -302,6 +313,9 @@ ipcMain.handle(
     return provider.summarize(transcriptText(meta), level, domain)
   }
 )
+// Голосовая правка: клип с микрофона → текст (движок из настроек расшифровки).
+ipcMain.handle('stt:clip', (_e, data: ArrayBuffer) => transcribeClip(Buffer.from(data)))
+
 ipcMain.handle('ai:runPrompt', async (_e, slug: string, system: string) => {
   const meta = getProject(slug)
   if (!meta?.turns) return null

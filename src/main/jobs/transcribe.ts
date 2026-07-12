@@ -30,7 +30,7 @@ function outputsValid(engineOut: string): boolean {
   }
 }
 
-function engineEnv(): NodeJS.ProcessEnv {
+export function engineEnv(): NodeJS.ProcessEnv {
   // Все кэши движка строго на D: — тот же набор, что в проверенном Transcribe.ps1.
   return {
     ...process.env,

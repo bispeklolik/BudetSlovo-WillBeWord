@@ -71,10 +71,15 @@ export default function Home({
   const doImport = async (): Promise<void> => {
     setBusy('Открываю диалог…')
     try {
-      const meta = await api.importAudio()
-      if (meta) {
+      const metas = await api.importAudio()
+      if (metas && metas.length === 1) {
         refresh()
-        onOpen(meta.slug)
+        onOpen(metas[0].slug)
+      } else if (metas && metas.length > 1) {
+        refresh()
+        alert(
+          `Импортировано записей: ${metas.length}. Расшифровка запущена — записи будут готовы по очереди.`
+        )
       }
     } catch (err) {
       alert('Не удалось импортировать: ' + String(err))

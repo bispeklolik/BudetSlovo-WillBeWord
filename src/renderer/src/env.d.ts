@@ -15,7 +15,7 @@ import type {
 export interface RendererApi {
   getSettings: () => Promise<Settings>
   setSettings: (patch: Partial<Settings>) => Promise<Settings>
-  importAudio: () => Promise<ProjectMeta | null>
+  importAudio: () => Promise<ProjectMeta[] | null>
   getPathForFile: (file: File) => string
   importPath: (path: string) => Promise<ProjectMeta | null>
   renameProject: (slug: string, title: string) => Promise<ProjectMeta | null>
@@ -52,6 +52,7 @@ export interface RendererApi {
     domain: 'therapy' | 'business' | 'general'
   ) => Promise<string | null>
   runPromptAi: (slug: string, system: string) => Promise<string | null>
+  transcribeClip: (data: ArrayBuffer) => Promise<string>
   highlightAi: (slug: string) => Promise<ProjectMeta | null>
   clearHighlightsAi: (slug: string) => Promise<ProjectMeta | null>
   anonymizeAi: (slug: string) => Promise<ProjectMeta | null>

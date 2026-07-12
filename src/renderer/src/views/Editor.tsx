@@ -73,6 +73,10 @@ export default function Editor({
   const [anonBusy, setAnonBusy] = useState(false)
   const [anonPanelOpen, setAnonPanelOpen] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
+  // Голосовая правка: реплика, которую надиктовывают заново.
+  const [redict, setRedict] = useState<{ turnId: string; phase: 'rec' | 'stt' } | null>(null)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const recChunksRef = useRef<Blob[]>([])
   const [searchOpen, setSearchOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [replace, setReplace] = useState('')
@@ -366,6 +370,57 @@ export default function Editor({
     if (a) a.playbackRate = r
   }
 
+  // -------- голосовая правка (надиктовать реплику заново) --------
+  const startRedictate = async (turnId: string): Promise<void> => {
+    if (redict) return
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const rec = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+      recChunksRef.current = []
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) recChunksRef.current.push(e.data)
+      }
+      recorderRef.current = rec
+      rec.start()
+      setRedict({ turnId, phase: 'rec' })
+    } catch {
+      alert('Микрофон недоступен. Проверьте, что он подключён и разрешён для приложения.')
+    }
+  }
+
+  const finishRedictate = (commit: boolean): void => {
+    const rec = recorderRef.current
+    const target = redict
+    if (!rec || !target) return
+    rec.onstop = async () => {
+      rec.stream.getTracks().forEach((t) => t.stop())
+      recorderRef.current = null
+      if (!commit) {
+        setRedict(null)
+        return
+      }
+      setRedict({ ...target, phase: 'stt' })
+      try {
+        const blob = new Blob(recChunksRef.current, { type: 'audio/webm' })
+        const text = (await api.transcribeClip(await blob.arrayBuffer())).trim()
+        if (!text) {
+          alert('Речь не распозналась — попробуйте ещё раз, ближе к микрофону.')
+          return
+        }
+        const m = metaRef.current
+        if (!m) return
+        let id = nextWordId(m)
+        const words = text.split(/\s+/).map((t) => ({ id: id++, t, src: 'ai' as const }))
+        edit({ op: 'setTurnWords', turnId: target.turnId, words })
+      } catch (err) {
+        alert('Не удалось распознать надиктовку: ' + String(err))
+      } finally {
+        setRedict(null)
+      }
+    }
+    rec.stop()
+  }
+
   if (!meta) {
     return (
       <main className="empty">
@@ -511,6 +566,14 @@ export default function Editor({
                 {anonMode ? '🕶 Обезличено' : 'Обезличено'}
               </button>
             )}
+            <button
+              className="btn btn-primary"
+              onClick={() => setLibraryOpen(true)}
+              title="Сделать из расшифровки саммари, заметку, протокол — любой результат"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <Icon name="sparkles" size={15} /> Сделать из текста
+            </button>
             <AiMenu
               busyLabel={
                 aiBusy
@@ -526,7 +589,6 @@ export default function Editor({
               hasAnon={hasAnon}
               onCleanup={runAiCleanup}
               onRevert={revertAiCleanup}
-              onSummary={() => setLibraryOpen(true)}
               onHighlights={runHighlights}
               onShowList={() => setHlPanelOpen(true)}
               onClearHl={clearHl}
@@ -652,6 +714,7 @@ export default function Editor({
               onSetTurnSpeaker={(turnId, spk) => edit({ op: 'setTurnSpeaker', turnId, spk })}
               onMergeTurn={(turnId) => edit({ op: 'mergeTurnIntoPrev', turnId })}
               onSplitTurn={onSplitTurn}
+              onRedictate={(turnId) => void startRedictate(turnId)}
               matchIds={matchIds}
               currentMatchId={curMatch?.wordId ?? null}
               searchTurnIndex={searchOpen ? (curMatch?.turnIndex ?? null) : null}
@@ -748,6 +811,25 @@ export default function Editor({
       )}
 
       {statsOpen && <StatsPanel meta={meta} onClose={() => setStatsOpen(false)} />}
+
+      {redict && (
+        <div className="redict-bar">
+          {redict.phase === 'rec' ? (
+            <>
+              <span className="redict-dot" />
+              <span>Говорите — реплика будет заменена вашими словами…</span>
+              <button className="btn btn-primary" onClick={() => finishRedictate(true)}>
+                Готово
+              </button>
+              <button className="btn" onClick={() => finishRedictate(false)}>
+                Отмена
+              </button>
+            </>
+          ) : (
+            <span>Распознаю надиктовку… (локальный движок может думать до минуты)</span>
+          )}
+        </div>
+      )}
     </main>
   )
 }
