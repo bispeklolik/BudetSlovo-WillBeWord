@@ -3,56 +3,11 @@ import { readFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { FFMPEG, STT_TEMP } from '../paths'
 import type { MergeResult } from '../project/merge'
-import type { SpeakerInfo, Turn } from '../../shared/types'
+import { openaiToTurns, type OaResponse } from '../../shared/sttMappers'
 
 // OpenAI и Groq: один и тот же контракт (multipart /audio/transcriptions,
 // verbose_json + word-таймкоды). Groq — тот же код, другой baseUrl+model.
-// У Whisper НЕТ диаризации → один говорящий; реплики бьём по сегментам Whisper
-// (естественные предложения), иначе была бы одна гигантская стена текста.
-
-interface OaWord {
-  word: string
-  start: number
-  end: number
-}
-interface OaSegment {
-  start: number
-  end: number
-  text: string
-}
-export interface OaResponse {
-  text?: string
-  words?: OaWord[]
-  segments?: OaSegment[]
-}
-
-// verbose_json → нормализованный {speakers, turns}. Один говорящий, границы
-// реплик — по сегментам Whisper (слово относим к сегменту по времени начала).
-export function openaiToTurns(data: OaResponse): MergeResult {
-  const words = (data.words ?? []).filter((w) => (w.word ?? '').trim() !== '')
-  const segments = data.segments ?? []
-  if (words.length === 0) return { speakers: [], turns: [] }
-
-  const turns: Turn[] = []
-  let wordId = 0
-  let si = -1 // индекс текущего сегмента
-  let segForCur = -2
-  let cur: Turn | null = null
-  for (const w of words) {
-    while (si + 1 < segments.length && w.start >= segments[si + 1].start) si++
-    if (!cur || si !== segForCur) {
-      cur = { id: 'T' + turns.length, spk: 'S0', startSec: w.start, words: [] }
-      turns.push(cur)
-      segForCur = si
-    }
-    cur.words.push({ id: wordId++, s: w.start, e: w.end, p: 1, t: w.word.trim() })
-  }
-
-  const speakers: SpeakerInfo[] = [
-    { id: 'S0', engineLabel: 'whisper', name: 'Говорящий', colorKey: 'spk1' }
-  ]
-  return { speakers, turns }
-}
+// Маппер ответа — в shared/sttMappers.ts (общий с веб-версией).
 
 export async function transcribeOpenAICompat(
   audioPath: string,

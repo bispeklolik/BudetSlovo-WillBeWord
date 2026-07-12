@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { openaiToTurns } from './openaiCompat'
+import { openaiToTurns } from '../../shared/sttMappers'
 
 describe('openaiToTurns', () => {
   it('один говорящий, реплики бьются по сегментам Whisper', () => {

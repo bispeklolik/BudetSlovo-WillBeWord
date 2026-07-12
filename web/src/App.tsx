@@ -1,33 +1,59 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MergeResult } from '../../src/shared/turns'
-import { deepgramToTurns, elevenToTurns } from '../../src/shared/sttMappers'
+import { deepgramToTurns, elevenToTurns, openaiToTurns } from '../../src/shared/sttMappers'
 import {
   BUILTIN_PROMPTS,
   CATEGORY_LABELS,
+  type CustomPrompt,
   type PromptCategory
 } from '../../src/shared/prompts'
 
 // Веб-версия «Слова»: всё в браузере, без сервера. Аудио уходит только в
 // выбранный STT-сервис по ключу пользователя; ключи живут в localStorage.
 
-type SttId = 'deepgram' | 'elevenlabs'
+type SttId = 'deepgram' | 'elevenlabs' | 'openai' | 'groq'
 type Phase = 'idle' | 'busy' | 'done'
 
 const RELEASES = 'https://github.com/bispeklolik/BudetSlovo-WillBeWord/releases/latest'
 const REPO = 'https://github.com/bispeklolik/BudetSlovo-WillBeWord'
 
-const STT_OPTIONS: { id: SttId; label: string; note: string; hint: string }[] = [
+const STT_OPTIONS: {
+  id: SttId
+  label: string
+  note: string
+  hint: string
+  advanced?: boolean
+  maxMb: number
+}[] = [
   {
     id: 'elevenlabs',
     label: 'Максимальная точность',
-    note: 'ElevenLabs Scribe · примерно $0.004 за минуту',
-    hint: 'ключ с elevenlabs.io'
+    note: 'ElevenLabs Scribe · примерно $0.004 за минуту · разделяет голоса',
+    hint: 'ключ с elevenlabs.io',
+    maxMb: 200
   },
   {
     id: 'deepgram',
     label: 'Цена и качество',
-    note: 'Deepgram · примерно $0.004 за минуту',
-    hint: 'ключ с console.deepgram.com'
+    note: 'Deepgram · примерно $0.004 за минуту · разделяет голоса',
+    hint: 'ключ с console.deepgram.com',
+    maxMb: 200
+  },
+  {
+    id: 'groq',
+    label: 'Groq',
+    note: 'Whisper · примерно $0.0007 за минуту · один голос, файл до 25 МБ',
+    hint: 'ключ с console.groq.com',
+    advanced: true,
+    maxMb: 25
+  },
+  {
+    id: 'openai',
+    label: 'OpenAI',
+    note: 'Whisper · примерно $0.006 за минуту · один голос, файл до 25 МБ',
+    hint: 'ключ с platform.openai.com',
+    advanced: true,
+    maxMb: 25
   }
 ]
 
@@ -66,20 +92,42 @@ async function sttTranscribe(file: File, engine: SttId, key: string): Promise<Me
     if (!res.ok) throw new Error(`Deepgram: ошибка ${res.status}`)
     return deepgramToTurns(await res.json())
   }
+  if (engine === 'elevenlabs') {
+    const form = new FormData()
+    form.append('file', file, file.name)
+    form.append('model_id', 'scribe_v2')
+    form.append('diarize', 'true')
+    form.append('language_code', 'rus')
+    form.append('timestamps_granularity', 'word')
+    const res = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+      method: 'POST',
+      headers: { 'xi-api-key': key },
+      body: form
+    })
+    if (res.status === 401) throw new Error('Неверный ключ ElevenLabs.')
+    if (!res.ok) throw new Error(`ElevenLabs: ошибка ${res.status}`)
+    return elevenToTurns(await res.json())
+  }
+  // OpenAI и Groq: один контракт, разный адрес и модель.
+  const base =
+    engine === 'openai' ? 'https://api.openai.com/v1' : 'https://api.groq.com/openai/v1'
+  const model = engine === 'openai' ? 'whisper-1' : 'whisper-large-v3-turbo'
   const form = new FormData()
   form.append('file', file, file.name)
-  form.append('model_id', 'scribe_v2')
-  form.append('diarize', 'true')
-  form.append('language_code', 'rus')
-  form.append('timestamps_granularity', 'word')
-  const res = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+  form.append('model', model)
+  form.append('language', 'ru')
+  form.append('response_format', 'verbose_json')
+  form.append('timestamp_granularities[]', 'word')
+  form.append('timestamp_granularities[]', 'segment')
+  const res = await fetch(`${base}/audio/transcriptions`, {
     method: 'POST',
-    headers: { 'xi-api-key': key },
+    headers: { Authorization: `Bearer ${key}` },
     body: form
   })
-  if (res.status === 401) throw new Error('Неверный ключ ElevenLabs.')
-  if (!res.ok) throw new Error(`ElevenLabs: ошибка ${res.status}`)
-  return elevenToTurns(await res.json())
+  if (res.status === 401)
+    throw new Error(engine === 'openai' ? 'Неверный ключ OpenAI.' : 'Неверный ключ Groq.')
+  if (!res.ok) throw new Error(`${engine === 'openai' ? 'OpenAI' : 'Groq'}: ошибка ${res.status}`)
+  return openaiToTurns(await res.json())
 }
 
 async function askClaude(system: string, text: string, key: string, model: string): Promise<string> {
@@ -108,6 +156,27 @@ async function askClaude(system: string, text: string, key: string, model: strin
     .trim()
 }
 
+// ---- шаринг результата ссылкой: JSON → deflate → base64url в #s=... ----
+async function packShare(title: string, body: string): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify({ t: title, b: body }))
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'))
+  const packed = new Uint8Array(await new Response(stream).arrayBuffer())
+  let bin = ''
+  packed.forEach((b) => (bin += String.fromCharCode(b)))
+  return btoa(bin).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
+}
+
+async function unpackShare(s: string): Promise<{ t: string; b: string } | null> {
+  try {
+    const bin = atob(s.replaceAll('-', '+').replaceAll('_', '/'))
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0))
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
+    return JSON.parse(await new Response(stream).text())
+  } catch {
+    return null
+  }
+}
+
 function fmtTime(sec: number): string {
   const t = Math.floor(sec)
   const m = Math.floor(t / 60)
@@ -128,8 +197,18 @@ const store = {
   set: (k: string, v: string): void => localStorage.setItem('slovo.' + k, v)
 }
 
+function loadCustom(): CustomPrompt[] {
+  try {
+    const arr = JSON.parse(store.get('customPrompts') || '[]')
+    return Array.isArray(arr) ? arr : []
+  } catch {
+    return []
+  }
+}
+
 export default function App(): React.JSX.Element {
   const [engine, setEngine] = useState<SttId>((store.get('stt') as SttId) || 'deepgram')
+  const [showAllStt, setShowAllStt] = useState(false)
   const [sttKey, setSttKey] = useState('')
   const [claudeKey, setClaudeKey] = useState(store.get('claudeKey'))
   const [model, setModel] = useState(store.get('model') || 'claude-sonnet-4-6')
@@ -143,23 +222,45 @@ export default function App(): React.JSX.Element {
   const [aiTitle, setAiTitle] = useState('')
   const [aiText, setAiText] = useState('')
   const [ownPrompt, setOwnPrompt] = useState('')
+  const [ownName, setOwnName] = useState('')
+  const [custom, setCustom] = useState<CustomPrompt[]>(loadCustom)
   const [copied, setCopied] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
+  const [shared, setShared] = useState<{ t: string; b: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const resultRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => setSttKey(store.get('key.' + engine)), [engine])
 
+  // Открыта ссылка-шаринг (#s=...) — показываем присланный результат.
+  // hashchange нужен, потому что переход по хэшу не перезагружает SPA.
+  useEffect(() => {
+    const check = (): void => {
+      const h = window.location.hash
+      if (h.startsWith('#s=')) void unpackShare(h.slice(3)).then((d) => d && setShared(d))
+    }
+    check()
+    window.addEventListener('hashchange', check)
+    return () => window.removeEventListener('hashchange', check)
+  }, [])
+
   const pick = (): void => fileRef.current?.click()
 
   const handleFile = async (file: File): Promise<void> => {
     setError('')
+    const opt = STT_OPTIONS.find((o) => o.id === engine)!
     if (!sttKey.trim()) {
       setError('Сначала вставьте ключ выбранного сервиса распознавания.')
       return
     }
-    if (file.size > 200 * 1024 * 1024) {
-      setError('Файл больше 200 МБ. Для таких записей лучше приложение для Windows.')
+    if (file.size > opt.maxMb * 1024 * 1024) {
+      setError(
+        `Файл больше ${opt.maxMb} МБ` +
+          (opt.maxMb === 25
+            ? ': это лимит OpenAI и Groq. Выберите другой режим распознавания.'
+            : '. Для таких записей лучше приложение для Windows.')
+      )
       return
     }
     setFileName(file.name)
@@ -198,6 +299,7 @@ export default function App(): React.JSX.Element {
     setAiTitle(title)
     setAiText('')
     setCopied(false)
+    setLinkCopied(false)
     try {
       const out = await askClaude(system, transcriptText(), claudeKey.trim(), model)
       setAiText(out)
@@ -209,12 +311,94 @@ export default function App(): React.JSX.Element {
     }
   }
 
+  const saveCard = (): void => {
+    const name = ownName.trim()
+    const system = ownPrompt.trim()
+    if (!name || !system) return
+    const next = [...custom, { id: 'c' + Date.now().toString(36), name, system }]
+    setCustom(next)
+    store.set('customPrompts', JSON.stringify(next))
+    setOwnName('')
+  }
+
+  const delCard = (id: string): void => {
+    const next = custom.filter((c) => c.id !== id)
+    setCustom(next)
+    store.set('customPrompts', JSON.stringify(next))
+  }
+
+  const shareResult = async (): Promise<void> => {
+    const hash = await packShare(aiTitle, aiText)
+    const url = window.location.origin + window.location.pathname + '#s=' + hash
+    if (url.length > 8000) {
+      setError('Результат слишком длинный для ссылки. Скачайте файлом.')
+      return
+    }
+    await navigator.clipboard.writeText(url)
+    setLinkCopied(true)
+  }
+
   const spkColor = (spk: string): string => {
     const s = result?.speakers.find((s) => s.id === spk)
     return `var(--${s?.colorKey ?? 'spk1'})`
   }
   const spkName = (spk: string): string =>
     result?.speakers.find((s) => s.id === spk)?.name ?? spk
+
+  const OWN_BASE =
+    'Тебе дают расшифровку разговора. Опирайся только на текст, ничего не выдумывай. Пиши по-русски. '
+
+  // ---- режим просмотра присланной ссылки ----
+  if (shared) {
+    return (
+      <div className="page">
+        <header className="top">
+          <span className="brand">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M4 10v4" /><path d="M8 6v12" /><path d="M12 3v18" /><path d="M16 6v12" /><path d="M20 10v4" />
+            </svg>
+            Слово
+            <span className="brand-web">веб</span>
+          </span>
+        </header>
+        <section className="shared">
+          <span className="label">Вам поделились результатом</span>
+          <h1>{shared.t}</h1>
+          <div className="ai-body shared-body">{shared.b}</div>
+          <div className="hero-ctas">
+            <button
+              className="btn"
+              onClick={() => {
+                void navigator.clipboard.writeText(shared.b)
+                setCopied(true)
+              }}
+            >
+              {copied ? 'Скопировано' : 'Копировать'}
+            </button>
+            <button className="btn" onClick={() => download(shared.t + '.md', shared.b)}>
+              Скачать
+            </button>
+            <button
+              className="btn primary"
+              onClick={() => {
+                history.replaceState(null, '', window.location.pathname)
+                setShared(null)
+              }}
+            >
+              Сделать свою расшифровку
+            </button>
+          </div>
+        </section>
+        <footer className="foot">
+          <p>
+            «Слово» превращает записи разговоров в текст и результат прямо в браузере. Ключи и
+            записи не покидают ваш компьютер, кроме выбранного вами сервиса распознавания.
+          </p>
+          <a href={REPO}>Открытый код на GitHub</a>
+        </footer>
+      </div>
+    )
+  }
 
   return (
     <div className="page">
@@ -250,20 +434,25 @@ export default function App(): React.JSX.Element {
             <div className="field">
               <span className="label">Распознавание</span>
               <div className="seg">
-                {STT_OPTIONS.map((o) => (
-                  <button
-                    key={o.id}
-                    className={'seg-btn' + (engine === o.id ? ' on' : '')}
-                    onClick={() => {
-                      setEngine(o.id)
-                      store.set('stt', o.id)
-                    }}
-                  >
-                    {o.label}
-                  </button>
-                ))}
+                {STT_OPTIONS.filter((o) => showAllStt || !o.advanced || o.id === engine).map(
+                  (o) => (
+                    <button
+                      key={o.id}
+                      className={'seg-btn' + (engine === o.id ? ' on' : '')}
+                      onClick={() => {
+                        setEngine(o.id)
+                        store.set('stt', o.id)
+                      }}
+                    >
+                      {o.label}
+                    </button>
+                  )
+                )}
               </div>
               <span className="hint">{STT_OPTIONS.find((o) => o.id === engine)?.note}</span>
+              <button className="text-link" onClick={() => setShowAllStt((v) => !v)}>
+                {showAllStt ? 'Скрыть дополнительные движки' : 'Ещё движки (OpenAI, Groq)'}
+              </button>
             </div>
             <div className="field">
               <span className="label">Ключ сервиса ({STT_OPTIONS.find((o) => o.id === engine)?.hint})</span>
@@ -321,7 +510,7 @@ export default function App(): React.JSX.Element {
           </div>
           <div className="how-item">
             <h3>Сделайте результат</h3>
-            <p>Саммари, протокол встречи, заметка сессии или свой промт. Готовый текст скачивается.</p>
+            <p>Саммари, протокол встречи, заметка сессии или свой промт. Готовым можно поделиться ссылкой.</p>
           </div>
         </section>
       )}
@@ -410,6 +599,28 @@ export default function App(): React.JSX.Element {
                 </div>
               </div>
 
+              {custom.length > 0 && (
+                <div className="cat">
+                  <span className="label">Мои</span>
+                  <div className="cards">
+                    {custom.map((c) => (
+                      <span className="card-wrap" key={c.id}>
+                        <button
+                          className="card"
+                          disabled={aiBusy !== null}
+                          onClick={() => void runPrompt(c.system, c.name, c.id)}
+                        >
+                          {aiBusy === c.id ? 'Делаю…' : c.name}
+                        </button>
+                        <button className="card-del" title="Удалить карточку" onClick={() => delCard(c.id)}>
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {CATEGORY_ORDER.map((cat) => {
                 const items = BUILTIN_PROMPTS.filter((p) => p.category === cat)
                 if (items.length === 0) return null
@@ -439,20 +650,27 @@ export default function App(): React.JSX.Element {
                   value={ownPrompt}
                   onChange={(e) => setOwnPrompt(e.target.value)}
                 />
-                <button
-                  className="btn primary"
-                  disabled={aiBusy !== null || ownPrompt.trim() === ''}
-                  onClick={() =>
-                    void runPrompt(
-                      'Тебе дают расшифровку разговора. Опирайся только на текст, ничего не выдумывай. Пиши по-русски. ' +
-                        ownPrompt.trim(),
-                      'Свой промт',
-                      'own'
-                    )
-                  }
-                >
-                  {aiBusy === 'own' ? 'Делаю…' : 'Запустить'}
-                </button>
+                <div className="own-row">
+                  <button
+                    className="btn primary"
+                    disabled={aiBusy !== null || ownPrompt.trim() === ''}
+                    onClick={() => void runPrompt(OWN_BASE + ownPrompt.trim(), 'Свой промт', 'own')}
+                  >
+                    {aiBusy === 'own' ? 'Делаю…' : 'Запустить'}
+                  </button>
+                  <input
+                    placeholder="имя карточки"
+                    value={ownName}
+                    onChange={(e) => setOwnName(e.target.value)}
+                  />
+                  <button
+                    className="btn"
+                    disabled={ownName.trim() === '' || ownPrompt.trim() === ''}
+                    onClick={saveCard}
+                  >
+                    Сохранить
+                  </button>
+                </div>
               </div>
 
               {error && <div className="err">{error}</div>}
@@ -473,6 +691,9 @@ export default function App(): React.JSX.Element {
                       </button>
                       <button className="btn" onClick={() => download(aiTitle + '.md', aiText)}>
                         Скачать
+                      </button>
+                      <button className="btn" onClick={() => void shareResult()}>
+                        {linkCopied ? 'Ссылка скопирована' : 'Поделиться ссылкой'}
                       </button>
                     </div>
                   </div>
