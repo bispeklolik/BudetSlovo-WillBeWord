@@ -51,5 +51,7 @@ jobs:
               core.info('Pages site created')
             } catch (e) {
               if (e.status === 409) core.info('Pages already enabled')
-              else throw e
+              // Включить Pages токен workflow не может (нужны админ-права) —
+              // одноразовый тумблер в Settings → Pages; дальше всё само.
+              else core.warning('Cannot enable Pages from workflow: ' + e.message)
             }
