@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: write
+  pages: write
 
 concurrency:
   group: pages
@@ -36,3 +37,19 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: dist-web
+      # Включить Pages с раздачей из gh-pages (идемпотентно: 409 = уже включён).
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.request('POST /repos/{owner}/{repo}/pages', {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                build_type: 'legacy',
+                source: { branch: 'gh-pages', path: '/' }
+              })
+              core.info('Pages site created')
+            } catch (e) {
+              if (e.status === 409) core.info('Pages already enabled')
+              else throw e
+            }
