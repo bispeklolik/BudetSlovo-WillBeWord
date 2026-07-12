@@ -24,6 +24,7 @@ export default function NotesPane({
 }): React.JSX.Element {
   const [notes, setNotes] = useState<Note[]>([])
   const [open, setOpen] = useState<Note | null>(null)
+  const [query, setQuery] = useState('')
 
   const load = (): void => {
     api.listNotes().then((n) => {
@@ -33,21 +34,42 @@ export default function NotesPane({
   }
   useEffect(load, [])
 
+  const q = query.trim().toLowerCase()
+  const shown = q
+    ? notes.filter((n) =>
+        (n.title + ' ' + n.body + ' ' + (n.sourceTitle ?? '')).toLowerCase().includes(q)
+      )
+    : notes
+
   return (
     <>
       <div className="pane-head">
         Конспекты <span className="pane-count">{notes.length}</span>
+        {notes.length > 0 && (
+          <input
+            className="text-input notes-search"
+            placeholder="Поиск по конспектам…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        )}
       </div>
       {notes.length === 0 ? (
         <div className="empty">
           <div className="empty-title">Здесь будут ваши конспекты</div>
           <div>
-            Откройте запись → «✨ ИИ» → «Саммари» или «Лучшие мысли» → «Сохранить в конспекты»
+            Откройте запись → «✨ ИИ» → «Сделать из текста…» → выберите карточку → «Сохранить в
+            конспекты»
           </div>
+        </div>
+      ) : shown.length === 0 ? (
+        <div className="empty">
+          <div className="empty-title">Ничего не найдено</div>
+          <div>По запросу «{query}» конспектов нет.</div>
         </div>
       ) : (
         <div className="project-grid">
-          {notes.map((n) => (
+          {shown.map((n) => (
             <div
               key={n.id}
               className="note-card"

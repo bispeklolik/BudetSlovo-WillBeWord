@@ -1,0 +1,39 @@
+# Одноразовая чистка: релизы v0.1.0/v0.1.1/v0.1.3 остались без части ассетов
+# (флаки-загрузка до ретраев в release.yml) и только путают. Удаляем релизы и
+# их теги. Срабатывает на пуш этого файла + вручную (workflow_dispatch).
+name: cleanup-broken-releases
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/cleanup-releases.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const broken = ['v0.1.0', 'v0.1.1', 'v0.1.3']
+            const { owner, repo } = context.repo
+            for (const tag of broken) {
+              try {
+                const rel = await github.rest.repos.getReleaseByTag({ owner, repo, tag })
+                await github.rest.repos.deleteRelease({ owner, repo, release_id: rel.data.id })
+                core.info(`release ${tag} deleted`)
+              } catch (e) {
+                core.info(`release ${tag}: ${e.status === 404 ? 'not found (ok)' : e.message}`)
+              }
+              try {
+                await github.rest.git.deleteRef({ owner, repo, ref: `tags/${tag}` })
+                core.info(`tag ${tag} deleted`)
+              } catch (e) {
+                core.info(`tag ${tag}: ${e.status === 404 ? 'not found (ok)' : e.message}`)
+              }
+            }

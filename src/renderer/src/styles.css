@@ -400,6 +400,13 @@ button {
   gap: 8px;
 }
 
+.notes-search {
+  margin-left: auto;
+  max-width: 260px;
+  font-weight: 400;
+  font-size: 13px;
+}
+
 .pane-count {
   font-size: 13px;
   font-weight: 400;
