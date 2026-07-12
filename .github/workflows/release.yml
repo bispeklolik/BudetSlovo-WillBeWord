@@ -21,6 +21,18 @@ jobs:
       # Сборка + публикация в GitHub Release. Публикацию повторяем до 3 раз:
       # загрузка крупного .exe на uploads.github.com иногда срывается (флаки-сеть),
       # из-за чего релиз оставался без части ассетов (в т.ч. latest.yml).
+      # Создаём релиз ЗАРАНЕЕ: иначе каждый ретрай electron-builder
+      # создавал НОВЫЙ релиз на тот же тег, и /releases/latest мог указывать
+      # на пустой дубль без установщика (ломая и скачивание, и автообновление).
+      - name: Ensure single release for tag
+        shell: pwsh
+        run: |
+          gh release view $env:GITHUB_REF_NAME 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:GITHUB_REF_NAME --title $env:GITHUB_REF_NAME --notes "Слово $env:GITHUB_REF_NAME"
+          }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and publish
         shell: pwsh
         run: |

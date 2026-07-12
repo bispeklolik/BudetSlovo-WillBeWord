@@ -67,7 +67,10 @@ export async function runCleanup(
     if (text) {
       try {
         const { cleaned, suspect } = await provider.cleanupTurn(text, {})
-        if (cleaned && cleaned.length >= text.length * 0.4 && cleaned.length <= text.length * 2.5) {
+        // Guard от молчаливой порчи: чистка убирает паразитов (обычно ≤25%
+        // текста). Усадка сильнее 30% — почти наверняка обрезанный моделью
+        // ввод (переполнение контекста), применять нельзя.
+        if (cleaned && cleaned.length >= text.length * 0.7 && cleaned.length <= text.length * 2.5) {
           words = applyCleanup(t.words, cleaned, nextId, suspect)
         }
       } catch {

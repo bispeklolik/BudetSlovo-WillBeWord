@@ -20,8 +20,9 @@ jobs:
       - uses: actions/github-script@v7
         with:
           script: |
-            const broken = ['v0.1.0', 'v0.1.1', 'v0.1.3']
             const { owner, repo } = context.repo
+            // 1) Старые битые теги — удалить целиком.
+            const broken = ['v0.1.0', 'v0.1.1', 'v0.1.3']
             for (const tag of broken) {
               try {
                 const rel = await github.rest.repos.getReleaseByTag({ owner, repo, tag })
@@ -35,5 +36,24 @@ jobs:
                 core.info(`tag ${tag} deleted`)
               } catch (e) {
                 core.info(`tag ${tag}: ${e.status === 404 ? 'not found (ok)' : e.message}`)
+              }
+            }
+            // 2) Дубли на один тег (следствие ретраев в release.yml): оставить
+            // релиз С установщиком (.exe), удалить пустые двойники — иначе
+            // /releases/latest указывает на релиз без установщика.
+            const { data: releases } = await github.rest.repos.listReleases({ owner, repo, per_page: 100 })
+            const byTag = new Map()
+            for (const r of releases) {
+              if (!byTag.has(r.tag_name)) byTag.set(r.tag_name, [])
+              byTag.get(r.tag_name).push(r)
+            }
+            for (const [tag, list] of byTag) {
+              if (list.length < 2) continue
+              const hasExe = (r) => r.assets.some((a) => a.name.endsWith('.exe'))
+              const keep = list.find(hasExe) ?? list[0]
+              for (const r of list) {
+                if (r.id === keep.id) continue
+                await github.rest.repos.deleteRelease({ owner, repo, release_id: r.id })
+                core.info(`duplicate release ${tag} (id ${r.id}, exe=${hasExe(r)}) deleted, kept id ${keep.id}`)
               }
             }

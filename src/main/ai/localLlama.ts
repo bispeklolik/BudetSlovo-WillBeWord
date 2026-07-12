@@ -172,7 +172,9 @@ export const localLlamaProvider: AiProvider = {
         ],
         stream: false,
         format: 'json',
-        options: { temperature: 0.2 }
+        // num_ctx обязателен: без него Ollama берёт дефолт (~4k), длинный
+        // монолог обрезается и «чистка» молча удаляет его хвост.
+        options: { temperature: 0.2, num_ctx: 8192 }
       })
     })
     if (!r.ok) throw new Error(`Ollama HTTP ${r.status}`)

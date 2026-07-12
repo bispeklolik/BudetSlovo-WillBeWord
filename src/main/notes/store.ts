@@ -1,22 +1,45 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { readFileSync, mkdirSync, existsSync, copyFileSync } from 'fs'
 import { join } from 'path'
 import { DATA_DIR } from '../paths'
+import { writeJsonAtomic } from '../project/store'
 import type { Note, NoteInput } from '../../shared/types'
 
 const NOTES_FILE = join(DATA_DIR, 'notes.json')
 
-function read(): Note[] {
+// Конспекты — самый ценный файл после записей. Схема защиты как у project.json:
+// .bak перед записью → атомарная запись (tmp→rename) → при повреждении читаем .bak.
+// ВАЖНО: read() различает «файла нет» (пустой список) и «файл битый» (fallback в
+// .bak); раньше битый файл читался как [], и следующий saveNote затирал всё пустотой.
+
+function parseNotes(file: string): Note[] | null {
   try {
-    const data = JSON.parse(readFileSync(NOTES_FILE, 'utf8'))
-    return Array.isArray(data) ? data : []
+    const data = JSON.parse(readFileSync(file, 'utf8'))
+    return Array.isArray(data) ? data : null
   } catch {
-    return []
+    return null
   }
+}
+
+function read(): Note[] {
+  if (!existsSync(NOTES_FILE)) return []
+  const main = parseNotes(NOTES_FILE)
+  if (main) return main
+  const bak = parseNotes(NOTES_FILE + '.bak')
+  if (bak) return bak
+  // Оба файла битые — не притворяемся пустым списком, чтобы не затереть остатки.
+  throw new Error(
+    'Файл конспектов повреждён (notes.json). Скопируйте его из папки данных и обратитесь за восстановлением.'
+  )
 }
 
 function write(notes: Note[]): void {
   mkdirSync(DATA_DIR, { recursive: true })
-  writeFileSync(NOTES_FILE, JSON.stringify(notes, null, 2), 'utf8')
+  try {
+    if (existsSync(NOTES_FILE)) copyFileSync(NOTES_FILE, NOTES_FILE + '.bak')
+  } catch {
+    /* .bak не критичен */
+  }
+  writeJsonAtomic(NOTES_FILE, notes)
 }
 
 export function listNotes(): Note[] {

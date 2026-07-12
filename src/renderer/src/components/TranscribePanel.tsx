@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { JobInfo, ProjectMeta } from '../../../shared/types'
+import type { JobInfo, ProjectMeta, SttEngine } from '../../../shared/types'
+import { sttMeta, sttModeLabel } from '../../../shared/sttEngines'
 import { api } from '../api'
 
 function isActive(j: JobInfo | null): boolean {
@@ -31,13 +32,18 @@ export default function TranscribePanel({
   const [numSpeakers, setNumSpeakers] = useState(meta.transcription?.numSpeakers ?? 2)
   const [enhance, setEnhance] = useState(meta.transcription?.enhance ?? true)
   const [now, setNow] = useState(Date.now())
+  const [engine, setEngine] = useState<SttEngine>('local')
 
   useEffect(() => {
+    api.getSettings().then((s) => setEngine(s.sttEngine ?? 'local'))
     api.listJobs().then((jobs) => {
       const mine = [...jobs].reverse().find((j) => j.slug === meta.slug)
       if (mine) setJob(mine)
     })
   }, [meta.slug])
+
+  const em = sttMeta(engine)
+  const cloud = !!em?.cloud
 
   useEffect(
     () =>
@@ -104,6 +110,10 @@ export default function TranscribePanel({
         </div>
       )}
       {job?.status === 'cancelled' && <div className="panel-note">Прошлая расшифровка отменена.</div>}
+      <div className="field">
+        <span>Движок распознавания</span>
+        <span className="settings-status">{em ? sttModeLabel(em) : engine}</span>
+      </div>
       <label className="field">
         <span>Говорящих на записи</span>
         <select value={numSpeakers} onChange={(e) => setNumSpeakers(Number(e.target.value))}>
@@ -112,10 +122,12 @@ export default function TranscribePanel({
           <option value={0}>Определить автоматически</option>
         </select>
       </label>
-      <label className="field field-check">
-        <input type="checkbox" checked={enhance} onChange={(e) => setEnhance(e.target.checked)} />
-        <span>Чистка звука (помогает с тихой и неразборчивой речью)</span>
-      </label>
+      {!cloud && (
+        <label className="field field-check">
+          <input type="checkbox" checked={enhance} onChange={(e) => setEnhance(e.target.checked)} />
+          <span>Чистка звука (помогает с тихой и неразборчивой речью)</span>
+        </label>
+      )}
       <div style={{ display: 'flex', gap: 8 }}>
         <button className="btn btn-primary" onClick={start} data-testid="start-transcribe">
           Расшифровать
@@ -127,7 +139,9 @@ export default function TranscribePanel({
         )}
       </div>
       <div className="panel-note">
-        Всё происходит на вашем компьютере: запись никуда не отправляется.
+        {cloud
+          ? `Запись будет отправлена в ${em?.label ?? 'облачный сервис'} (облако) по вашему ключу. Сменить движок можно в Настройках.`
+          : 'Всё происходит на вашем компьютере: запись никуда не отправляется. Сменить движок можно в Настройках.'}
       </div>
     </div>
   )
