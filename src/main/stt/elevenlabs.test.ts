@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { elevenToTurns } from './elevenlabs'
+import { elevenToTurns } from '../../shared/sttMappers'
 
 describe('elevenToTurns', () => {
   it('берёт только type=word, группирует по speaker_id', () => {

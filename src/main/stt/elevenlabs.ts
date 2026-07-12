@@ -1,33 +1,10 @@
 import { readFileSync } from 'fs'
-import { buildTurns, type FlatWord, type MergeResult } from '../project/merge'
+import type { MergeResult } from '../project/merge'
+import { elevenToTurns, type ElResponse } from '../../shared/sttMappers'
 
 // ElevenLabs Scribe: multipart, модель scribe_v2 (v1 снимают с обслуживания),
-// язык 'rus' (ISO-639-3!), диаризация diarize=true. words[] содержит и слова, и
-// пробелы, и аудио-события — берём только type==='word'. Таймкоды в секундах.
-
-interface ElWord {
-  text: string
-  start: number
-  end: number
-  type?: string
-  speaker_id?: string | null
-}
-interface ElResponse {
-  words?: ElWord[]
-}
-
-export function elevenToTurns(data: ElResponse): MergeResult {
-  const flat: FlatWord[] = (data.words ?? [])
-    .filter((w) => w.type === 'word' && (w.text ?? '').trim() !== '')
-    .map((w) => ({
-      s: w.start,
-      e: w.end,
-      p: 1,
-      t: w.text.trim(),
-      label: w.speaker_id ?? 'speaker_0'
-    }))
-  return buildTurns(flat)
-}
+// язык 'rus' (ISO-639-3!), диаризация diarize=true. Таймкоды в секундах.
+// Маппер ответа — в shared/sttMappers.ts (общий с веб-версией).
 
 export async function transcribeWithElevenLabs(audioPath: string, key: string): Promise<MergeResult> {
   const form = new FormData()

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deepgramToTurns, type DgWord, type DgResponse } from './deepgram'
+import { deepgramToTurns, type DgWord, type DgResponse } from '../../shared/sttMappers'
 
 const resp = (words: DgWord[]): DgResponse => ({
   results: { channels: [{ alternatives: [{ words }] }] }

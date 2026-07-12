@@ -1,36 +1,10 @@
 import { readFileSync } from 'fs'
-import { buildTurns, type FlatWord, type MergeResult } from '../project/merge'
+import type { MergeResult } from '../project/merge'
+import { deepgramToTurns, type DgResponse } from '../../shared/sttMappers'
 
 // Расшифровка через Deepgram (облако). Ключ хранится локально в настройках.
 // Аудио уходит на серверы Deepgram — в отличие от локального Whisper.
-
-export interface DgWord {
-  word: string
-  start: number
-  end: number
-  confidence?: number
-  speaker?: number
-  punctuated_word?: string
-}
-
-export interface DgResponse {
-  results?: { channels?: { alternatives?: { words?: DgWord[] }[] }[] }
-}
-
-// Ответ Deepgram → нормализованный {speakers, turns} (тот же формат, что merge).
-export function deepgramToTurns(dg: DgResponse): MergeResult {
-  const words = dg.results?.channels?.[0]?.alternatives?.[0]?.words ?? []
-  const flat: FlatWord[] = words
-    .map((w) => ({
-      s: w.start,
-      e: w.end,
-      p: w.confidence ?? 1,
-      t: (w.punctuated_word ?? w.word ?? '').trim(),
-      label: 'DG' + (w.speaker ?? 0)
-    }))
-    .filter((w) => w.t !== '')
-  return buildTurns(flat)
-}
+// Маппер ответа — в shared/sttMappers.ts (общий с веб-версией).
 
 const DG_URL = 'https://api.deepgram.com/v1/listen'
 
