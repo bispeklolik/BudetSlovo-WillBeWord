@@ -10,12 +10,16 @@ import { sttMeta } from '../../shared/sttEngines'
 import type { JobInfo } from '../../shared/types'
 
 const procs = new Map<string, ChildProcess>()
+const cloudAborts = new Map<string, AbortController>()
 
 export function killJobProcess(jobId: string): void {
   const p = procs.get(jobId)
   if (p?.pid) {
     spawnSync('taskkill', ['/PID', String(p.pid), '/T', '/F'], { windowsHide: true })
   }
+  // Облачная задача: обрываем сетевые запросы (иначе «отмена» была no-op,
+  // и задача занимала очередь до конца запроса).
+  cloudAborts.get(jobId)?.abort()
 }
 
 // Результат готов, если записан непустой audio.json. Движок (PyInstaller+CUDA)
@@ -64,9 +68,19 @@ async function runCloud(
   if (!existsSync(audio)) throw new Error('Аудио не найдено: ' + audio)
 
   emit({ phase: `Отправка в ${label}`, percent: null })
-  const result = await run(audio, key, emit)
-  // ponytail: облачную задачу нельзя прервать на середине запроса — если за это
-  // время нажали «отмена», просто не сохраняем результат.
+  const ctrl = new AbortController()
+  cloudAborts.set(job.id, ctrl)
+  let result
+  try {
+    result = await run(audio, key, emit, ctrl.signal)
+  } catch (err) {
+    if (job.cancelRequested || ctrl.signal.aborted) return
+    if (err instanceof Error && err.name === 'TimeoutError')
+      throw new Error(`${label}: сервис не ответил вовремя. Проверьте интернет и попробуйте ещё раз.`)
+    throw err
+  } finally {
+    cloudAborts.delete(job.id)
+  }
   if (job.cancelRequested) return
 
   emit({ phase: 'Сохранение результата', percent: null })

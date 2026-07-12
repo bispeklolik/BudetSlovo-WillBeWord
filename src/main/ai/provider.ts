@@ -34,7 +34,7 @@ export interface CleanupResult {
 }
 
 export interface AiProvider {
-  id: 'local-llama' | 'claude'
+  id: 'local-llama' | 'claude' | 'openrouter'
   /** Человекочитаемое имя для UI (напр. «Локально» / «Claude (облако)»). */
   name: string
   /** true — обработка на устройстве (для пометки приватности в UI). */

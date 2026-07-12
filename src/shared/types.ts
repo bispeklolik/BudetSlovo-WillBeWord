@@ -2,7 +2,7 @@ export type Theme = 'light' | 'dark'
 
 import type { CustomPrompt } from './prompts'
 
-export type AiEngine = 'local-llama' | 'claude'
+export type AiEngine = 'local-llama' | 'claude' | 'openrouter'
 
 // Движок расшифровки: локальный Whisper (приватно, на этом компьютере) или
 // один из облачных (быстрее, но аудио уходит на их серверы).
@@ -14,6 +14,8 @@ export interface Settings {
   aiEngine?: AiEngine // чем обрабатывать: локально или облачный Claude
   anthropicKey?: string // ключ Anthropic API (хранится локально), для движка Claude
   claudeModel?: string // модель Claude (по умолчанию sonnet)
+  openrouterKey?: string // ключ OpenRouter (хранится локально)
+  openrouterModel?: string // id модели OpenRouter (например anthropic/claude-sonnet-5)
   sttEngine?: SttEngine // чем расшифровывать: локально или облачный движок
   sttKeys?: Record<string, string> // ключи облачных STT по id движка (хранятся локально)
   customPrompts?: CustomPrompt[] // пользовательские карточки-промты для библиотеки
@@ -24,6 +26,7 @@ export const defaultSettings: Settings = {
   folders: [],
   aiEngine: 'local-llama',
   claudeModel: 'claude-sonnet-4-6',
+  openrouterModel: 'anthropic/claude-sonnet-5',
   sttEngine: 'local'
 }
 

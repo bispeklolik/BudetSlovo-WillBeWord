@@ -19,18 +19,18 @@ import {
   parseHighlights
 } from './localLlama'
 
-// Облачный провайдер Claude (Anthropic API). Ключ задаёт пользователь в
-// настройках, хранится локально; обработка идёт на серверах Anthropic — только
-// для своего контента или ПОСЛЕ локального обезличивания.
+// OpenRouter: один ключ — сотни моделей (Claude/Gemini/DeepSeek/…) через
+// OpenAI-совместимый chat completions. Ключ задаёт пользователь в настройках,
+// хранится локально. Только текстовые задачи (STT у OpenRouter нет).
 let apiKey = ''
-let model = 'claude-sonnet-4-6'
+let model = 'anthropic/claude-sonnet-5'
 
-export function setClaudeConfig(key: string | undefined, mdl: string | undefined): void {
+export function setOpenrouterConfig(key: string | undefined, mdl: string | undefined): void {
   apiKey = (key ?? '').trim()
-  if (mdl) model = mdl
+  if (mdl && mdl.trim()) model = mdl.trim()
 }
 
-// Claude иногда оборачивает JSON в ```-блок — достаём содержимое.
+// Модели любят оборачивать JSON в ```-блок — достаём содержимое.
 function jsonText(s: string): string {
   const m = s.match(/```(?:json)?\s*([\s\S]*?)```/i)
   return (m ? m[1] : s).trim()
@@ -38,43 +38,40 @@ function jsonText(s: string): string {
 
 async function ask(system: string, user: string, maxTokens: number): Promise<string> {
   if (!apiKey) throw new Error('AI_MODEL_MISSING')
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
+  const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
+      authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
       model,
       max_tokens: maxTokens,
-      system,
-      messages: [{ role: 'user', content: user }]
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user }
+      ]
     }),
     signal: AbortSignal.timeout(300_000)
   })
   if (!r.ok) {
     const t = await r.text().catch(() => '')
     if (r.status === 401) throw new Error('AI_KEY_INVALID')
-    throw new Error(`Claude HTTP ${r.status} ${t.slice(0, 200)}`)
+    if (r.status === 404) throw new Error(`OpenRouter: модель «${model}» не найдена`)
+    throw new Error(`OpenRouter HTTP ${r.status} ${t.slice(0, 200)}`)
   }
   const d = (await r.json()) as {
-    content?: { type: string; text?: string }[]
-    stop_reason?: string
+    choices?: { message?: { content?: string }; finish_reason?: string }[]
   }
-  let out = (d.content ?? [])
-    .filter((b) => b.type === 'text')
-    .map((b) => b.text ?? '')
-    .join('')
-    .trim()
-  if (d.stop_reason === 'max_tokens')
-    out += '\n\n…[ответ обрезан по лимиту — попробуйте ещё раз]'
+  const c = d.choices?.[0]
+  let out = (c?.message?.content ?? '').trim()
+  if (c?.finish_reason === 'length') out += '\n\n…[ответ обрезан по лимиту — попробуйте ещё раз или другую модель]'
   return out
 }
 
-export const claudeProvider: AiProvider = {
-  id: 'claude',
-  name: 'Claude (облако)',
+export const openrouterProvider: AiProvider = {
+  id: 'openrouter',
+  name: 'OpenRouter (облако)',
   isLocal: false,
 
   async isAvailable(): Promise<boolean> {
@@ -82,7 +79,7 @@ export const claudeProvider: AiProvider = {
   },
 
   async cleanupTurn(text: string, opts: CleanupOptions): Promise<CleanupResult> {
-    const raw = await ask(opts.systemPrompt || DEFAULT_SYSTEM, text, 1024)
+    const raw = await ask(opts.systemPrompt || DEFAULT_SYSTEM, text, 2048)
     return parseResult(jsonText(raw), text)
   },
 
@@ -95,10 +92,10 @@ export const claudeProvider: AiProvider = {
   },
 
   async highlights(text: string): Promise<string[]> {
-    return parseHighlights(jsonText(await ask(HIGHLIGHTS_SYSTEM, text, 2000)))
+    return parseHighlights(jsonText(await ask(HIGHLIGHTS_SYSTEM, text, 4000)))
   },
 
   async anonymize(text: string): Promise<AnonRule[]> {
-    return parseAnon(jsonText(await ask(ANON_SYSTEM, text, 2000)))
+    return parseAnon(jsonText(await ask(ANON_SYSTEM, text, 4000)))
   }
 }

@@ -4,6 +4,7 @@ import { join } from 'path'
 import { FFMPEG, STT_TEMP } from '../paths'
 import type { MergeResult } from '../project/merge'
 import { openaiToTurns, type OaResponse } from '../../shared/sttMappers'
+import { netSignal } from './net'
 
 // OpenAI и Groq: один и тот же контракт (multipart /audio/transcriptions,
 // verbose_json + word-таймкоды). Groq — тот же код, другой baseUrl+model.
@@ -13,7 +14,8 @@ export async function transcribeOpenAICompat(
   audioPath: string,
   key: string,
   baseUrl: string,
-  model: string
+  model: string,
+  signal?: AbortSignal
 ): Promise<MergeResult> {
   // ponytail: лимит 25 МБ на файл → перекодируем в моно 16 kbps m4a. Речь так
   // распознаётся без потерь, а многочасовая сессия влезает одним файлом.
@@ -31,10 +33,12 @@ export async function transcribeOpenAICompat(
     form.append('language', 'ru')
     form.append('response_format', 'verbose_json')
     form.append('timestamp_granularities[]', 'word')
+    form.append('timestamp_granularities[]', 'segment') // сегменты = границы реплик
     const res = await fetch(`${baseUrl}/audio/transcriptions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}` }, // Content-Type ставит fetch (boundary)
-      body: form
+      body: form,
+      signal: netSignal(600_000, signal)
     })
     if (res.status === 401) throw new Error('Неверный ключ API (проверьте в Настройках).')
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`)

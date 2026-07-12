@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs'
 import { buildTurns, type FlatWord, type MergeResult } from '../project/merge'
 import type { JobInfo } from '../../shared/types'
+import { netSignal } from './net'
 
 // AssemblyAI: асинхронно (upload → create → poll). Диаризация (speaker_labels),
 // русский (language_code 'ru'), модель 'best'. Таймкоды приходят в МИЛЛИСЕКУНДАХ.
@@ -36,7 +37,8 @@ const BASE = 'https://api.assemblyai.com/v2'
 export async function transcribeWithAssemblyAI(
   audioPath: string,
   key: string,
-  emit: (p: Partial<JobInfo>) => void
+  emit: (p: Partial<JobInfo>) => void,
+  signal?: AbortSignal
 ): Promise<MergeResult> {
   const auth = { authorization: key }
 
@@ -44,7 +46,8 @@ export async function transcribeWithAssemblyAI(
   const up = await fetch(`${BASE}/upload`, {
     method: 'POST',
     headers: { ...auth, 'content-type': 'application/octet-stream' },
-    body: readFileSync(audioPath)
+    body: readFileSync(audioPath),
+    signal: netSignal(600_000, signal)
   })
   if (up.status === 401) throw new Error('AssemblyAI: неверный ключ API (проверьте в Настройках).')
   if (!up.ok) throw new Error(`AssemblyAI upload HTTP ${up.status}`)
@@ -59,7 +62,8 @@ export async function transcribeWithAssemblyAI(
       language_code: 'ru',
       speaker_labels: true,
       speech_model: 'best'
-    })
+    }),
+    signal: netSignal(60_000, signal)
   })
   if (!cr.ok) throw new Error(`AssemblyAI create HTTP ${cr.status}: ${(await cr.text()).slice(0, 200)}`)
   const { id } = (await cr.json()) as { id: string }
@@ -68,8 +72,12 @@ export async function transcribeWithAssemblyAI(
   // потолок ~20 мин (400×3с) — на реальные сессии хватает с запасом.
   emit({ phase: 'Расшифровка в AssemblyAI', percent: null })
   for (let i = 0; i < 400; i++) {
+    if (signal?.aborted) throw new Error('Задача отменена.')
     await new Promise((r) => setTimeout(r, 3000))
-    const pr = await fetch(`${BASE}/transcript/${id}`, { headers: auth })
+    const pr = await fetch(`${BASE}/transcript/${id}`, {
+      headers: auth,
+      signal: netSignal(30_000, signal)
+    })
     if (!pr.ok) throw new Error(`AssemblyAI poll HTTP ${pr.status}`)
     const t = (await pr.json()) as AaTranscript
     if (t.status === 'completed') {

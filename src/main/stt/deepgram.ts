@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs'
 import type { MergeResult } from '../project/merge'
 import { deepgramToTurns, type DgResponse } from '../../shared/sttMappers'
+import { netSignal } from './net'
 
 // Расшифровка через Deepgram (облако). Ключ хранится локально в настройках.
 // Аудио уходит на серверы Deepgram — в отличие от локального Whisper.
@@ -28,7 +29,7 @@ export async function transcribeWithDeepgram(
     method: 'POST',
     headers: { Authorization: `Token ${key}`, 'Content-Type': 'audio/mp4' },
     body,
-    signal
+    signal: netSignal(600_000, signal)
   })
   if (res.status === 401) throw new Error('Deepgram: неверный ключ API (проверьте в Настройках).')
   if (!res.ok) throw new Error(`Deepgram HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`)

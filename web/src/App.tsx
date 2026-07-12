@@ -63,6 +63,14 @@ const CLAUDE_MODELS = [
   { id: 'claude-haiku-4-5', label: 'Haiku · дёшево' }
 ]
 
+const OPENROUTER_MODELS = [
+  'anthropic/claude-sonnet-5',
+  'google/gemini-2.5-pro',
+  'google/gemini-2.5-flash',
+  'deepseek/deepseek-v4-pro',
+  'anthropic/claude-haiku-4.5'
+]
+
 const CATEGORY_ORDER: PromptCategory[] = [
   'universal',
   'psychology',
@@ -141,19 +149,56 @@ async function askClaude(system: string, text: string, key: string, model: strin
     },
     body: JSON.stringify({
       model,
-      max_tokens: 4000,
+      max_tokens: 8000,
       system,
       messages: [{ role: 'user', content: text }]
-    })
+    }),
+    signal: AbortSignal.timeout(300_000)
   })
   if (res.status === 401) throw new Error('Неверный ключ Claude.')
   if (!res.ok) throw new Error(`Claude: ошибка ${res.status}`)
-  const d = (await res.json()) as { content?: { type: string; text?: string }[] }
-  return (d.content ?? [])
+  const d = (await res.json()) as {
+    content?: { type: string; text?: string }[]
+    stop_reason?: string
+  }
+  let out = (d.content ?? [])
     .filter((b) => b.type === 'text')
     .map((b) => b.text ?? '')
     .join('')
     .trim()
+  if (d.stop_reason === 'max_tokens') out += '\n\n…[ответ обрезан по лимиту]'
+  return out
+}
+
+async function askOpenRouter(
+  system: string,
+  text: string,
+  key: string,
+  model: string
+): Promise<string> {
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model,
+      max_tokens: 8000,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: text }
+      ]
+    }),
+    signal: AbortSignal.timeout(300_000)
+  })
+  if (res.status === 401) throw new Error('Неверный ключ OpenRouter.')
+  if (res.status === 404) throw new Error('OpenRouter: такая модель не найдена, проверьте id.')
+  if (!res.ok) throw new Error(`OpenRouter: ошибка ${res.status}`)
+  const d = (await res.json()) as {
+    choices?: { message?: { content?: string }; finish_reason?: string }[]
+  }
+  const c = d.choices?.[0]
+  let out = (c?.message?.content ?? '').trim()
+  if (c?.finish_reason === 'length') out += '\n\n…[ответ обрезан по лимиту]'
+  return out
 }
 
 // ---- шаринг результата ссылкой: JSON → deflate → base64url в #s=... ----
@@ -212,6 +257,11 @@ export default function App(): React.JSX.Element {
   const [sttKey, setSttKey] = useState('')
   const [claudeKey, setClaudeKey] = useState(store.get('claudeKey'))
   const [model, setModel] = useState(store.get('model') || 'claude-sonnet-4-6')
+  const [aiEngine, setAiEngine] = useState<'claude' | 'openrouter'>(
+    (store.get('aiEngine') as 'claude' | 'openrouter') || 'claude'
+  )
+  const [orKey, setOrKey] = useState(store.get('orKey'))
+  const [orModel, setOrModel] = useState(store.get('orModel') || 'anthropic/claude-sonnet-5')
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState('')
   const [fileName, setFileName] = useState('')
@@ -232,6 +282,36 @@ export default function App(): React.JSX.Element {
   const resultRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => setSttKey(store.get('key.' + engine)), [engine])
+
+  // Расшифровка стоит денег — не даём потерять её случайно: страховка от
+  // закрытия вкладки + восстановление последнего результата после перезапуска.
+  const [restorable, setRestorable] = useState<string>('')
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('slovo.lastResult')
+      if (saved) setRestorable((JSON.parse(saved) as { fileName: string }).fileName ?? '')
+    } catch {
+      /* битое сохранение — игнорируем */
+    }
+  }, [])
+  useEffect(() => {
+    const guard = (e: BeforeUnloadEvent): void => {
+      if (phase === 'busy') e.preventDefault()
+    }
+    window.addEventListener('beforeunload', guard)
+    return () => window.removeEventListener('beforeunload', guard)
+  }, [phase])
+
+  const restoreLast = (): void => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('slovo.lastResult') ?? '')
+      setFileName(saved.fileName)
+      setResult(saved.result)
+      setPhase('done')
+    } catch {
+      setRestorable('')
+    }
+  }
 
   // Открыта ссылка-шаринг (#s=...) — показываем присланный результат.
   // hashchange нужен, потому что переход по хэшу не перезагружает SPA.
@@ -269,6 +349,11 @@ export default function App(): React.JSX.Element {
       const r = await sttTranscribe(file, engine, sttKey.trim())
       if (r.turns.length === 0) throw new Error('Сервис вернул пустую расшифровку.')
       setResult(r)
+      try {
+        localStorage.setItem('slovo.lastResult', JSON.stringify({ fileName: file.name, result: r }))
+      } catch {
+        /* очень длинная запись не влезла в localStorage — просто без страховки */
+      }
       setAudioUrl((old) => {
         if (old) URL.revokeObjectURL(old)
         return URL.createObjectURL(file)
@@ -291,8 +376,13 @@ export default function App(): React.JSX.Element {
 
   const runPrompt = async (system: string, title: string, id: string): Promise<void> => {
     setError('')
-    if (!claudeKey.trim()) {
-      setError('Для «Сделать из текста» нужен ключ Claude (console.anthropic.com).')
+    const useOr = aiEngine === 'openrouter'
+    if (useOr ? !orKey.trim() : !claudeKey.trim()) {
+      setError(
+        useOr
+          ? 'Для «Сделать из текста» нужен ключ OpenRouter (openrouter.ai/keys).'
+          : 'Для «Сделать из текста» нужен ключ Claude (console.anthropic.com).'
+      )
       return
     }
     setAiBusy(id)
@@ -301,7 +391,9 @@ export default function App(): React.JSX.Element {
     setCopied(false)
     setLinkCopied(false)
     try {
-      const out = await askClaude(system, transcriptText(), claudeKey.trim(), model)
+      const out = useOr
+        ? await askOpenRouter(system, transcriptText(), orKey.trim(), orModel.trim())
+        : await askClaude(system, transcriptText(), claudeKey.trim(), model)
       setAiText(out)
       requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: 'smooth' }))
     } catch (err) {
@@ -427,6 +519,11 @@ export default function App(): React.JSX.Element {
               <button className="btn primary" onClick={pick} disabled={phase === 'busy'}>
                 Выбрать запись
               </button>
+              {restorable && phase === 'idle' && (
+                <button className="btn" onClick={restoreLast}>
+                  Вернуться к «{restorable}»
+                </button>
+              )}
             </div>
           </div>
 
@@ -529,6 +626,7 @@ export default function App(): React.JSX.Element {
               <button
                 className="btn"
                 onClick={() => {
+                  if (!window.confirm('Закрыть эту расшифровку и начать новую?')) return
                   setPhase('idle')
                   setResult(null)
                   setAiText('')
@@ -572,32 +670,87 @@ export default function App(): React.JSX.Element {
             <aside className="make">
               <h2>Сделать из текста</h2>
               <div className="field">
-                <span className="label">Ключ Claude (console.anthropic.com)</span>
-                <input
-                  type="password"
-                  placeholder="для промтов нужен ключ Claude"
-                  value={claudeKey}
-                  onChange={(e) => setClaudeKey(e.target.value)}
-                  onBlur={() => store.set('claudeKey', claudeKey.trim())}
-                />
-              </div>
-              <div className="field">
-                <span className="label">Модель</span>
+                <span className="label">Модель для текста</span>
                 <div className="seg">
-                  {CLAUDE_MODELS.map((m) => (
-                    <button
-                      key={m.id}
-                      className={'seg-btn' + (model === m.id ? ' on' : '')}
-                      onClick={() => {
-                        setModel(m.id)
-                        store.set('model', m.id)
-                      }}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
+                  <button
+                    className={'seg-btn' + (aiEngine === 'claude' ? ' on' : '')}
+                    onClick={() => {
+                      setAiEngine('claude')
+                      store.set('aiEngine', 'claude')
+                    }}
+                  >
+                    Claude
+                  </button>
+                  <button
+                    className={'seg-btn' + (aiEngine === 'openrouter' ? ' on' : '')}
+                    onClick={() => {
+                      setAiEngine('openrouter')
+                      store.set('aiEngine', 'openrouter')
+                    }}
+                  >
+                    OpenRouter
+                  </button>
                 </div>
               </div>
+              {aiEngine === 'claude' ? (
+                <>
+                  <div className="field">
+                    <span className="label">Ключ Claude (console.anthropic.com)</span>
+                    <input
+                      type="password"
+                      placeholder="для промтов нужен ключ Claude"
+                      value={claudeKey}
+                      onChange={(e) => setClaudeKey(e.target.value)}
+                      onBlur={() => store.set('claudeKey', claudeKey.trim())}
+                    />
+                  </div>
+                  <div className="field">
+                    <span className="label">Модель</span>
+                    <div className="seg">
+                      {CLAUDE_MODELS.map((m) => (
+                        <button
+                          key={m.id}
+                          className={'seg-btn' + (model === m.id ? ' on' : '')}
+                          onClick={() => {
+                            setModel(m.id)
+                            store.set('model', m.id)
+                          }}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="field">
+                    <span className="label">Ключ OpenRouter (openrouter.ai/keys)</span>
+                    <input
+                      type="password"
+                      placeholder="sk-or-…"
+                      value={orKey}
+                      onChange={(e) => setOrKey(e.target.value)}
+                      onBlur={() => store.set('orKey', orKey.trim())}
+                    />
+                  </div>
+                  <div className="field">
+                    <span className="label">Модель (id с openrouter.ai/models)</span>
+                    <input
+                      list="or-models"
+                      placeholder="anthropic/claude-sonnet-5"
+                      value={orModel}
+                      onChange={(e) => setOrModel(e.target.value)}
+                      onBlur={() => store.set('orModel', orModel.trim())}
+                    />
+                    <datalist id="or-models">
+                      {OPENROUTER_MODELS.map((m) => (
+                        <option key={m} value={m} />
+                      ))}
+                    </datalist>
+                  </div>
+                </>
+              )}
 
               {custom.length > 0 && (
                 <div className="cat">

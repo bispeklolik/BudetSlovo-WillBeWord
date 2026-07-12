@@ -1,12 +1,17 @@
 import { readFileSync } from 'fs'
 import type { MergeResult } from '../project/merge'
 import { elevenToTurns, type ElResponse } from '../../shared/sttMappers'
+import { netSignal } from './net'
 
 // ElevenLabs Scribe: multipart, модель scribe_v2 (v1 снимают с обслуживания),
 // язык 'rus' (ISO-639-3!), диаризация diarize=true. Таймкоды в секундах.
 // Маппер ответа — в shared/sttMappers.ts (общий с веб-версией).
 
-export async function transcribeWithElevenLabs(audioPath: string, key: string): Promise<MergeResult> {
+export async function transcribeWithElevenLabs(
+  audioPath: string,
+  key: string,
+  signal?: AbortSignal
+): Promise<MergeResult> {
   const form = new FormData()
   form.append('file', new Blob([readFileSync(audioPath)], { type: 'audio/mp4' }), 'audio.m4a')
   form.append('model_id', 'scribe_v2')
@@ -16,7 +21,8 @@ export async function transcribeWithElevenLabs(audioPath: string, key: string): 
   const res = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
     method: 'POST',
     headers: { 'xi-api-key': key }, // Content-Type ставит fetch (boundary)
-    body: form
+    body: form,
+    signal: netSignal(600_000, signal)
   })
   if (res.status === 401) throw new Error('ElevenLabs: неверный ключ API (проверьте в Настройках).')
   if (!res.ok) throw new Error(`ElevenLabs HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`)

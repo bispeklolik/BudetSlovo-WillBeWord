@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ProjectMeta } from '../../../shared/types'
+import type { ProjectMeta, JobInfo } from '../../../shared/types'
 import { searchProjects } from '../../../shared/search'
 import { buildFolderTree, ancestorPaths } from '../../../shared/folders'
 import { api } from '../api'
@@ -49,6 +49,7 @@ export default function Home({
   const [gq, setGq] = useState('') // глобальный поиск
   const [dropKey, setDropKey] = useState<string | null>(null)
   const [modal, setModal] = useState<Modal>(null)
+  const [jobs, setJobs] = useState<JobInfo[]>([])
 
   const refresh = (): void => {
     api.listProjects().then(setProjects)
@@ -62,6 +63,22 @@ export default function Home({
     api.getSettings().then((s) => setFolderList(s.folders ?? []))
   }, [])
   useEffect(() => api.onImportProgress((p) => setBusy(p.phase === 'done' ? null : p.message)), [])
+
+  // Очередь расшифровок видна с главного экрана (важно при пакетном импорте).
+  useEffect(() => {
+    api.listJobs().then(setJobs)
+    return api.onJobUpdate((j) => {
+      setJobs((prev) => {
+        const i = prev.findIndex((x) => x.id === j.id)
+        const next = i >= 0 ? [...prev.slice(0, i), { ...j }, ...prev.slice(i + 1)] : [...prev, { ...j }]
+        return next
+      })
+      if (j.status === 'done') refresh()
+    })
+  }, [])
+
+  const activeJobs = jobs.filter((j) => j.status === 'queued' || j.status === 'running')
+  const jobTitle = (slug: string): string => projects.find((p) => p.slug === slug)?.title ?? slug
 
   const persistFolders = async (next: string[]): Promise<void> => {
     setFolderList(next)
@@ -224,6 +241,24 @@ export default function Home({
           )}
         </div>
       </div>
+
+      {activeJobs.length > 0 && (
+        <div className="queue-strip">
+          {activeJobs.map((j) => (
+            <div className="queue-item" key={j.id}>
+              <span className="queue-dot" />
+              <span className="queue-title">{jobTitle(j.slug)}</span>
+              <span className="queue-phase">
+                {j.status === 'queued' ? 'в очереди' : j.phase}
+                {j.percent !== null && j.status === 'running' ? ` · ${j.percent}%` : ''}
+              </span>
+              <button className="btn-icon" title="Отменить" onClick={() => api.cancelJob(j.id)}>
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="home-body">
         <Sidebar

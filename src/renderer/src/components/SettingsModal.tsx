@@ -24,6 +24,8 @@ export default function SettingsModal({
   const [engine, setEngine] = useState<AiEngine>('local-llama')
   const [key, setKey] = useState('')
   const [model, setModel] = useState('claude-sonnet-4-6')
+  const [orKey, setOrKey] = useState('')
+  const [orModel, setOrModel] = useState('anthropic/claude-sonnet-5')
   const [stt, setStt] = useState<SttEngine>('local')
   const [sttKeys, setSttKeys] = useState<Record<string, string>>({})
   const [showAllStt, setShowAllStt] = useState(false)
@@ -34,6 +36,8 @@ export default function SettingsModal({
       setEngine(s.aiEngine ?? 'local-llama')
       setKey(s.anthropicKey ?? '')
       setModel(s.claudeModel ?? 'claude-sonnet-4-6')
+      setOrKey(s.openrouterKey ?? '')
+      setOrModel(s.openrouterModel ?? 'anthropic/claude-sonnet-5')
       setStt(s.sttEngine ?? 'local')
       setSttKeys(s.sttKeys ?? {})
     })
@@ -142,10 +146,19 @@ export default function SettingsModal({
               >
                 Claude (облако)
               </button>
+              <button
+                className={'btn' + (engine === 'openrouter' ? ' btn-primary' : '')}
+                onClick={() => {
+                  setEngine('openrouter')
+                  save({ aiEngine: 'openrouter' })
+                }}
+              >
+                OpenRouter (облако)
+              </button>
             </div>
           </div>
 
-          {engine === 'local-llama' ? (
+          {engine === 'local-llama' && (
             <>
               <div className="settings-row">
                 <span>Локальная модель</span>
@@ -155,7 +168,8 @@ export default function SettingsModal({
               </div>
               <div className="panel-note">Обработка на вашем компьютере — ничего не уходит наружу.</div>
             </>
-          ) : (
+          )}
+          {engine === 'claude' && (
             <>
               <div className="input-label">Ключ Anthropic API (вставьте свой; хранится локально)</div>
               <input
@@ -187,6 +201,39 @@ export default function SettingsModal({
                 Ключ берётся на console.anthropic.com (оплата по факту, это не подписка). Обезличивание
                 всегда работает локально — для клиентских сессий сначала обезличьте, потом отправляйте
                 в Claude.
+              </div>
+            </>
+          )}
+          {engine === 'openrouter' && (
+            <>
+              <div className="input-label">Ключ OpenRouter (вставьте свой; хранится локально)</div>
+              <input
+                className="text-input"
+                type="password"
+                placeholder="sk-or-…"
+                value={orKey}
+                onChange={(e) => setOrKey(e.target.value)}
+                onBlur={() => save({ openrouterKey: orKey.trim() })}
+              />
+              <div className="input-label">Модель (id с openrouter.ai/models)</div>
+              <input
+                className="text-input"
+                list="or-models"
+                placeholder="anthropic/claude-sonnet-5"
+                value={orModel}
+                onChange={(e) => setOrModel(e.target.value)}
+                onBlur={() => save({ openrouterModel: orModel.trim() })}
+              />
+              <datalist id="or-models">
+                <option value="anthropic/claude-sonnet-5">Claude Sonnet 5 · умная</option>
+                <option value="google/gemini-2.5-pro">Gemini 2.5 Pro · умная</option>
+                <option value="google/gemini-2.5-flash">Gemini 2.5 Flash · быстрая</option>
+                <option value="deepseek/deepseek-v4-pro">DeepSeek v4 Pro · дёшево и умно</option>
+                <option value="anthropic/claude-haiku-4.5">Claude Haiku 4.5 · дёшево</option>
+              </datalist>
+              <div className="panel-note">
+                Один ключ — сотни моделей (openrouter.ai, оплата по факту). Для саммари и супервизора
+                берите умную модель. Обезличивание всегда работает локально.
               </div>
             </>
           )}

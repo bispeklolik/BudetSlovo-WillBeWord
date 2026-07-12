@@ -37,7 +37,7 @@ export default function PromptLibraryPanel({
   onClose: () => void
 }): React.JSX.Element {
   useEscClose(onClose)
-  const [engineCloud, setEngineCloud] = useState(false)
+  const [engineLabel, setEngineLabel] = useState('Локально')
   const [custom, setCustom] = useState<CustomPrompt[]>([])
   const [busy, setBusy] = useState<string | null>(null)
   const [runningLabel, setRunningLabel] = useState('')
@@ -49,7 +49,13 @@ export default function PromptLibraryPanel({
 
   useEffect(() => {
     api.getSettings().then((s) => {
-      setEngineCloud(s.aiEngine === 'claude')
+      setEngineLabel(
+        s.aiEngine === 'claude'
+          ? `Claude (${s.claudeModel ?? 'облако'})`
+          : s.aiEngine === 'openrouter'
+            ? `OpenRouter (${s.openrouterModel ?? 'облако'})`
+            : 'Локально'
+      )
       setCustom(s.customPrompts ?? [])
     })
   }, [])
@@ -97,7 +103,7 @@ export default function PromptLibraryPanel({
         </div>
         <div className="panel-note">
           Выберите, что сделать с расшифровкой — ИИ выполнит промт. Движок:{' '}
-          {engineCloud ? 'Claude (облако)' : 'Локально'} — умную модель выбираете в настройках.
+          {engineLabel} — движок и модель выбираются в настройках.
         </div>
 
         {busy && (

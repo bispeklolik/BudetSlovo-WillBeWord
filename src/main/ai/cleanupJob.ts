@@ -55,10 +55,11 @@ export async function runCleanup(
   const nextId = (): number => ++maxId
 
   const total = baseTurns.length
-  const out: Turn[] = []
-  for (let i = 0; i < total; i++) {
+  const out: Turn[] = new Array(total)
+  let done = 0
+
+  const cleanOne = async (i: number): Promise<void> => {
     const t = baseTurns[i]
-    onProgress({ done: i, total, phase: 'Причёсываю' })
     const text = t.words
       .map((w) => w.t)
       .join(' ')
@@ -77,8 +78,22 @@ export async function runCleanup(
         // оставляем реплику как есть
       }
     }
-    out.push({ ...t, words })
+    out[i] = { ...t, words }
+    onProgress({ done: ++done, total, phase: 'Причёсываю' })
   }
+
+  // Облако тянет параллель (4 реплики разом — в разы быстрее на длинной
+  // сессии); локальная Ollama обрабатывает по одной (GPU и так занят).
+  const concurrency = provider.isLocal ? 1 : 4
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < total) {
+      const i = next++
+      await cleanOne(i)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, total) }, () => worker()))
+
   onProgress({ done: total, total, phase: 'Сохранение' })
   return saveTranscript(slug, out, speakers)
 }

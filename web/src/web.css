@@ -338,6 +338,12 @@ textarea {
   gap: 18px;
 }
 
+/* Длинные записи: не раскладывать за экраном тысячи слов сразу. */
+.turn {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 140px;
+}
+
 .turn-head {
   display: flex;
   align-items: baseline;

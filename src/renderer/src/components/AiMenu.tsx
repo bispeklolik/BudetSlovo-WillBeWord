@@ -19,11 +19,20 @@ interface AiMenuProps {
 export default function AiMenu(props: AiMenuProps): React.JSX.Element {
   const { busyLabel, hasBackup, hasHl } = props
   const [open, setOpen] = useState(false)
-  const [engineCloud, setEngineCloud] = useState(false)
+  const [engineLabel, setEngineLabel] = useState('Локально')
   const wrapRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (open) api.getSettings().then((s) => setEngineCloud(s.aiEngine === 'claude'))
+    if (open)
+      api.getSettings().then((s) => {
+        setEngineLabel(
+          s.aiEngine === 'claude'
+            ? 'Claude (облако)'
+            : s.aiEngine === 'openrouter'
+              ? `OpenRouter (${s.openrouterModel ?? 'облако'})`
+              : 'Локально'
+        )
+      })
   }, [open])
 
   useEffect(() => {
@@ -57,7 +66,7 @@ export default function AiMenu(props: AiMenuProps): React.JSX.Element {
       {open && (
         <div className="export-menu">
           <div className="export-note">
-            Движок: {engineCloud ? 'Claude (облако)' : 'Локально'}
+            Движок: {engineLabel}
           </div>
           <div className="menu-sep" />
           <button className="export-item" onClick={() => pick(props.onCleanup)}>

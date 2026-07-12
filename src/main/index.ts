@@ -24,6 +24,7 @@ import {
 } from './ai/provider'
 import { localLlamaProvider } from './ai/localLlama'
 import { claudeProvider, setClaudeConfig } from './ai/claude'
+import { openrouterProvider, setOpenrouterConfig } from './ai/openrouter'
 import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
 import { stopOllama, ensureOllama } from './ai/ollamaServer'
 import { applyHighlights, clearHighlights } from './ai/highlight'
@@ -48,14 +49,29 @@ import type {
 
 // Все данные Chromium-профиля строго на D: — C: почти полон.
 app.setPath('userData', join(DATA_DIR, 'electron'))
+
+// Второй экземпляр портит очередь задач и перезатирает настройки/конспекты —
+// разрешаем ровно один: повторный запуск просто поднимает уже открытое окно.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+}
+app.on('second-instance', () => {
+  if (win) {
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  }
+})
+
 registerMediaScheme()
 registerProvider(localLlamaProvider)
 registerProvider(claudeProvider)
+registerProvider(openrouterProvider)
 app.on('before-quit', () => stopOllama())
 
 let win: BrowserWindow | null = null
 let settings: Settings = loadSettings()
 setClaudeConfig(settings.anthropicKey, settings.claudeModel)
+setOpenrouterConfig(settings.openrouterKey, settings.openrouterModel)
 
 // Готовит выбранный движок для одиночных вызовов (саммари/мысли): для локального
 // поднимает Ollama; проверяет доступность (ключ/модель). Обезличивание — всегда локально.
@@ -103,6 +119,7 @@ ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
   settings = { ...settings, ...patch }
   saveSettings(settings)
   setClaudeConfig(settings.anthropicKey, settings.claudeModel)
+  setOpenrouterConfig(settings.openrouterKey, settings.openrouterModel)
   return settings
 })
 
