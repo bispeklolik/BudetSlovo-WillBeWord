@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { mdToHtml } from './md'
 import type { MergeResult } from '../../src/shared/turns'
 import { deepgramToTurns, elevenToTurns, openaiToTurns } from '../../src/shared/sttMappers'
 import {
@@ -229,6 +230,44 @@ function fmtTime(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+// Длительность записи из метаданных браузера — для оценки цены до отправки.
+function getDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const a = new Audio()
+    const url = URL.createObjectURL(file)
+    const done = (v: number | null): void => {
+      URL.revokeObjectURL(url)
+      resolve(v)
+    }
+    a.onloadedmetadata = () => done(isFinite(a.duration) ? a.duration : null)
+    a.onerror = () => done(null)
+    setTimeout(() => done(null), 4000)
+    a.src = url
+  })
+}
+
+const PRICE_PER_MIN: Record<SttId, number> = {
+  elevenlabs: 0.004,
+  deepgram: 0.004,
+  openai: 0.006,
+  groq: 0.0007
+}
+
+// Готовый пример: даёт пощупать транскрипт и промты без ключей и загрузки.
+const DEMO: MergeResult = {
+  speakers: [
+    { id: 'S0', engineLabel: 'demo', name: 'Психолог', colorKey: 'spk1' },
+    { id: 'S1', engineLabel: 'demo', name: 'Клиент', colorKey: 'spk2' }
+  ],
+  turns: [
+    { id: 'T0', spk: 'S0', startSec: 0, words: 'Здравствуйте, с чем сегодня пришли?'.split(' ').map((t, i) => ({ id: i, t })) },
+    { id: 'T1', spk: 'S1', startSec: 4, words: 'Опять не могу спать, всё думаю про работу и что всех подвожу.'.split(' ').map((t, i) => ({ id: 10 + i, t })) },
+    { id: 'T2', spk: 'S0', startSec: 11, words: 'Что именно крутится в голове перед сном?'.split(' ').map((t, i) => ({ id: 30 + i, t })) },
+    { id: 'T3', spk: 'S1', startSec: 16, words: 'Что уволят. Что я хуже всех в отделе, хотя вчера меня похвалили.'.split(' ').map((t, i) => ({ id: 40 + i, t })) },
+    { id: 'T4', spk: 'S0', startSec: 24, words: 'Давайте посмотрим на факты за и против этой мысли.'.split(' ').map((t, i) => ({ id: 60 + i, t })) }
+  ]
+}
+
 function download(name: string, body: string): void {
   const a = document.createElement('a')
   a.href = URL.createObjectURL(new Blob([body], { type: 'text/plain;charset=utf-8' }))
@@ -273,6 +312,7 @@ export default function App(): React.JSX.Element {
   const [aiText, setAiText] = useState('')
   const [ownPrompt, setOwnPrompt] = useState('')
   const [ownName, setOwnName] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [custom, setCustom] = useState<CustomPrompt[]>(loadCustom)
   const [copied, setCopied] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
@@ -286,6 +326,14 @@ export default function App(): React.JSX.Element {
   // Расшифровка стоит денег — не даём потерять её случайно: страховка от
   // закрытия вкладки + восстановление последнего результата после перезапуска.
   const [restorable, setRestorable] = useState<string>('')
+  const [estimate, setEstimate] = useState('')
+  const [busyStart, setBusyStart] = useState(0)
+  const [busySec, setBusySec] = useState(0)
+  useEffect(() => {
+    if (phase !== 'busy') return
+    const t = setInterval(() => setBusySec(Math.floor((Date.now() - busyStart) / 1000)), 1000)
+    return () => clearInterval(t)
+  }, [phase, busyStart])
   useEffect(() => {
     try {
       const saved = localStorage.getItem('slovo.lastResult')
@@ -345,6 +393,14 @@ export default function App(): React.JSX.Element {
     }
     setFileName(file.name)
     setPhase('busy')
+    // Оценка до отправки: длительность → примерная цена по тарифу движка.
+    void getDuration(file).then((sec) => {
+      if (sec) {
+        const min = sec / 60
+        setEstimate(`≈ ${Math.round(min)} мин аудио · ~$${(min * PRICE_PER_MIN[engine]).toFixed(2)}`)
+      }
+    })
+    setBusyStart(Date.now())
     try {
       const r = await sttTranscribe(file, engine, sttKey.trim())
       if (r.turns.length === 0) throw new Error('Сервис вернул пустую расшифровку.')
@@ -407,16 +463,26 @@ export default function App(): React.JSX.Element {
     const name = ownName.trim()
     const system = ownPrompt.trim()
     if (!name || !system) return
-    const next = [...custom, { id: 'c' + Date.now().toString(36), name, system }]
+    const next = editingId
+      ? custom.map((c) => (c.id === editingId ? { ...c, name, system } : c))
+      : [...custom, { id: 'c' + Date.now().toString(36), name, system }]
     setCustom(next)
     store.set('customPrompts', JSON.stringify(next))
     setOwnName('')
+    setEditingId(null)
+  }
+
+  const editCard = (c: CustomPrompt): void => {
+    setOwnPrompt(c.system)
+    setOwnName(c.name)
+    setEditingId(c.id)
   }
 
   const delCard = (id: string): void => {
     const next = custom.filter((c) => c.id !== id)
     setCustom(next)
     store.set('customPrompts', JSON.stringify(next))
+    if (editingId === id) setEditingId(null)
   }
 
   const shareResult = async (): Promise<void> => {
@@ -456,7 +522,7 @@ export default function App(): React.JSX.Element {
         <section className="shared">
           <span className="label">Вам поделились результатом</span>
           <h1>{shared.t}</h1>
-          <div className="ai-body shared-body">{shared.b}</div>
+          <div className="ai-body shared-body md" dangerouslySetInnerHTML={{ __html: mdToHtml(shared.b) }} />
           <div className="hero-ctas">
             <button
               className="btn"
@@ -524,6 +590,18 @@ export default function App(): React.JSX.Element {
                   Вернуться к «{restorable}»
                 </button>
               )}
+              {!restorable && (
+                <button
+                  className="btn"
+                  onClick={() => {
+                    setFileName('Пример: фрагмент сессии')
+                    setResult(DEMO)
+                    setPhase('done')
+                  }}
+                >
+                  Посмотреть на примере
+                </button>
+              )}
             </div>
           </div>
 
@@ -581,7 +659,11 @@ export default function App(): React.JSX.Element {
               {phase === 'busy' ? (
                 <>
                   <span className="drop-title">Распознаю «{fileName}»…</span>
-                  <span className="hint">Обычно меньше минуты. Не закрывайте вкладку.</span>
+                  <span className="hint">
+                    {estimate ? estimate + ' · ' : ''}
+                    {busySec > 0 ? `идёт ${busySec} с · ` : ''}
+                    обычно меньше минуты, не закрывайте вкладку
+                  </span>
                 </>
               ) : (
                 <>
@@ -765,6 +847,9 @@ export default function App(): React.JSX.Element {
                         >
                           {aiBusy === c.id ? 'Делаю…' : c.name}
                         </button>
+                        <button className="card-edit" title="Редактировать" onClick={() => editCard(c)}>
+                          ✎
+                        </button>
                         <button className="card-del" title="Удалить карточку" onClick={() => delCard(c.id)}>
                           ×
                         </button>
@@ -821,7 +906,7 @@ export default function App(): React.JSX.Element {
                     disabled={ownName.trim() === '' || ownPrompt.trim() === ''}
                     onClick={saveCard}
                   >
-                    Сохранить
+                    {editingId ? 'Сохранить изменения' : 'Сохранить'}
                   </button>
                 </div>
               </div>
@@ -850,15 +935,17 @@ export default function App(): React.JSX.Element {
                       </button>
                     </div>
                   </div>
-                  <div className="ai-body">{aiText}</div>
+                  <div className="ai-body md" dangerouslySetInnerHTML={{ __html: mdToHtml(aiText) }} />
                 </div>
               )}
             </aside>
           </div>
 
-          <div className="player">
-            <audio ref={audioRef} src={audioUrl} controls />
-          </div>
+          {audioUrl && (
+            <div className="player">
+              <audio ref={audioRef} src={audioUrl} controls />
+            </div>
+          )}
         </section>
       )}
 

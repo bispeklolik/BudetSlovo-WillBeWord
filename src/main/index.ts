@@ -22,7 +22,13 @@ import {
   type SummaryDomain,
   type AiProvider
 } from './ai/provider'
-import { localLlamaProvider } from './ai/localLlama'
+import {
+  localLlamaProvider,
+  SUMMARY_BASE,
+  SUMMARY_DOMAIN,
+  SUMMARY_LEVEL
+} from './ai/localLlama'
+import { chunkByLines } from '../shared/chunk'
 import { claudeProvider, setClaudeConfig } from './ai/claude'
 import { openrouterProvider, setOpenrouterConfig } from './ai/openrouter'
 import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
@@ -321,13 +327,40 @@ ipcMain.handle('ai:cleanup', (_e, slug: string) =>
   )
 )
 ipcMain.handle('ai:revert', (_e, slug: string) => revertCleanup(slug))
+// Map-reduce для локальной модели: длинная запись не влезает в контекст
+// (16k токенов) — обрабатываем частями и сводим итог. Облачным моделям
+// (200k+) отдаём целиком.
+const LOCAL_CTX_CHARS = 45_000
+async function generateSmart(provider: AiProvider, system: string, text: string): Promise<string> {
+  if (!provider.isLocal || text.length <= LOCAL_CTX_CHARS) return provider.generate(system, text)
+  const chunks = chunkByLines(text, LOCAL_CTX_CHARS)
+  const parts: string[] = []
+  for (let i = 0; i < chunks.length; i++) {
+    parts.push(
+      await provider.generate(
+        system + ` (Это часть ${i + 1} из ${chunks.length} длинной записи — обработай только её.)`,
+        chunks[i]
+      )
+    )
+  }
+  return provider.generate(
+    system +
+      ' Ниже — результаты по последовательным частям одной длинной записи. Сведи их в один целостный ответ без повторов.',
+    parts.join('\n\n---\n\n')
+  )
+}
+
 ipcMain.handle(
   'ai:summarize',
   async (_e, slug: string, level: SummaryLevel, domain: SummaryDomain) => {
     const meta = getProject(slug)
     if (!meta?.turns) return null
     const provider = await prepareEngine()
-    return provider.summarize(transcriptText(meta), level, domain)
+    return generateSmart(
+      provider,
+      SUMMARY_BASE + SUMMARY_DOMAIN[domain] + SUMMARY_LEVEL[level],
+      transcriptText(meta)
+    )
   }
 )
 // Голосовая правка: клип с микрофона → текст (движок из настроек расшифровки).
@@ -337,7 +370,7 @@ ipcMain.handle('ai:runPrompt', async (_e, slug: string, system: string) => {
   const meta = getProject(slug)
   if (!meta?.turns) return null
   const provider = await prepareEngine()
-  return provider.generate(system, transcriptText(meta))
+  return generateSmart(provider, system, transcriptText(meta))
 })
 ipcMain.handle('ai:highlights', async (_e, slug: string) => {
   const meta = getProject(slug)
@@ -359,7 +392,24 @@ ipcMain.handle('ai:anonymize', async (_e, slug: string) => {
   if (!provider) throw new Error('AI_PROVIDER_NOT_FOUND')
   if (!(await provider.isAvailable())) throw new Error('AI_MODEL_MISSING')
   const text = meta.turns.map((t) => t.words.map((w) => w.t).join(' ')).join('\n')
-  meta.anon = await provider.anonymize(text)
+  // Длинная сессия не влезает в контекст → обезличиваем по частям и сливаем
+  // правила (дубли по find убираем). Фича приватности не должна «отказывать
+  // молча»: длинный текст и ноль правил = ошибка, а не ложное «готово».
+  const chunks = chunkByLines(text, 30_000)
+  const merged = new Map<string, AnonRule>()
+  for (const chunk of chunks) {
+    for (const r of await provider.anonymize(chunk)) {
+      const k = r.find.toLowerCase()
+      if (!merged.has(k)) merged.set(k, r)
+    }
+  }
+  const rules = [...merged.values()]
+  if (rules.length === 0 && text.length > 2000) {
+    throw new Error(
+      'Обезличивание не нашло ни одного имени в длинной записи — похоже, модель не справилась. Попробуйте ещё раз.'
+    )
+  }
+  meta.anon = rules
   saveProject(meta)
   return meta
 })

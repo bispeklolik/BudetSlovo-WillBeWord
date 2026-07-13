@@ -43,6 +43,27 @@ describe('buildAnonOverlay', () => {
     expect(ov.get(0)).toBe('город')
   })
 
+  it('морфология: склонённые формы имени ловятся по основе', () => {
+    const turns = [turn([W(0, 'видел'), W(1, 'Евгению'), W(2, 'и'), W(3, 'Евгением')])]
+    const ov = buildAnonOverlay(turns, [{ find: 'Евгения', replace: 'Клиентка', kind: 'name' }])
+    expect(ov.get(1)).toBe('Клиентка')
+    expect(ov.get(3)).toBe('Клиентка')
+    expect(ov.has(0)).toBe(false)
+  })
+
+  it('морфология не захватывает слова с другой основой', () => {
+    const turns = [turn([W(0, 'Евангелие'), W(1, 'ева')])]
+    const ov = buildAnonOverlay(turns, [{ find: 'Ева', replace: 'Клиентка', kind: 'name' }])
+    expect(ov.has(0)).toBe(false) // «Евангелие» — не форма «Ева» (хвост слишком длинный)
+    expect(ov.get(1)).toBe('Клиентка')
+  })
+
+  it('морфология работает только для имён (kind=name), не для мест/прочего', () => {
+    const turns = [turn([W(0, 'городской')])]
+    const ov = buildAnonOverlay(turns, [{ find: 'городок', replace: 'место', kind: 'place' }])
+    expect(ov.has(0)).toBe(false)
+  })
+
   it('пустые правила игнорируются', () => {
     const turns = [turn([W(0, 'привет')])]
     expect(buildAnonOverlay(turns, [{ find: '', replace: 'X', kind: 'other' }]).size).toBe(0)

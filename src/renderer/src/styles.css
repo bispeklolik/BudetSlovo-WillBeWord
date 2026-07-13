@@ -1513,6 +1513,26 @@ button {
   display: flex;
 }
 
+.prompt-edit {
+  position: absolute;
+  top: -6px;
+  right: 16px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  font-size: 11px;
+}
+
+.prompt-edit:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
 .prompt-del {
   position: absolute;
   top: -6px;
@@ -1565,6 +1585,51 @@ button {
 
 .text-link:hover {
   color: var(--text);
+}
+
+/* Тосты (ненавязчивые уведомления об ошибках) */
+.toast-box {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 100;
+  max-width: 380px;
+}
+
+.toast {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 13.5px;
+  color: var(--text);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  animation: rise 0.25s ease;
+}
+
+.toast-error {
+  border-left-color: #e5484d;
+}
+
+.toast-out {
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Полоса очереди расшифровок на главном */

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ProjectMeta } from '../../../shared/types'
 import { buildAnonOverlay, anonTurnText } from '../../../shared/anon'
 import { api } from '../api'
+import { showToast, humanError } from '../toast'
 
 export default function ExportMenu({
   slug,
@@ -42,7 +43,7 @@ export default function ExportMenu({
       setCopied(true)
       setTimeout(() => setCopied(false), 1600)
     } catch (err) {
-      alert('Не удалось скопировать: ' + String(err))
+      showToast('Не удалось скопировать: ' + humanError(err))
     }
   }
 
@@ -59,7 +60,7 @@ export default function ExportMenu({
     try {
       await api.exportTranscript(slug, format, format === 'docx' ? highlight : false, anon)
     } catch (err) {
-      alert('Не удалось сохранить: ' + String(err))
+      showToast('Не удалось сохранить: ' + humanError(err))
     } finally {
       setBusy(false)
       setOpen(false)
@@ -71,7 +72,7 @@ export default function ExportMenu({
     try {
       await api.exportAudio(slug)
     } catch (err) {
-      alert('Не удалось сохранить: ' + String(err))
+      showToast('Не удалось сохранить: ' + humanError(err))
     } finally {
       setBusy(false)
       setOpen(false)

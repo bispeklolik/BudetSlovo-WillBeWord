@@ -3,6 +3,7 @@ import type { ProjectMeta, JobInfo } from '../../../shared/types'
 import { searchProjects } from '../../../shared/search'
 import { buildFolderTree, ancestorPaths } from '../../../shared/folders'
 import { api } from '../api'
+import { showToast, humanError } from '../toast'
 import Icon from '../components/Icon'
 import Sidebar, { NOTES_KEY } from '../components/Sidebar'
 import InputModal from '../components/InputModal'
@@ -94,12 +95,13 @@ export default function Home({
         onOpen(metas[0].slug)
       } else if (metas && metas.length > 1) {
         refresh()
-        alert(
-          `Импортировано записей: ${metas.length}. Расшифровка запущена — записи будут готовы по очереди.`
+        showToast(
+          `Импортировано записей: ${metas.length}. Расшифровка запущена — записи будут готовы по очереди.`,
+          'info'
         )
       }
     } catch (err) {
-      alert('Не удалось импортировать: ' + String(err))
+      showToast('Не удалось импортировать: ' + humanError(err))
     } finally {
       setBusy(null)
     }
@@ -147,7 +149,7 @@ export default function Home({
   }
   const deleteFolder = (path: string): void => {
     if (count(path) > 0) {
-      alert('В папке есть записи. Сначала переместите их в другую папку.')
+      showToast('В папке есть записи. Сначала переместите их в другую папку.', 'info')
       return
     }
     void persistFolders(folderList.filter((f) => f !== path && !f.startsWith(path + '/')))

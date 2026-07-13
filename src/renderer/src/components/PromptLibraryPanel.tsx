@@ -46,6 +46,7 @@ export default function PromptLibraryPanel({
   const [savedNote, setSavedNote] = useState(false)
   const [ownText, setOwnText] = useState('')
   const [ownName, setOwnName] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   useEffect(() => {
     api.getSettings().then((s) => {
@@ -80,16 +81,27 @@ export default function PromptLibraryPanel({
     const name = ownName.trim()
     const system = ownText.trim()
     if (!name || !system) return
-    const next = [...custom, { id: 'c' + Date.now().toString(36), name, system }]
+    // Редактирование существующей карточки (нажали ✎) или новая.
+    const next = editingId
+      ? custom.map((c) => (c.id === editingId ? { ...c, name, system } : c))
+      : [...custom, { id: 'c' + Date.now().toString(36), name, system }]
     setCustom(next)
     await api.setSettings({ customPrompts: next })
     setOwnName('')
+    setEditingId(null)
+  }
+
+  const editCard = (c: CustomPrompt): void => {
+    setOwnText(c.system)
+    setOwnName(c.name)
+    setEditingId(c.id)
   }
 
   const delCard = async (id: string): Promise<void> => {
     const next = custom.filter((c) => c.id !== id)
     setCustom(next)
     await api.setSettings({ customPrompts: next })
+    if (editingId === id) setEditingId(null)
   }
 
   return (
@@ -170,6 +182,13 @@ export default function PromptLibraryPanel({
                         {c.name}
                       </button>
                       <button
+                        className="prompt-edit"
+                        title="Редактировать карточку"
+                        onClick={() => editCard(c)}
+                      >
+                        ✎
+                      </button>
+                      <button
                         className="prompt-del"
                         title="Удалить карточку"
                         onClick={() => delCard(c.id)}
@@ -231,7 +250,7 @@ export default function PromptLibraryPanel({
                   disabled={ownName.trim() === '' || ownText.trim() === ''}
                   onClick={saveCard}
                 >
-                  Сохранить карточкой
+                  {editingId ? 'Сохранить изменения' : 'Сохранить карточкой'}
                 </button>
               </div>
             </div>

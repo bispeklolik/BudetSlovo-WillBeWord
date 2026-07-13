@@ -124,7 +124,8 @@ export function parseResult(raw: string, original: string): CleanupResult {
 }
 
 // Один system+user чат к Ollama (num_ctx под длинную расшифровку). Общий для
-// summarize и generate (библиотека промтов).
+// summarize и generate (библиотека промтов). stream:true обязателен: без
+// стрима долгая генерация (минуты) обрывалась таймаутом тела ответа у fetch.
 async function ollamaChat(system: string, text: string): Promise<string> {
   const r = await fetch(`${OLLAMA_URL}/api/chat`, {
     method: 'POST',
@@ -135,13 +136,33 @@ async function ollamaChat(system: string, text: string): Promise<string> {
         { role: 'system', content: system },
         { role: 'user', content: text }
       ],
-      stream: false,
+      stream: true,
       options: { temperature: 0.3, num_ctx: 16384 }
     })
   })
-  if (!r.ok) throw new Error(`Ollama HTTP ${r.status}`)
-  const d = (await r.json()) as { message?: { content?: string } }
-  return (d.message?.content || '').trim()
+  if (!r.ok || !r.body) throw new Error(`Ollama HTTP ${r.status}`)
+  const reader = r.body.getReader()
+  const dec = new TextDecoder()
+  let buf = ''
+  let out = ''
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += dec.decode(value, { stream: true })
+    let idx: number
+    while ((idx = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, idx).trim()
+      buf = buf.slice(idx + 1)
+      if (!line) continue
+      try {
+        const j = JSON.parse(line) as { message?: { content?: string } }
+        out += j.message?.content ?? ''
+      } catch {
+        /* служебная строка стрима */
+      }
+    }
+  }
+  return out.trim()
 }
 
 export const localLlamaProvider: AiProvider = {

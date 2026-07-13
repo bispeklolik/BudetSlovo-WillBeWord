@@ -14,6 +14,7 @@ import AnonPanel from '../components/AnonPanel'
 import StatsPanel from '../components/StatsPanel'
 import { buildAnonOverlay } from '../../../shared/anon'
 import { rateForKey } from '../../../shared/playback'
+import { showToast, humanError } from '../toast'
 import AiMenu from '../components/AiMenu'
 import Icon from '../components/Icon'
 
@@ -384,7 +385,7 @@ export default function Editor({
       rec.start()
       setRedict({ turnId, phase: 'rec' })
     } catch {
-      alert('Микрофон недоступен. Проверьте, что он подключён и разрешён для приложения.')
+      showToast('Микрофон недоступен. Проверьте, что он подключён и разрешён для приложения.')
     }
   }
 
@@ -404,7 +405,7 @@ export default function Editor({
         const blob = new Blob(recChunksRef.current, { type: 'audio/webm' })
         const text = (await api.transcribeClip(await blob.arrayBuffer())).trim()
         if (!text) {
-          alert('Речь не распозналась — попробуйте ещё раз, ближе к микрофону.')
+          showToast('Речь не распозналась. Попробуйте ещё раз, ближе к микрофону.', 'info')
           return
         }
         const m = metaRef.current
@@ -413,7 +414,7 @@ export default function Editor({
         const words = text.split(/\s+/).map((t) => ({ id: id++, t, src: 'ai' as const }))
         edit({ op: 'setTurnWords', turnId: target.turnId, words })
       } catch (err) {
-        alert('Не удалось распознать надиктовку: ' + String(err))
+        showToast('Не удалось распознать надиктовку: ' + humanError(err))
       } finally {
         setRedict(null)
       }
@@ -439,12 +440,7 @@ export default function Editor({
         setAiBackup(true)
       }
     } catch (err) {
-      const s = String(err)
-      if (s.includes('AI_UNAVAILABLE'))
-        alert('Не удалось запустить локальный ИИ (Ollama). Проверь, что он установлен в D:\\Apps\\ollama.')
-      else if (s.includes('AI_MODEL_MISSING'))
-        alert('ИИ-модель qwen2.5:7b-instruct не найдена — её нужно скачать.')
-      else alert('Не удалось причесать: ' + s)
+      showToast('Не удалось причесать: ' + humanError(err))
     } finally {
       setAiBusy(false)
       setAiProgress(null)
@@ -465,10 +461,7 @@ export default function Editor({
       const m = await api.highlightAi(slug)
       if (m) loadMeta(m)
     } catch (err) {
-      const s = String(err)
-      if (s.includes('AI_UNAVAILABLE')) alert('Не удалось запустить локальный ИИ (Ollama).')
-      else if (s.includes('AI_MODEL_MISSING')) alert('ИИ-модель не найдена — её нужно скачать.')
-      else alert('Не удалось выделить мысли: ' + s)
+      showToast('Не удалось выделить мысли: ' + humanError(err))
     } finally {
       setHlBusy(false)
     }
@@ -488,10 +481,7 @@ export default function Editor({
         setAnonMode(true) // сразу показываем результат
       }
     } catch (err) {
-      const s = String(err)
-      if (s.includes('AI_UNAVAILABLE')) alert('Не удалось запустить локальный ИИ (Ollama).')
-      else if (s.includes('AI_MODEL_MISSING')) alert('ИИ-модель не найдена — её нужно скачать.')
-      else alert('Не удалось обезличить: ' + s)
+      showToast('Не удалось обезличить: ' + humanError(err))
     } finally {
       setAnonBusy(false)
     }

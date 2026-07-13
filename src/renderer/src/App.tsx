@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Settings, Theme } from '../../shared/types'
 import { api } from './api'
+import { showToast, humanError } from './toast'
 import Home from './views/Home'
 import Editor from './views/Editor'
 import Icon from './components/Icon'
@@ -43,7 +44,7 @@ export default function App(): React.JSX.Element {
       if (!file) return
       const path = api.getPathForFile(file)
       if (!path) {
-        alert('Не удалось определить путь к файлу.')
+        showToast('Не удалось определить путь к файлу.')
         return
       }
       setImporting('Импортирую…')
@@ -53,7 +54,7 @@ export default function App(): React.JSX.Element {
         // после которой пользователь сам запускает расшифровку.
         if (meta) setView({ page: 'editor', slug: meta.slug })
       } catch (err) {
-        alert('Не удалось импортировать: ' + String(err))
+        showToast('Не удалось импортировать: ' + humanError(err))
       } finally {
         setImporting(null)
       }

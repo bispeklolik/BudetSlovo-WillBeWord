@@ -37,6 +37,24 @@ export function buildAnonOverlay(turns: Turn[], rules: AnonRule[]): Map<number, 
         for (let j = 1; j < toks.length; j++) overlay.set(words[i + j].id, '')
       }
     }
+
+    // Морфология для имён: модель перечисляет не все падежные формы, поэтому
+    // однословные правила kind='name' дополнительно ловят слова с той же
+    // основой (основа = форма без последних 2 букв, хвост ≤ 4 букв — обычные
+    // русские окончания; «Евангелие» под «Ева» не попадает: хвост длиннее).
+    for (const rule of sorted) {
+      if (rule.kind !== 'name' || /\s/.test(rule.find.trim())) continue
+      const base = norm(rule.find)
+      const stem = base.slice(0, Math.max(3, base.length - 2))
+      if (stem.length < 3) continue
+      for (const w of words) {
+        if (overlay.has(w.id)) continue
+        const n = norm(w.t)
+        if (n !== base && n.startsWith(stem) && n.length - stem.length <= 4) {
+          overlay.set(w.id, rule.replace)
+        }
+      }
+    }
   }
   return overlay
 }

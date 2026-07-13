@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import type { ProjectMeta, Turn, Word } from '../../../shared/types'
 
@@ -40,7 +40,9 @@ interface Props {
   anonOverlay: Map<number, string>
 }
 
-export default function TranscriptView(props: Props): React.JSX.Element {
+// memo: родитель (Editor) перерисовывается 60 раз/с во время воспроизведения
+// (тикает currentTime), а лента должна перерисовываться только на смене слова.
+function TranscriptView(props: Props): React.JSX.Element {
   const { meta, activeWordId, activeTurnIndex, follow } = props
   const turns = meta.turns ?? []
   const ref = useRef<VirtuosoHandle>(null)
@@ -277,3 +279,5 @@ export default function TranscriptView(props: Props): React.JSX.Element {
     </div>
   )
 }
+
+export default memo(TranscriptView)
