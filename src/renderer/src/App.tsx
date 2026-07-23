@@ -6,10 +6,18 @@ import Home from './views/Home'
 import Editor from './views/Editor'
 import Icon from './components/Icon'
 import SettingsModal from './components/SettingsModal'
+import DictationRecorder from './components/DictationRecorder'
+import DictOverlay from './components/DictOverlay'
 
 type View = { page: 'home' } | { page: 'editor'; slug: string; search?: string }
 
 export default function App(): React.JSX.Element {
+  // Окно-оверлей диктовки грузит тот же бандл с #overlay — рендерим только плашку.
+  if (window.location.hash === '#overlay') return <DictOverlay />
+  return <MainApp />
+}
+
+function MainApp(): React.JSX.Element {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [view, setView] = useState<View>({ page: 'home' })
   const [dragging, setDragging] = useState(false)
@@ -79,6 +87,7 @@ export default function App(): React.JSX.Element {
 
   return (
     <div className="app">
+      <DictationRecorder />
       <header className="app-header">
         {view.page === 'editor' && (
           <button className="btn" onClick={() => setView({ page: 'home' })}>

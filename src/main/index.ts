@@ -37,6 +37,12 @@ import { applyHighlights, clearHighlights } from './ai/highlight'
 import { listNotes, saveNote, deleteNote } from './notes/store'
 import { transcribeClip } from './stt/clip'
 import {
+  initDictation,
+  applyDictationSettings,
+  stopDictation,
+  onDictationAudio
+} from './dictation/manager'
+import {
   initQueue,
   setJobNotifier,
   enqueueTranscribe,
@@ -72,7 +78,10 @@ registerMediaScheme()
 registerProvider(localLlamaProvider)
 registerProvider(claudeProvider)
 registerProvider(openrouterProvider)
-app.on('before-quit', () => stopOllama())
+app.on('before-quit', () => {
+  stopOllama()
+  stopDictation()
+})
 
 let win: BrowserWindow | null = null
 let settings: Settings = loadSettings()
@@ -97,6 +106,12 @@ function transcriptText(meta: ProjectMeta): string {
     .join('\n')
 }
 
+function rendererUrl(hash: string): string {
+  const dev = process.env['ELECTRON_RENDERER_URL']
+  if (dev) return dev + '#' + hash
+  return 'file://' + join(__dirname, '../renderer/index.html') + '#' + hash
+}
+
 function createWindow(): void {
   win = new BrowserWindow({
     width: 1280,
@@ -119,6 +134,25 @@ function createWindow(): void {
   }
 }
 
+// Оверлей диктовки: не забирает фокус, поверх всех окон, без рамки.
+function createDictationOverlay(): BrowserWindow {
+  return new BrowserWindow({
+    width: 260,
+    height: 64,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    focusable: false,
+    hasShadow: false,
+    show: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js')
+    }
+  })
+}
+
 // ---------- настройки ----------
 ipcMain.handle('settings:get', () => settings)
 ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
@@ -126,8 +160,12 @@ ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
   saveSettings(settings)
   setClaudeConfig(settings.anthropicKey, settings.claudeModel)
   setOpenrouterConfig(settings.openrouterKey, settings.openrouterModel)
+  if ('dictation' in patch) applyDictationSettings(settings.dictation)
   return settings
 })
+
+// Аудио диктовки из renderer → распознать → вставить в активное окно.
+ipcMain.handle('dict:audio', (_e, data: ArrayBuffer) => onDictationAudio(data))
 
 // ---------- конспекты ----------
 ipcMain.handle('notes:list', () => listNotes())
@@ -471,6 +509,21 @@ app.whenReady().then(() => {
     autoUpdater.on('error', (err) => console.error('[updater]', err))
     autoUpdater.checkForUpdates().catch((err) => console.error('[updater]', err))
   }
+
+  // Системная диктовка: оверлей + глобальная клавиша (если включена).
+  const overlay = createDictationOverlay()
+  initDictation(win!, overlay, rendererUrl('overlay'), async (raw) => {
+    const provider = await prepareEngine()
+    // Промт-чистка: минимум правил (вычитанием) — паразиты, самоисправления,
+    // пунктуация; текст не пересказывать.
+    return provider.generate(
+      'Это надиктованный текст. Убери слова-паразиты и оговорки, оставь только ' +
+        'исправленную версию самоисправлений («во вторник, нет, в среду» → «в среду»), ' +
+        'расставь пунктуацию и абзацы. Смысл и слова не менять. Верни ТОЛЬКО текст.',
+      raw
+    )
+  })
+  applyDictationSettings(settings.dictation)
 
   // Dev-хук: headless-проверка пайплайна импорта без диалога.
   const devImport = process.env['SLOVO_IMPORT']

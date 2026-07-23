@@ -44,6 +44,9 @@ const stub: RendererApi = {
   transcribeClip: async () => {
     throw new Error('Голосовая правка доступна только в приложении (Electron)')
   },
+  sendDictAudio: async () => {},
+  onDictRecord: () => () => {},
+  onDictState: () => () => {},
   highlightAi: async () => null,
   clearHighlightsAi: async () => null,
   anonymizeAi: async () => null,

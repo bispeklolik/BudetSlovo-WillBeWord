@@ -1587,6 +1587,85 @@ button {
   color: var(--text);
 }
 
+/* Плашка системной диктовки (отдельное прозрачное окно поверх всех) */
+body.overlay-mode {
+  background: transparent;
+  overflow: hidden;
+}
+
+.dict-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  margin: 8px;
+  padding: 0 16px;
+  border-radius: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  font-size: 13.5px;
+  color: var(--text);
+  user-select: none;
+}
+
+.dict-listening {
+  border-color: var(--accent);
+}
+
+.dict-error .dict-label {
+  color: #e5484d;
+}
+
+.dict-label {
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.dict-hint {
+  color: var(--muted);
+  font-size: 11.5px;
+  margin-left: auto;
+}
+
+.dict-wave {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+}
+
+.dict-wave i {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: dict-bounce 1s ease-in-out infinite;
+}
+
+.dict-wave i:nth-child(1) { height: 8px; animation-delay: 0s; }
+.dict-wave i:nth-child(2) { height: 14px; animation-delay: 0.12s; }
+.dict-wave i:nth-child(3) { height: 18px; animation-delay: 0.24s; }
+.dict-wave i:nth-child(4) { height: 14px; animation-delay: 0.36s; }
+.dict-wave i:nth-child(5) { height: 8px; animation-delay: 0.48s; }
+
+@keyframes dict-bounce {
+  0%, 100% { transform: scaleY(0.55); }
+  50% { transform: scaleY(1); }
+}
+
+.dict-spin {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: dict-rot 0.8s linear infinite;
+}
+
+@keyframes dict-rot {
+  to { transform: rotate(360deg); }
+}
+
 /* Тосты (ненавязчивые уведомления об ошибках) */
 .toast-box {
   position: fixed;

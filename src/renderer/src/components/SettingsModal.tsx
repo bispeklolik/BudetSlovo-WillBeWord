@@ -1,8 +1,28 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import type { Theme, AiEngine, SttEngine, Settings } from '../../../shared/types'
+import type { Theme, AiEngine, SttEngine, Settings, DictationSettings } from '../../../shared/types'
+import { defaultDictation } from '../../../shared/types'
 import { STT_ENGINES, sttMeta, sttModeLabel } from '../../../shared/sttEngines'
 import { useEscClose } from '../useEscClose'
+
+// Клавиши для диктовки: без левых модификаторов (они испортили бы Ctrl+V
+// вставку), одиночные и правые — то, что редко занято.
+const DICT_KEYS: { id: string; label: string }[] = [
+  { id: 'F9', label: 'F9' },
+  { id: 'F8', label: 'F8' },
+  { id: 'F6', label: 'F6' },
+  { id: 'F10', label: 'F10' },
+  { id: 'F12', label: 'F12' },
+  { id: 'ControlRight', label: 'Правый Ctrl' },
+  { id: 'AltRight', label: 'Правый Alt' },
+  { id: 'ShiftRight', label: 'Правый Shift' },
+  { id: 'CapsLock', label: 'CapsLock' },
+  { id: 'ScrollLock', label: 'ScrollLock' },
+  { id: 'Pause', label: 'Pause' },
+  { id: 'Insert', label: 'Insert' },
+  { id: 'NumpadAdd', label: 'Num +' },
+  { id: 'NumpadSubtract', label: 'Num −' }
+]
 
 const MODELS: { id: string; label: string }[] = [
   { id: 'claude-haiku-4-5', label: 'Haiku · дёшево' },
@@ -29,6 +49,7 @@ export default function SettingsModal({
   const [stt, setStt] = useState<SttEngine>('local')
   const [sttKeys, setSttKeys] = useState<Record<string, string>>({})
   const [showAllStt, setShowAllStt] = useState(false)
+  const [dict, setDict] = useState<DictationSettings>({ ...defaultDictation })
 
   useEffect(() => {
     api.aiAvailable().then(setAiReady)
@@ -40,8 +61,15 @@ export default function SettingsModal({
       setOrModel(s.openrouterModel ?? 'anthropic/claude-sonnet-5')
       setStt(s.sttEngine ?? 'local')
       setSttKeys(s.sttKeys ?? {})
+      setDict({ ...defaultDictation, ...s.dictation })
     })
   }, [])
+
+  const saveDict = (patch: Partial<DictationSettings>): void => {
+    const next = { ...dict, ...patch }
+    setDict(next)
+    void api.setSettings({ dictation: next })
+  }
 
   const sm = sttMeta(stt)
 
@@ -234,6 +262,70 @@ export default function SettingsModal({
               <div className="panel-note">
                 Один ключ — сотни моделей (openrouter.ai, оплата по факту). Для саммари и супервизора
                 берите умную модель. Обезличивание всегда работает локально.
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="settings-section">
+          <div className="settings-label">Диктовка в любое окно</div>
+          <div className="settings-row">
+            <span>Включена</span>
+            <button
+              className={'btn' + (dict.enabled ? ' btn-primary' : '')}
+              onClick={() => saveDict({ enabled: !dict.enabled })}
+            >
+              {dict.enabled ? 'Вкл' : 'Выкл'}
+            </button>
+          </div>
+          {dict.enabled && (
+            <>
+              <div className="settings-row">
+                <span>Клавиша</span>
+                <select
+                  className="rate"
+                  value={dict.hotkey}
+                  onChange={(e) => saveDict({ hotkey: e.target.value })}
+                >
+                  {DICT_KEYS.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="settings-row">
+                <span>ИИ-чистка текста (паразиты, пунктуация)</span>
+                <button
+                  className={'btn' + (dict.polish ? ' btn-primary' : '')}
+                  onClick={() => saveDict({ polish: !dict.polish })}
+                >
+                  {dict.polish ? 'Вкл' : 'Выкл'}
+                </button>
+              </div>
+              <div className="settings-row">
+                <span>Вставлять в активное окно</span>
+                <button
+                  className={'btn' + (dict.autoPaste ? ' btn-primary' : '')}
+                  onClick={() => saveDict({ autoPaste: !dict.autoPaste })}
+                >
+                  {dict.autoPaste ? 'Вкл' : 'только в буфер'}
+                </button>
+              </div>
+              <div className="settings-row">
+                <span>Звуковые сигналы</span>
+                <button
+                  className={'btn' + (dict.sounds ? ' btn-primary' : '')}
+                  onClick={() => saveDict({ sounds: !dict.sounds })}
+                >
+                  {dict.sounds ? 'Вкл' : 'Выкл'}
+                </button>
+              </div>
+              <div className="panel-note">
+                Зажмите клавишу — говорите, отпустите — текст вставится туда, где курсор. Быстрое
+                двойное нажатие — запись без рук до следующего нажатия. Esc — отмена. Распознаёт
+                движок из раздела «Расшифровка»; чистку делает движок из раздела «ИИ». Все диктовки
+                сохраняются в журнал в папке данных.
               </div>
             </>
           )}

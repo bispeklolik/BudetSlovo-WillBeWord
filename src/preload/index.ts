@@ -77,6 +77,25 @@ const api = {
   runPromptAi: (slug: string, system: string): Promise<string | null> =>
     ipcRenderer.invoke('ai:runPrompt', slug, system),
   transcribeClip: (data: ArrayBuffer): Promise<string> => ipcRenderer.invoke('stt:clip', data),
+
+  // Системная диктовка: main командует записью, renderer шлёт аудио обратно.
+  sendDictAudio: (data: ArrayBuffer): Promise<void> => ipcRenderer.invoke('dict:audio', data),
+  onDictRecord: (cb: (cmd: 'start' | 'stop' | 'cancel', opts?: { sounds?: boolean }) => void): (() => void) => {
+    const hs = (
+      ['dict:record-start', 'dict:record-stop', 'dict:record-cancel'] as const
+    ).map((ch) => {
+      const cmd = ch.split('-')[1] as 'start' | 'stop' | 'cancel'
+      const h = (_e: unknown, opts?: { sounds?: boolean }): void => cb(cmd, opts)
+      ipcRenderer.on(ch, h)
+      return [ch, h] as const
+    })
+    return () => hs.forEach(([ch, h]) => ipcRenderer.off(ch, h))
+  },
+  onDictState: (cb: (state: string) => void): (() => void) => {
+    const h = (_e: unknown, s: string): void => cb(s)
+    ipcRenderer.on('dict:state', h)
+    return () => ipcRenderer.off('dict:state', h)
+  },
   highlightAi: (slug: string): Promise<ProjectMeta | null> =>
     ipcRenderer.invoke('ai:highlights', slug),
   clearHighlightsAi: (slug: string): Promise<ProjectMeta | null> =>

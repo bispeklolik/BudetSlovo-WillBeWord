@@ -19,6 +19,25 @@ export interface Settings {
   sttEngine?: SttEngine // чем расшифровывать: локально или облачный движок
   sttKeys?: Record<string, string> // ключи облачных STT по id движка (хранятся локально)
   customPrompts?: CustomPrompt[] // пользовательские карточки-промты для библиотеки
+  dictation?: DictationSettings // системная диктовка (глобальная горячая клавиша)
+}
+
+// Системная диктовка: зажал клавишу — говоришь (push-to-talk), быстрый
+// двойной тап — запись до следующего нажатия. Всё настраивается.
+export interface DictationSettings {
+  enabled: boolean
+  hotkey: string // e.code-имя клавиши (например 'F9', 'ControlRight')
+  polish: boolean // LLM-чистка текста (паразиты/самоисправления/пунктуация)
+  autoPaste: boolean // вставлять в активное окно (false = только в буфер)
+  sounds: boolean // звуковые сигналы старта/стопа записи
+}
+
+export const defaultDictation: DictationSettings = {
+  enabled: false,
+  hotkey: 'F9',
+  polish: false,
+  autoPaste: true,
+  sounds: true
 }
 
 export const defaultSettings: Settings = {

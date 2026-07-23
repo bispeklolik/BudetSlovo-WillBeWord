@@ -53,6 +53,11 @@ export interface RendererApi {
   ) => Promise<string | null>
   runPromptAi: (slug: string, system: string) => Promise<string | null>
   transcribeClip: (data: ArrayBuffer) => Promise<string>
+  sendDictAudio: (data: ArrayBuffer) => Promise<void>
+  onDictRecord: (
+    cb: (cmd: 'start' | 'stop' | 'cancel', opts?: { sounds?: boolean }) => void
+  ) => () => void
+  onDictState: (cb: (state: string) => void) => () => void
   highlightAi: (slug: string) => Promise<ProjectMeta | null>
   clearHighlightsAi: (slug: string) => Promise<ProjectMeta | null>
   anonymizeAi: (slug: string) => Promise<ProjectMeta | null>
