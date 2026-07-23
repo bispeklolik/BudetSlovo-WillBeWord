@@ -445,7 +445,14 @@ app.whenReady().then(() => {
   // поставится при следующем выходе (autoInstallOnAppQuit по умолчанию вкл).
   if (app.isPackaged) {
     autoUpdater.autoDownload = true
+    // Загрузка 100 МБ идёт минуты: показываем прогресс на иконке в панели
+    // задач, иначе выглядит как «ничего не происходит», и приложение
+    // закрывают до конца скачивания (диалог тогда не успевает появиться).
+    autoUpdater.on('download-progress', (p) => {
+      win?.setProgressBar(p.percent / 100)
+    })
     autoUpdater.on('update-downloaded', (info) => {
+      win?.setProgressBar(-1)
       void dialog
         .showMessageBox({
           type: 'info',
