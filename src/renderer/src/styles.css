@@ -2471,3 +2471,176 @@ body.overlay-mode {
 .range-field .text-input {
   width: 90px;
 }
+
+/* ---------- волна 4: вопросы к записям, мои заметки ---------- */
+
+.ask-modal {
+  max-height: 86vh;
+}
+
+.ask-scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.ask-list {
+  flex: 1;
+  min-height: 160px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-right: 4px;
+}
+
+.ask-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ask-q {
+  align-self: flex-end;
+  max-width: 85%;
+  background: var(--accent-soft);
+  border-radius: 12px 12px 4px 12px;
+  padding: 8px 12px;
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+
+.ask-a {
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.ask-ref {
+  display: inline-block;
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  margin: 0 2px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--accent-solid);
+  cursor: pointer;
+  vertical-align: baseline;
+}
+
+.ask-ref:hover {
+  border-color: var(--accent);
+}
+
+.ask-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ask-item-actions {
+  display: flex;
+  gap: 14px;
+}
+
+.ask-input {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.ask-input textarea {
+  flex: 1;
+  resize: vertical;
+  min-height: 44px;
+}
+
+.call-notes {
+  min-height: 110px;
+  flex: none;
+}
+
+.call-missed-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.call-missed {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 30px 10px 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.call-missed-x {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+}
+
+/* Шапка редактора: кнопок стало много — переносим рядом целиком, а не по словам. */
+.editor-tools {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.editor-tools .btn {
+  white-space: nowrap;
+}
+
+.editor-title {
+  min-width: 160px;
+}
+
+/* ---------- волна 5: словарь и сниппеты ---------- */
+
+.vocab-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.vocab-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 260px;
+}
+
+.vocab-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1.4fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.vocab-row-top {
+  align-items: start;
+}
+
+.vocab-row textarea {
+  resize: vertical;
+  font: inherit;
+}
+
+.mcp-json {
+  min-height: 180px;
+  font-family: Consolas, monospace;
+  font-size: 12.5px;
+}

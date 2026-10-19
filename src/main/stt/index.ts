@@ -9,6 +9,8 @@ export type Emit = (patch: Partial<JobInfo>) => void
 /** verbatim — «Дословно»: просим сервис не вычищать «э-э»/«ну» (для русского — как получится). */
 export interface CloudOpts {
   verbatim?: boolean
+  /** Слова из словаря пользователя — подсказка движку (имена, термины). */
+  terms?: string[]
 }
 type RunFn = (
   audioPath: string,

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { humanError } from '../toast'
 import { useEscClose } from '../useEscClose'
+import ConsentModal from './ConsentModal'
 
 // Запись звонка (Zoom, Telegram, WhatsApp, Meet…): две дорожки — микрофон («Я»)
 // и звук компьютера («Собеседник», loopback Windows). Каждую потом
@@ -98,6 +99,12 @@ export default function CallRecorder({
   const lastSysSound = useRef(0)
   const startedAt = useRef(0)
   const startingRef = useRef(false)
+  // Мои заметки по ходу разговора: уходят на диск сразу (при сбое не пропадут).
+  const [myNotes, setMyNotes] = useState('')
+  const notesTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const [missedMin, setMissedMin] = useState(5)
+  const [missed, setMissed] = useState<{ busy: boolean; text: string } | null>(null)
+  const [consentOpen, setConsentOpen] = useState(false)
 
   useEffect(() => api.onCallWriteError((m) => setNotice(m)), [])
 
@@ -106,8 +113,27 @@ export default function CallRecorder({
   })
 
   useEffect(() => {
-    api.getSettings().then((s) => s.callNames && setNames(s.callNames))
+    api.getSettings().then((s) => {
+      if (s.callNames) setNames(s.callNames)
+      if (s.missedMinutes) setMissedMin(s.missedMinutes)
+    })
   }, [])
+
+  const changeNotes = (v: string): void => {
+    setMyNotes(v)
+    clearTimeout(notesTimer.current)
+    notesTimer.current = setTimeout(() => api.callNotes(idRef.current, v), 1000)
+  }
+
+  const askMissed = async (): Promise<void> => {
+    if (missed?.busy) return
+    setMissed({ busy: true, text: '' })
+    try {
+      setMissed({ busy: false, text: await api.callMissed(idRef.current, missedMin) })
+    } catch (e) {
+      setMissed({ busy: false, text: 'Не получилось: ' + humanError(e) })
+    }
+  }
 
   // Таймер и сторож «собеседника не слышно».
   useEffect(() => {
@@ -143,6 +169,9 @@ export default function CallRecorder({
     setErr(null)
     setNotice(null)
     setSilent(false)
+    // Повторная запись в том же окне (после сбоя сборки) — без заметок прошлой.
+    setMyNotes('')
+    setMissed(null)
     tracksRef.current = {}
     const id = 'call' + Date.now().toString(36)
     idRef.current = id
@@ -201,6 +230,10 @@ export default function CallRecorder({
   }
 
   const finish = async (): Promise<void> => {
+    // Последнюю секунду заметок — сразу на диск: если сборка упадёт, они
+    // соберутся вместе с записью при следующем запуске.
+    clearTimeout(notesTimer.current)
+    api.callNotes(idRef.current, myNotes)
     setPhase('saving')
     try {
       await stopAll()
@@ -210,7 +243,8 @@ export default function CallRecorder({
       const meta = await api.callFinish(idRef.current, {
         title,
         names: [names[0].trim() || 'Я', names[1].trim() || 'Собеседник'],
-        app: app?.name
+        app: app?.name,
+        myNotes
       })
       onDone(meta.slug)
     } catch (e) {
@@ -228,7 +262,10 @@ export default function CallRecorder({
 
   return (
     <div className="modal-overlay">
-      <div className="modal modal-sm call-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className={'modal call-modal' + (phase === 'recording' ? '' : ' modal-sm')}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
           <span className="modal-title">Запись звонка{app ? ` в ${app.name}` : ''}</span>
         </div>
@@ -245,7 +282,12 @@ export default function CallRecorder({
                 <input className="text-input" value={names[1]} onChange={(e) => setNames([names[0], e.target.value])} />
               </label>
             </div>
-            <div className="call-note">Предупредите собеседника, что разговор записывается.</div>
+            <div className="call-note">
+              Предупредите собеседника, что разговор записывается.{' '}
+              <button className="link-btn" onClick={() => setConsentOpen(true)}>
+                Шаблон согласия
+              </button>
+            </div>
             <div className="panel-note">
               Лучше в наушниках: тогда голос собеседника не попадёт в ваш микрофон. Запись остаётся на этом
               компьютере.
@@ -291,6 +333,42 @@ export default function CallRecorder({
                 Не слышу собеседника 30 секунд. Звук звонка должен идти на устройство вывода по умолчанию.
               </div>
             )}
+            <textarea
+              className="note-body call-notes"
+              placeholder="Мои заметки по ходу разговора — потом из них получится конспект"
+              value={myNotes}
+              onChange={(e) => changeNotes(e.target.value)}
+              spellCheck
+            />
+            <div className="call-missed-row">
+              <button className="btn" onClick={() => void askMissed()} disabled={!!missed?.busy}>
+                {missed?.busy ? 'Слушаю и пересказываю…' : 'Что я пропустил?'}
+              </button>
+              <select
+                className="rate"
+                value={missedMin}
+                title="За сколько последних минут пересказать"
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  setMissedMin(v)
+                  void api.setSettings({ missedMinutes: v })
+                }}
+              >
+                {[2, 5, 10, 15].map((v) => (
+                  <option key={v} value={v}>
+                    за {v} мин
+                  </option>
+                ))}
+              </select>
+            </div>
+            {missed && !missed.busy && (
+              <div className="call-missed">
+                <button className="btn-icon call-missed-x" title="Скрыть" onClick={() => setMissed(null)}>
+                  ×
+                </button>
+                {missed.text}
+              </div>
+            )}
             <div className="panel-note">Можно свернуть «Слово» — запись идёт. Если окно закрыть, запись сохранится и соберётся при следующем запуске.</div>
             <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
               <button className="btn" onClick={discard}>
@@ -306,6 +384,7 @@ export default function CallRecorder({
         {phase === 'starting' && <div className="call-live">Включаю микрофон и звук компьютера…</div>}
         {phase === 'saving' && <div className="call-live">Собираю запись…</div>}
       </div>
+      {consentOpen && <ConsentModal onClose={() => setConsentOpen(false)} />}
     </div>
   )
 }

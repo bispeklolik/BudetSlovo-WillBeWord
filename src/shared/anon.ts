@@ -10,6 +10,39 @@ function norm(s: string): string {
     .trim()
 }
 
+// Падежные окончания русских имён и фамилий: «Ева → Евы, Еве, Евой»,
+// «Мария → Марии», «Андрей → Андрея», «Игорь → Игорем», «Иван → Ивану»,
+// «Иванов → Ивановой». Нужны для коротких имён: у «Евы» правило «основа без
+// двух букв» (ниже) не работало — «Евой» меняет уже вторую букву с конца
+// (ревью волны 4).
+const FEM = ['а', 'я', 'ы', 'и', 'е', 'у', 'ю', 'ой', 'ей', 'ою', 'ею']
+const SOFT = ['ь', 'я', 'ю', 'ем', 'е', 'и', 'ью', 'ей']
+const HARD = ['', 'а', 'у', 'ом', 'е', 'ы', 'ым', 'ой', 'ых', 'ую', 'ов', 'ам', 'ами', 'ах']
+
+function nameForms(base: string): Set<string> {
+  const out = new Set<string>([base])
+  const add = (stem: string, ends: string[]): void => ends.forEach((e) => out.add(stem + e))
+  const last = base.slice(-1)
+  if (last === 'а' || last === 'я') add(base.slice(0, -1), FEM)
+  else if (last === 'й') add(base.slice(0, -1), ['й', 'я', 'ю', 'ем', 'е', 'и'])
+  else if (last === 'ь') add(base.slice(0, -1), SOFT)
+  else if (/[бвгджзклмнпрстфхцчшщ]/.test(last)) add(base, HARD)
+  return out
+}
+
+/**
+ * Совпадает ли слово (уже нормализованное) с именем из правила в любом падеже.
+ * Точные окончания + прежнее правило «основа без двух последних букв, хвост
+ * ≤ 4 букв» («Евангелие» под «Ева» не попадает: хвост длиннее).
+ */
+function nameMatcher(find: string): (n: string) => boolean {
+  const base = norm(find)
+  const forms = nameForms(base)
+  const stem = base.slice(0, Math.max(3, base.length - 2))
+  return (n) =>
+    forms.has(n) || (stem.length >= 3 && n !== base && n.startsWith(stem) && n.length - stem.length <= 4)
+}
+
 // Строит наложение замен: wordId → текст замены ('' = скрыть хвост многословного спана).
 // Длинные правила применяются раньше коротких; слово, уже занятое правилом, не перезахватывается.
 export function buildAnonOverlay(turns: Turn[], rules: AnonRule[]): Map<number, string> {
@@ -44,15 +77,10 @@ export function buildAnonOverlay(turns: Turn[], rules: AnonRule[]): Map<number, 
     // русские окончания; «Евангелие» под «Ева» не попадает: хвост длиннее).
     for (const rule of sorted) {
       if (rule.kind !== 'name' || /\s/.test(rule.find.trim())) continue
-      const base = norm(rule.find)
-      const stem = base.slice(0, Math.max(3, base.length - 2))
-      if (stem.length < 3) continue
+      const same = nameMatcher(rule.find)
       for (const w of words) {
         if (overlay.has(w.id)) continue
-        const n = norm(w.t)
-        if (n !== base && n.startsWith(stem) && n.length - stem.length <= 4) {
-          overlay.set(w.id, rule.replace)
-        }
+        if (same(norm(w.t))) overlay.set(w.id, rule.replace)
       }
     }
   }
@@ -67,4 +95,27 @@ export function anonTurnText(turn: Turn, overlay: Map<number, string>): string {
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+const escRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * Правила обезличивания на свободный текст (мои заметки, вопрос к ИИ, название
+ * записи, имя говорящего). Фразы — целиком; имена — и в падежах, как в
+ * buildAnonOverlay («Марии», «Марией» под правилом «Мария»). Ревью волны 4:
+ * без падежей имя клиента в заметках уходило в облако.
+ */
+export function anonPlain(text: string, rules: AnonRule[] | undefined): string {
+  const list = [...(rules ?? [])].filter((r) => r.find.trim() && r.replace.trim()).sort((a, b) => b.find.length - a.find.length)
+  let out = text
+  for (const r of list) {
+    const words = r.find.trim().split(/\s+/).map(escRe)
+    out = out.replace(new RegExp(`(?<![\\p{L}\\p{N}])${words.join('[\\s,.!?;:—–-]+')}(?![\\p{L}\\p{N}])`, 'giu'), r.replace)
+  }
+  for (const r of list) {
+    if (r.kind !== 'name' || /\s/.test(r.find.trim())) continue
+    const same = nameMatcher(r.find)
+    out = out.replace(/[\p{L}\p{N}]+/gu, (w) => (same(norm(w)) ? r.replace : w))
+  }
+  return out
 }

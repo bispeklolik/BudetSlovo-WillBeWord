@@ -7,6 +7,7 @@ import { detectGpu } from '../engine/sysinfo'
 import { deviceArgs, localModel } from '../../shared/localModels'
 import { loadSettings } from '../settings'
 import { CLOUD_RUN } from './index'
+import { glossaryPrompt } from '../../shared/vocab'
 
 // Голосовая правка: короткий клип с микрофона (webm из MediaRecorder) → текст.
 // Облачный движок (если выбран и есть ключ) — быстро; иначе локальный Whisper
@@ -31,7 +32,9 @@ async function localClipText(m4a: string, outDir: string): Promise<string> {
       '--condition_on_previous_text', 'False',
       '--output_dir', outDir,
       '--output_format', 'json',
-      '--beep_off'
+      '--beep_off',
+      // Словарь пользователя — затравкой: имена и термины пишутся как в нём.
+      ...(glossaryPrompt(s.vocab?.words) ? ['--initial_prompt', glossaryPrompt(s.vocab?.words)] : [])
     ]
     const child = spawn(eng.exe, args, { cwd: eng.dir, env: engineEnv(), windowsHide: true })
     child.on('error', (err) => reject(new Error('Не удалось запустить движок: ' + err.message)))
@@ -66,21 +69,25 @@ export async function transcribeClip(webm: Buffer): Promise<string> {
       windowsHide: true
     })
     if (ff.status !== 0 || !existsSync(m4a)) throw new Error('Не удалось обработать запись микрофона (ffmpeg).')
-
-    const settings = loadSettings()
-    const engineId = settings.sttEngine ?? 'local'
-    const key = (settings.sttKeys?.[engineId] ?? '').trim()
-    if (engineId !== 'local' && CLOUD_RUN[engineId] && key) {
-      const result = await CLOUD_RUN[engineId](m4a, key, () => {})
-      return result.turns
-        .flatMap((t) => t.words.map((w) => w.t))
-        .join(' ')
-        .trim()
-    }
-    return (await localClipText(m4a, outDir)).trim()
+    return await transcribeAudioText(m4a, outDir)
   } finally {
     rmSync(src, { force: true })
     rmSync(m4a, { force: true })
     rmSync(outDir, { recursive: true, force: true })
   }
+}
+
+/** Готовый m4a → плоский текст (движок из настроек расшифровки). outDir — для локального движка. */
+export async function transcribeAudioText(m4a: string, outDir: string): Promise<string> {
+  const settings = loadSettings()
+  const engineId = settings.sttEngine ?? 'local'
+  const key = (settings.sttKeys?.[engineId] ?? '').trim()
+  if (engineId !== 'local' && CLOUD_RUN[engineId] && key) {
+    const result = await CLOUD_RUN[engineId](m4a, key, () => {}, undefined, { terms: settings.vocab?.words })
+    return result.turns
+      .flatMap((t) => t.words.map((w) => w.t))
+      .join(' ')
+      .trim()
+  }
+  return (await localClipText(m4a, outDir)).trim()
 }

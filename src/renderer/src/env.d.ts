@@ -14,7 +14,9 @@ import type {
   SetupProgress,
   OllamaStatus,
   KeyVerdict,
-  DictationEntry
+  DictationEntry,
+  AskAnswer,
+  AskTurn
 } from '../../shared/types'
 
 export interface RendererApi {
@@ -88,9 +90,21 @@ export interface RendererApi {
   openExternal: (url: string) => Promise<void>
   createBackup: () => Promise<{ path: string; items: number; bytes: number } | null>
   restoreBackup: () => Promise<{ restored: string[]; savedTo: string } | null>
+  mcpConfig: () => Promise<{ ok: boolean; json: string; configDir: string }>
+  openClaudeConfigDir: () => Promise<boolean>
+  setMyNotes: (slug: string, text: string) => Promise<void>
+  enhanceNotes: (slug: string) => Promise<Note>
+  askRecording: (slug: string, question: string, history: AskTurn[], thorough?: boolean) => Promise<AskAnswer>
+  askAll: (question: string, folder: string | null, history: AskTurn[], thorough?: boolean) => Promise<AskAnswer>
+  clientDynamics: (folder: string) => Promise<Note>
+  callMissed: (id: string, minutes: number) => Promise<string>
+  callNotes: (id: string, text: string) => void
   callOpen: (id: string) => Promise<void>
   callChunk: (id: string, kind: 'mic' | 'sys', data: ArrayBuffer) => void
-  callFinish: (id: string, opts: { title: string; names: [string, string]; app?: string }) => Promise<ProjectMeta>
+  callFinish: (
+    id: string,
+    opts: { title: string; names: [string, string]; app?: string; myNotes?: string }
+  ) => Promise<ProjectMeta>
   callCancel: (id: string) => Promise<void>
   callMute: (appId: string) => Promise<void>
   callUnmute: (appId: string) => Promise<void>

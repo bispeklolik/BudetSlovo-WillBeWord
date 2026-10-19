@@ -87,6 +87,25 @@ const stub: RendererApi = {
   openExternal: async () => {},
   createBackup: async () => null,
   restoreBackup: async () => null,
+  mcpConfig: async () => ({ ok: false, json: '', configDir: '' }),
+  openClaudeConfigDir: async () => false,
+  setMyNotes: async () => {},
+  enhanceNotes: async () => {
+    throw new Error('Доступно только в приложении (Electron)')
+  },
+  askRecording: async () => {
+    throw new Error('Доступно только в приложении (Electron)')
+  },
+  askAll: async () => {
+    throw new Error('Доступно только в приложении (Electron)')
+  },
+  clientDynamics: async () => {
+    throw new Error('Доступно только в приложении (Electron)')
+  },
+  callMissed: async () => {
+    throw new Error('Доступно только в приложении (Electron)')
+  },
+  callNotes: () => {},
   callOpen: async () => {
     throw new Error('Запись звонка доступна только в приложении (Electron)')
   },

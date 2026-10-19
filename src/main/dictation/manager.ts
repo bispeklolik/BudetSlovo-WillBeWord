@@ -5,7 +5,9 @@ import { join } from 'path'
 import { DATA_DIR } from '../paths'
 import { transcribeClip } from '../stt/clip'
 import { hotkeyHook } from './hotkeyHook'
-import { acceptPolished } from './polish'
+import { acceptPolished, wrapForPolish } from './polish'
+import { buildPolishSystem, findMode } from '../../shared/dictModes'
+import { finishDictation, type Vocab } from '../../shared/vocab'
 import { pauseMedia, resumeMedia } from './media'
 import type { DictationSettings, DictationEntry } from '../../shared/types'
 import { defaultDictation } from '../../shared/types'
@@ -30,7 +32,8 @@ let mainWin: BrowserWindow | null = null
 let overlayUrl = ''
 let cfg: DictationSettings = { ...defaultDictation }
 let phase: Phase = 'idle'
-let polishFn: ((text: string) => Promise<string>) | null = null
+let polishFn: ((system: string, user: string) => Promise<string>) | null = null
+let vocab: Vocab | undefined
 let pausedMedia: Promise<string[]> | null = null
 
 function send(ch: string, ...args: unknown[]): void {
@@ -151,13 +154,24 @@ async function recognize(data: Buffer): Promise<{ raw: string; text: string; pol
   const raw = (await transcribeClip(data)).trim()
   let polished: string | null = null
   if (raw && cfg.polish && polishFn) {
+    // Режим (чистка, письмо, сообщение, заметка, свой) + тон + словарь.
+    const mode = findMode(cfg.mode, cfg.customModes)
     try {
-      polished = acceptPolished(raw, await polishFn(raw))
+      const system = buildPolishSystem(mode.id, cfg.tone, vocab?.words, cfg.customModes)
+      polished = acceptPolished(raw, await polishFn(system, wrapForPolish(raw, mode.reformat)), {
+        reformat: mode.reformat
+      })
+      // Режим не справился (ответил на вопрос, выдумал) — хотя бы обычная чистка.
+      if (polished === null && mode.reformat) {
+        const clean = buildPolishSystem('clean', 'neutral', vocab?.words, cfg.customModes)
+        polished = acceptPolished(raw, await polishFn(clean, wrapForPolish(raw)))
+      }
     } catch {
       /* полировка упала — вставляем сырой текст, это лучше потери */
     }
   }
-  return { raw, text: polished ?? raw, polished }
+  // Точные замены и сниппеты — после чистки: ИИ их не перепишет.
+  return { raw, text: raw ? finishDictation(polished ?? raw, vocab) : raw, polished }
 }
 
 /** «Повторить» из списка: распознать сохранённый клип заново и положить в буфер. */
@@ -166,7 +180,7 @@ export async function retryDictation(audio: string): Promise<string> {
   if (!existsSync(file)) throw new Error('Аудио этой диктовки уже удалено (срок хранения).')
   const { raw, text, polished } = await recognize(readFileSync(file))
   if (!raw) throw new Error('В записи не расслышал речи.')
-  logHistory({ at: new Date().toISOString(), raw, polished, audio })
+  logHistory({ at: new Date().toISOString(), raw, polished, text, mode: cfg.polish ? cfg.mode : undefined, audio })
   clipboard.writeText(text)
   return text
 }
@@ -255,7 +269,14 @@ export async function onDictationAudio(data: ArrayBuffer, meta: ClipMeta = {}): 
       finish('empty', 1600)
       return
     }
-    logHistory({ at: new Date().toISOString(), raw: result.raw, polished: result.polished, audio })
+    logHistory({
+      at: new Date().toISOString(),
+      raw: result.raw,
+      polished: result.polished,
+      text: result.text,
+      mode: cfg.polish ? cfg.mode : undefined,
+      audio
+    })
     if (cfg.autoPaste) pasteIntoActiveWindow(result.text)
     else clipboard.writeText(result.text)
     finish('done', 1200)
@@ -269,7 +290,7 @@ export function initDictation(
   main: BrowserWindow,
   ovl: BrowserWindow,
   url: string,
-  polish: (text: string) => Promise<string>
+  polish: (system: string, user: string) => Promise<string>
 ): void {
   mainWin = main
   overlay = ovl
@@ -282,8 +303,9 @@ export function initDictation(
   hotkeyHook.on('toggle-stop', stopRecording)
 }
 
-export function applyDictationSettings(d: DictationSettings | undefined): void {
+export function applyDictationSettings(d: DictationSettings | undefined, v?: Vocab): void {
   cfg = { ...defaultDictation, ...d }
+  vocab = v
   pruneDictationAudio()
   hotkeyHook.stop()
   if (cfg.enabled && hotkeyHook.setHotkey(cfg.hotkey)) {

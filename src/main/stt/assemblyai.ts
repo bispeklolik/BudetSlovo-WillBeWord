@@ -1,4 +1,5 @@
 import { readFileSync } from 'fs'
+import { cleanWords } from '../../shared/vocab'
 import { buildTurns, type FlatWord, type MergeResult } from '../project/merge'
 import type { JobInfo } from '../../shared/types'
 import { netSignal } from './net'
@@ -39,7 +40,7 @@ export async function transcribeWithAssemblyAI(
   key: string,
   emit: (p: Partial<JobInfo>) => void,
   signal?: AbortSignal,
-  opts?: { verbatim?: boolean }
+  opts?: { verbatim?: boolean; terms?: string[] }
 ): Promise<MergeResult> {
   const auth = { authorization: key }
 
@@ -64,7 +65,9 @@ export async function transcribeWithAssemblyAI(
       speaker_labels: true,
       speech_model: 'best',
       // disfluencies официально только для английского — для русского «как получится».
-      ...(opts?.verbatim ? { disfluencies: true } : {})
+      ...(opts?.verbatim ? { disfluencies: true } : {}),
+      // Словарь: имена и термины — подсказка движку (word_boost).
+      ...(cleanWords(opts?.terms).length ? { word_boost: cleanWords(opts?.terms), boost_param: 'high' } : {})
     }),
     signal: netSignal(60_000, signal)
   })

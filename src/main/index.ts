@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, clipboard, Notification } from 'electron'
 import { join } from 'path'
-import { existsSync, copyFileSync, writeFileSync, readFileSync } from 'fs'
+import { existsSync, copyFileSync, writeFileSync, readFileSync, rmSync } from 'fs'
 import { autoUpdater } from 'electron-updater'
 import { DATA_DIR, loadSettings, saveSettings } from './settings'
 import { registerMediaScheme, installMediaProtocol } from './protocol'
@@ -29,6 +29,18 @@ import {
   SUMMARY_LEVEL
 } from './ai/localLlama'
 import { chunkByLines } from '../shared/chunk'
+import { generateSmart } from './ai/smart'
+import {
+  askRecording,
+  askAll,
+  askAllThorough,
+  projectsIn,
+  enhanceNotes,
+  dynamicsSessions,
+  clientDynamics
+} from './ai/insights'
+import { missedSystem } from '../shared/aiTasks'
+import { transcribeClip, transcribeAudioText } from './stt/clip'
 import { claudeProvider, setClaudeConfig } from './ai/claude'
 import { openrouterProvider, setOpenrouterConfig } from './ai/openrouter'
 import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
@@ -51,7 +63,6 @@ import { createBackup, restoreBackup } from './backup'
 import { holdAwake, releaseAwake } from './wakeLock'
 import { applyHighlights, clearHighlights } from './ai/highlight'
 import { listNotes, saveNote, deleteNote } from './notes/store'
-import { transcribeClip } from './stt/clip'
 import {
   initDictation,
   applyDictationSettings,
@@ -61,7 +72,6 @@ import {
   retryDictation,
   type ClipMeta
 } from './dictation/manager'
-import { POLISH_SYSTEM, wrapForPolish } from './dictation/polish'
 import { setDictationBlocker, isDictating } from './dictation/manager'
 import {
   registerCallCapture,
@@ -72,7 +82,9 @@ import {
   recoverCalls,
   isCallActive,
   abandonActiveCall,
-  setCallWriteErrorHandler
+  setCallWriteErrorHandler,
+  saveCallNotes,
+  missedAudio
 } from './calls/recorder'
 import { startCallWatcher, stopCallWatcher, snoozeCallPrompts } from './calls/watcher'
 import type { CallPrompt } from '../shared/callDetect'
@@ -90,7 +102,8 @@ import type {
   SpeakerInfo,
   NoteInput,
   AnonRule,
-  ProjectMeta
+  ProjectMeta,
+  AskTurn
 } from '../shared/types'
 
 // Профиль Chromium — внутри папки данных (у владельца это D:, где есть место).
@@ -205,7 +218,7 @@ ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
   saveSettings(settings)
   setClaudeConfig(settings.anthropicKey, settings.claudeModel)
   setOpenrouterConfig(settings.openrouterKey, settings.openrouterModel)
-  if ('dictation' in patch) applyDictationSettings(settings.dictation)
+  if ('dictation' in patch || 'vocab' in patch) applyDictationSettings(settings.dictation, settings.vocab)
   if ('callPrompt' in patch) applyCallWatcher()
   return settings
 })
@@ -218,9 +231,39 @@ const callNames = (): [string, string] => settings.callNames ?? ['Я', 'Собе
 ipcMain.handle('call:open', (_e, id: string) => openCall(id))
 // Куски летят каждые 2 с — без ответа (send), чтобы не держать renderer.
 ipcMain.on('call:chunk', (_e, id: string, kind: string, data: ArrayBuffer) => writeChunk(id, kind, data))
-ipcMain.handle('call:finish', (_e, id: string, opts: { title: string; names: [string, string]; app?: string }) => {
-  patchSettings({ callNames: opts.names })
-  return finishCall(id, opts)
+ipcMain.handle(
+  'call:finish',
+  (_e, id: string, opts: { title: string; names: [string, string]; app?: string; myNotes?: string }) => {
+    patchSettings({ callNames: opts.names })
+    return finishCall(id, opts)
+  }
+)
+ipcMain.on('call:notes', (_e, id: string, text: string) => saveCallNotes(id, String(text ?? '')))
+// «Что я пропустил?»: последние N минут идущей записи → текст → короткий пересказ.
+ipcMain.handle('call:missed', async (_e, id: string, minutes: number) => {
+  const m = Math.min(30, Math.max(1, Math.round(Number(minutes) || 3)))
+  const audio = await missedAudio(id, m)
+  const outDir = audio.replace(/\.m4a$/, '-out')
+  try {
+    let text: string
+    try {
+      text = await transcribeAudioText(audio, outDir)
+    } catch (err) {
+      // Облачные движки на тишине отвечают ошибкой «пустая расшифровка».
+      if (/пуст(ая|ую) расшифровк/i.test(String(err))) text = ''
+      else throw err
+    }
+    if (text.replace(/[\s.,!?…-]/g, '').length < 3) return `За последние ${m} мин речи почти не слышно.`
+    try {
+      const provider = await prepareEngine()
+      return (await provider.generate(missedSystem(m), text)).trim()
+    } catch {
+      return `ИИ сейчас недоступен — вот текст последних ${m} мин:\n\n${text}`
+    }
+  } finally {
+    rmSync(audio, { force: true })
+    rmSync(outDir, { recursive: true, force: true })
+  }
 })
 ipcMain.handle('call:cancel', (_e, id: string) => cancelCall(id))
 ipcMain.handle('call:mute', (_e, appId: string) => {
@@ -583,29 +626,6 @@ ipcMain.handle('ai:cleanup', (_e, slug: string) =>
   )
 )
 ipcMain.handle('ai:revert', (_e, slug: string) => revertCleanup(slug))
-// Map-reduce для локальной модели: длинная запись не влезает в контекст
-// (16k токенов) — обрабатываем частями и сводим итог. Облачным моделям
-// (200k+) отдаём целиком.
-const LOCAL_CTX_CHARS = 45_000
-async function generateSmart(provider: AiProvider, system: string, text: string): Promise<string> {
-  if (!provider.isLocal || text.length <= LOCAL_CTX_CHARS) return provider.generate(system, text)
-  const chunks = chunkByLines(text, LOCAL_CTX_CHARS)
-  const parts: string[] = []
-  for (let i = 0; i < chunks.length; i++) {
-    parts.push(
-      await provider.generate(
-        system + ` (Это часть ${i + 1} из ${chunks.length} длинной записи — обработай только её.)`,
-        chunks[i]
-      )
-    )
-  }
-  return provider.generate(
-    system +
-      ' Ниже — результаты по последовательным частям одной длинной записи. Сведи их в один целостный ответ без повторов.',
-    parts.join('\n\n---\n\n')
-  )
-}
-
 ipcMain.handle(
   'ai:summarize',
   async (_e, slug: string, level: SummaryLevel, domain: SummaryDomain) => {
@@ -627,6 +647,82 @@ ipcMain.handle('ai:runPrompt', async (_e, slug: string, system: string) => {
   if (!meta?.turns) return null
   const provider = await prepareEngine()
   return generateSmart(provider, system, transcriptText(meta))
+})
+// ---------- MCP: Claude читает записи ----------
+// Готовая запись для claude_desktop_config.json: тот же exe «Слова» в режиме Node.
+ipcMain.handle('mcp:config', () => {
+  const script = join(__dirname, 'mcp.js')
+  const entry = {
+    command: process.execPath,
+    args: [script],
+    env: { ELECTRON_RUN_AS_NODE: '1', SLOVO_DATA_DIR: DATA_DIR }
+  }
+  return {
+    ok: existsSync(script),
+    json: JSON.stringify({ mcpServers: { slovo: entry } }, null, 2),
+    configDir: join(app.getPath('appData'), 'Claude')
+  }
+})
+ipcMain.handle('mcp:openConfigDir', async () => {
+  const dir = join(app.getPath('appData'), 'Claude')
+  if (!existsSync(dir)) return false
+  await shell.openPath(dir)
+  return true
+})
+
+// ---------- волна 4: мои заметки, вопросы к записям, динамика ----------
+ipcMain.handle('project:setMyNotes', (_e, slug: string, text: string) => {
+  const meta = getProject(slug)
+  if (!meta) return
+  meta.myNotes = String(text ?? '')
+  saveProject(meta)
+})
+ipcMain.handle('ai:enhanceNotes', async (_e, slug: string) => {
+  const meta = getProject(slug)
+  if (!meta) throw new Error('Запись не найдена.')
+  const provider = await prepareEngine()
+  const body = await enhanceNotes(provider, meta)
+  return saveNote({ title: `Конспект: ${meta.title}`, body, kind: 'summary', sourceSlug: slug, sourceTitle: meta.title })
+})
+ipcMain.handle(
+  'ai:askRecording',
+  async (_e, slug: string, question: string, history: AskTurn[], thorough?: boolean) => {
+    const meta = getProject(slug)
+    if (!meta) throw new Error('Запись не найдена.')
+    const provider = await prepareEngine()
+    return askRecording(provider, meta, String(question), history ?? [], !!thorough)
+  }
+)
+ipcMain.handle(
+  'ai:askAll',
+  async (_e, question: string, folder: string | null, history: AskTurn[], thorough?: boolean) => {
+    const projects = projectsIn(listProjects(), folder)
+    const provider = await prepareEngine()
+    if (!thorough) return askAll(provider, projects, String(question), history ?? [])
+    return askAllThorough(provider, projects, String(question), history ?? [], (done, total) =>
+      win?.webContents.send('ai:progress', { done, total, phase: `Читаю запись ${Math.min(done + 1, total)} из ${total}` })
+    )
+  }
+)
+ipcMain.handle('ai:dynamics', async (_e, folder: string) => {
+  const sessions = dynamicsSessions(listProjects(), folder)
+  const provider = await prepareEngine()
+  const body = await clientDynamics(provider, sessions, {
+    progress: (done, total) =>
+      win?.webContents.send('ai:progress', {
+        done,
+        total,
+        phase: done < total - 1 ? `Выжимка сессии ${done + 1} из ${total - 1}` : 'Свожу динамику'
+      }),
+    saveBrief: (m, brief) => {
+      const fresh = getProject(m.slug)
+      if (!fresh) return
+      fresh.brief = brief
+      saveProject(fresh)
+    }
+  })
+  const name = folder.split('/').pop() || folder
+  return saveNote({ title: `Динамика: ${name}`, body, kind: 'summary', sourceTitle: folder })
 })
 ipcMain.handle('ai:highlights', async (_e, slug: string) => {
   const meta = getProject(slug)
@@ -665,9 +761,13 @@ ipcMain.handle('ai:anonymize', async (_e, slug: string) => {
       'Обезличивание не нашло ни одного имени в длинной записи — похоже, модель не справилась. Попробуйте ещё раз.'
     )
   }
-  meta.anon = rules
-  saveProject(meta)
-  return meta
+  // Модель думала минутами — за это время могли сохранить «Мои заметки» или
+  // правки: пишем правила в свежую копию, а не в прочитанную до запуска.
+  const fresh = getProject(slug)
+  if (!fresh) return null
+  fresh.anon = rules
+  saveProject(fresh)
+  return fresh
 })
 ipcMain.handle('ai:setAnon', (_e, slug: string, rules: AnonRule[]) => {
   const meta = getProject(slug)
@@ -731,12 +831,12 @@ app.whenReady().then(() => {
 
   // Системная диктовка: оверлей + глобальная клавиша (если включена).
   const overlay = createDictationOverlay()
-  initDictation(win!, overlay, rendererUrl('overlay'), async (raw) => {
+  initDictation(win!, overlay, rendererUrl('overlay'), async (system, user) => {
     const provider = await prepareEngine()
-    // Промт и проверка ответа — в dictation/polish.ts (под тестами и живым прогоном).
-    return provider.generate(POLISH_SYSTEM, wrapForPolish(raw))
+    // Промт режима и проверка ответа — в shared/dictModes.ts и dictation/polish.ts.
+    return provider.generate(system, user)
   })
-  applyDictationSettings(settings.dictation)
+  applyDictationSettings(settings.dictation, settings.vocab)
 
   // Запись звонков: разрешение на звук компьютера, подсказка «идёт звонок»,
   // сборка записей, прерванных сбоем.

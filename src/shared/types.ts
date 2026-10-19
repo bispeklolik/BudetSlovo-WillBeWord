@@ -1,6 +1,8 @@
 export type Theme = 'light' | 'dark'
 
 import type { CustomPrompt } from './prompts'
+import type { Vocab } from './vocab'
+import type { DictTone, CustomDictMode } from './dictModes'
 
 export type AiEngine = 'local-llama' | 'claude' | 'openrouter'
 
@@ -29,6 +31,10 @@ export interface Settings {
   callPrompt?: boolean // предлагать запись, когда начинается звонок
   callMuted?: string[] // программы, для которых подсказку о звонке не показывать (id из callDetect)
   callNames?: [string, string] // подписи дорожек звонка: микрофон / звук компьютера
+  missedMinutes?: number // «Что я пропустил?» — за сколько последних минут пересказать
+  consentText?: string // мой вариант согласия на запись (пусто — шаблон)
+  vocab?: Vocab // словарь: слова для распознавания, точные замены, сниппеты
+  mcpPolicy?: 'anon' | 'all' // что Claude (MCP) может читать: только обезличенные записи (по умолчанию) или все
 }
 
 // Системная диктовка: зажал клавишу — говоришь (push-to-talk), быстрый
@@ -43,6 +49,9 @@ export interface DictationSettings {
   pauseMedia?: boolean // ставить музыку/видео на паузу на время диктовки
   keepAudioDays?: number // сколько дней хранить аудио диктовок для «Повторить» (0 — не хранить)
   micId?: string // выбранный микрофон (deviceId); пусто — системный по умолчанию
+  mode?: string // режим ИИ-чистки: clean | email | message | note | id своего режима
+  tone?: DictTone // тон для режимов, которые переписывают текст
+  customModes?: CustomDictMode[] // свои режимы: название + что сделать с текстом
 }
 
 // Запись журнала диктовок (dictation-history.jsonl) — для списка «Последние диктовки».
@@ -52,6 +61,8 @@ export interface DictationEntry {
   polished: string | null
   error?: string
   audio?: string // имя файла клипа в папке dictation (если ещё хранится)
+  text?: string // что вставлено: после чистки, замен и сниппетов
+  mode?: string // режим, которым чистили
 }
 
 export const defaultDictation: DictationSettings = {
@@ -166,6 +177,10 @@ export interface ProjectMeta {
   anon?: AnonRule[]
   /** Пример из первого запуска: без звука, с готовыми результатами. */
   demo?: boolean
+  /** Мои заметки к разговору (пишутся во время или после) — из них ИИ делает конспект. */
+  myNotes?: string
+  /** Краткая выжимка сессии для «Динамики клиента» и хэш текста, по которому она сделана. */
+  brief?: { text: string; hash: string }
   /** Запись звонка: две дорожки (файлы в папке записи) — говорящие известны заранее. */
   channels?: { mic: string; sys: string; names: [string, string]; app?: string }
 }
@@ -249,4 +264,25 @@ export interface OllamaStatus {
 export interface KeyVerdict {
   ok: boolean
   message: string
+}
+
+// ---------- «Спросить запись» ----------
+export interface AskSource {
+  n: number // номер в ответе: [1], [2]…
+  slug: string
+  title: string
+  startSec: number
+  snippet: string
+}
+
+export interface AskAnswer {
+  answer: string
+  sources: AskSource[]
+  /** По словам вопроса ничего не нашлось — можно «Искать внимательно». */
+  notFound?: boolean
+}
+
+export interface AskTurn {
+  q: string
+  a: string
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ProjectMeta, Word, AnonRule } from '../../../shared/types'
+import type { ProjectMeta, Word, AnonRule, Note } from '../../../shared/types'
 import type { Patch } from '../../../shared/patches'
 import { nextWordId } from '../../../shared/patches'
 import { withPatch } from '../editing'
@@ -12,6 +12,9 @@ import PromptLibraryPanel from '../components/PromptLibraryPanel'
 import HighlightsPanel from '../components/HighlightsPanel'
 import AnonPanel from '../components/AnonPanel'
 import StatsPanel from '../components/StatsPanel'
+import AskPanel from '../components/AskPanel'
+import MyNotesPanel from '../components/MyNotesPanel'
+import NoteViewer from '../components/NoteViewer'
 import { buildAnonOverlay } from '../../../shared/anon'
 import { rateForKey } from '../../../shared/playback'
 import { showToast, humanError } from '../toast'
@@ -49,10 +52,13 @@ interface IndexEntry {
 export default function Editor({
   slug,
   initialSearch,
+  initialSec,
   pauseMinSec = 3
 }: {
   slug: string
   initialSearch?: string
+  /** Открыть запись сразу на этом месте (переход из ответа «Спросить записи»). */
+  initialSec?: number
   pauseMinSec?: number
 }): React.JSX.Element {
   const [meta, setMeta] = useState<ProjectMeta | null>(null)
@@ -76,6 +82,11 @@ export default function Editor({
   const [anonBusy, setAnonBusy] = useState(false)
   const [anonPanelOpen, setAnonPanelOpen] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
+  const [askOpen, setAskOpen] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
+  const [resultNote, setResultNote] = useState<Note | null>(null)
+  // Переход к месту записи до того, как аудио загрузилось, — применяем по готовности.
+  const pendingSeek = useRef<number | null>(initialSec ?? null)
   // Голосовая правка: реплика, которую надиктовывают заново.
   const [redict, setRedict] = useState<{ turnId: string; phase: 'rec' | 'stt' } | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -218,8 +229,10 @@ export default function Editor({
     const prev = undoRef.current.pop()
     if (!prev || !m) return
     redoRef.current.push(m)
-    setMeta(prev)
-    scheduleSave(prev)
+    // Отмена — про текст расшифровки; заметки и выжимку не откатываем (ревью волны 4).
+    const next = { ...prev, myNotes: m.myNotes, brief: m.brief }
+    setMeta(next)
+    scheduleSave(next)
   }, [scheduleSave])
 
   const redo = useCallback((): void => {
@@ -227,8 +240,9 @@ export default function Editor({
     const nxt = redoRef.current.pop()
     if (!nxt || !m) return
     undoRef.current.push(m)
-    setMeta(nxt)
-    scheduleSave(nxt)
+    const next = { ...nxt, myNotes: m.myNotes, brief: m.brief }
+    setMeta(next)
+    scheduleSave(next)
   }, [scheduleSave])
 
   useEffect(() => {
@@ -319,7 +333,9 @@ export default function Editor({
 
   const seek = (sec: number): void => {
     const a = audioRef.current
-    if (a) a.currentTime = sec
+    if (a && a.readyState >= 1) a.currentTime = sec
+    else pendingSeek.current = sec
+    setCur(sec)
   }
 
   const onWordClick = (w: Word): void => {
@@ -540,7 +556,7 @@ export default function Editor({
           {hasText && (dirty ? ' · сохраняю…' : ' · сохранено')}
         </span>
         {hasText && !reproc && (
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <div className="editor-tools">
             <button
               className="btn btn-icon"
               onClick={() => setSearchOpen(true)}
@@ -564,6 +580,12 @@ export default function Editor({
                 {anonMode ? '🕶 Обезличено' : 'Обезличено'}
               </button>
             )}
+            <button className="btn" onClick={() => setNotesOpen(true)} title="Мои заметки к записи → конспект">
+              Мои заметки{meta.myNotes?.trim() ? ' ✓' : ''}
+            </button>
+            <button className="btn" onClick={() => setAskOpen(true)} title="Задать вопрос по записи">
+              Спросить
+            </button>
             <button
               className="btn btn-primary"
               onClick={() => setLibraryOpen(true)}
@@ -737,6 +759,19 @@ export default function Editor({
           ref={audioRef}
           src={audioUrl ?? undefined}
           preload="metadata"
+          onLoadedMetadata={(e) => {
+            if (pendingSeek.current !== null) {
+              e.currentTarget.currentTime = pendingSeek.current
+              setCur(pendingSeek.current)
+              pendingSeek.current = null
+              // Пришли из ответа «Спросить записи» — сразу играть: текст сам
+              // прокрутится к этому месту и подсветится.
+              if (initialSec !== undefined) {
+                setFollow(true)
+                e.currentTarget.play().catch(() => {})
+              }
+            }
+          }}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
           onEnded={() => setPlaying(false)}
@@ -812,6 +847,38 @@ export default function Editor({
       )}
 
       {statsOpen && <StatsPanel meta={meta} onClose={() => setStatsOpen(false)} />}
+
+      {askOpen && (
+        <AskPanel
+          mode="one"
+          slug={slug}
+          title={meta.title}
+          onSeek={(sec) => {
+            seek(sec + 0.01)
+            setFollow(true)
+            audioRef.current?.play().catch(() => {})
+          }}
+          onClose={() => setAskOpen(false)}
+        />
+      )}
+
+      {notesOpen && (
+        <MyNotesPanel
+          slug={slug}
+          initial={meta.myNotes ?? ''}
+          hasText={hasText}
+          onSaved={(t) => setMeta((m) => (m ? { ...m, myNotes: t } : m))}
+          onResult={(n) => {
+            setNotesOpen(false)
+            setResultNote(n)
+          }}
+          onClose={() => setNotesOpen(false)}
+        />
+      )}
+
+      {resultNote && (
+        <NoteViewer note={resultNote} onClose={() => setResultNote(null)} onChanged={() => {}} />
+      )}
 
       {redict && (
         <div className="redict-bar">

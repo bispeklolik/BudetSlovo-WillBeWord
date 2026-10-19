@@ -10,6 +10,7 @@ import { loadSettings } from '../settings'
 import { CLOUD_RUN } from '../stt'
 import { sttMeta } from '../../shared/sttEngines'
 import { VERBATIM_PROMPT_RU } from '../../shared/verbatim'
+import { sttPrompt } from '../../shared/vocab'
 import {
   wordsFromTurns,
   parseWhisperJsonWords,
@@ -112,10 +113,11 @@ function runLocalEngine(job: JobInfo, r: EngineRun, emit: Emit, log: WriteStream
     if (r.numSpeakers > 0) args.push('--num_speakers', String(r.numSpeakers))
   }
   if (r.enhance) args.push('--ff_loudnorm', '--ff_lowhighpass', '--ff_fftdn', '10')
-  if (r.verbatim) {
-    // Затравка с «э-э»/«ну» + VAD не выкидывает короткие звуки (иначе «м-м» режется до модели).
-    args.push('--initial_prompt', VERBATIM_PROMPT_RU, '--vad_min_speech_duration_ms', '100')
-  }
+  // Затравка: «дословно» (с «э-э»/«ну») и/или словарь пользователя (имена, термины).
+  const prompt = sttPrompt(r.verbatim ? VERBATIM_PROMPT_RU : null, settings.vocab?.words)
+  if (prompt) args.push('--initial_prompt', prompt)
+  // VAD не выкидывает короткие звуки (иначе «м-м» режется до модели).
+  if (r.verbatim) args.push('--vad_min_speech_duration_ms', '100')
   log.write(`[slovo] ${new Date().toISOString()}\n[slovo] ${eng.exe}\n[slovo] args: ${args.join(' ')}\n\n`)
 
   return new Promise((resolve, reject) => {
@@ -185,7 +187,7 @@ async function runCloudOn(job: JobInfo, engineId: string, input: string, verbati
   const ctrl = new AbortController()
   cloudAborts.set(job.id, ctrl)
   try {
-    const result = await run(input, key, emit, ctrl.signal, { verbatim })
+    const result = await run(input, key, emit, ctrl.signal, { verbatim, terms: loadSettings().vocab?.words })
     checkCancel(job) // отменили, пока сервис отвечал, — результат не сохраняем
     return result
   } catch (err) {

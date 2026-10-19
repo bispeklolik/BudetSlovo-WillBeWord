@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ProjectMeta, JobInfo } from '../../../shared/types'
+import type { ProjectMeta, JobInfo, Note } from '../../../shared/types'
 import { searchProjects } from '../../../shared/search'
 import { buildFolderTree, ancestorPaths } from '../../../shared/folders'
 import { api } from '../api'
@@ -10,6 +10,8 @@ import Sidebar, { NOTES_KEY } from '../components/Sidebar'
 import InputModal from '../components/InputModal'
 import MoveModal from '../components/MoveModal'
 import NotesPane from '../components/NotesPane'
+import AskPanel from '../components/AskPanel'
+import NoteViewer from '../components/NoteViewer'
 
 function fmtDuration(sec: number): string {
   const t = Math.floor(sec)
@@ -43,7 +45,7 @@ export default function Home({
   onOpenWelcome,
   onRecordCall
 }: {
-  onOpen: (slug: string, search?: string) => void
+  onOpen: (slug: string, search?: string, sec?: number) => void
   onOpenWelcome: () => void
   onRecordCall: () => void
 }): React.JSX.Element {
@@ -56,6 +58,9 @@ export default function Home({
   const [dropKey, setDropKey] = useState<string | null>(null)
   const [modal, setModal] = useState<Modal>(null)
   const [jobs, setJobs] = useState<JobInfo[]>([])
+  const [askOpen, setAskOpen] = useState(false)
+  const [dyn, setDyn] = useState<{ phase: string } | null>(null)
+  const [resultNote, setResultNote] = useState<Note | null>(null)
 
   const refresh = (): void => {
     api.listProjects().then(setProjects)
@@ -127,6 +132,23 @@ export default function Home({
     .filter((p) => (p.folder ?? '') === folder)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   const hits = gq.trim() ? searchProjects(projects, gq) : null
+
+  // Динамика клиента: выжимка каждой сессии папки → что меняется от сессии к сессии.
+  const runDynamics = async (): Promise<void> => {
+    if (dyn) return
+    setDyn({ phase: 'Готовлю' })
+    const off = api.onAiProgress((p) => setDyn({ phase: p.phase }))
+    try {
+      const note = await api.clientDynamics(folder)
+      refreshNotes()
+      setResultNote(note)
+    } catch (e) {
+      showToast('Динамика не получилась: ' + humanError(e))
+    } finally {
+      off()
+      setDyn(null)
+    }
+  }
 
   // --- действия с папками ---
   const createFolder = (name: string): void => {
@@ -238,6 +260,9 @@ export default function Home({
         <button className="btn" onClick={onRecordCall}>
           Записать звонок
         </button>
+        <button className="btn" onClick={() => setAskOpen(true)} title="Вопрос по всем записям — ответ со ссылками">
+          Спросить записи
+        </button>
         <div className="global-search">
           <Icon name="search" size={16} />
           <input
@@ -326,6 +351,21 @@ export default function Home({
             <>
               <div className="pane-head">
                 {folderTitle} <span className="pane-count">{records.length}</span>
+                {folder !== '' && (
+                  <button
+                    className="btn btn-sm"
+                    style={{ marginLeft: 'auto' }}
+                    onClick={() => void runDynamics()}
+                    disabled={!!dyn || count(folder) < 2}
+                    title={
+                      count(folder) < 2
+                        ? 'Нужны хотя бы две записи в папке'
+                        : 'Что меняется у клиента от сессии к сессии — по всем записям папки'
+                    }
+                  >
+                    {dyn ? dyn.phase + '…' : 'Динамика клиента'}
+                  </button>
+                )}
               </div>
               {records.length === 0 ? (
                 <div className="empty">
@@ -396,6 +436,20 @@ export default function Home({
         </section>
       </div>
 
+      {askOpen && (
+        <AskPanel
+          mode="all"
+          folder={folder && folder !== NOTES_KEY ? folder : null}
+          onOpen={(slug, sec) => {
+            setAskOpen(false)
+            onOpen(slug, undefined, sec)
+          }}
+          onClose={() => setAskOpen(false)}
+        />
+      )}
+      {resultNote && (
+        <NoteViewer note={resultNote} onClose={() => setResultNote(null)} onChanged={refreshNotes} />
+      )}
       {modal?.kind === 'createFolder' && (
         <InputModal
           title="Новая папка"

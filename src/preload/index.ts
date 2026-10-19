@@ -14,7 +14,9 @@ import type {
   SetupProgress,
   OllamaStatus,
   KeyVerdict,
-  DictationEntry
+  DictationEntry,
+  AskAnswer,
+  AskTurn
 } from '../shared/types'
 
 const api = {
@@ -160,11 +162,28 @@ const api = {
   restoreBackup: (): Promise<{ restored: string[]; savedTo: string } | null> =>
     ipcRenderer.invoke('backup:restore'),
 
+  mcpConfig: (): Promise<{ ok: boolean; json: string; configDir: string }> => ipcRenderer.invoke('mcp:config'),
+  openClaudeConfigDir: (): Promise<boolean> => ipcRenderer.invoke('mcp:openConfigDir'),
+
+  // Волна 4: мои заметки → конспект, «Спросить запись», динамика клиента.
+  setMyNotes: (slug: string, text: string): Promise<void> => ipcRenderer.invoke('project:setMyNotes', slug, text),
+  enhanceNotes: (slug: string): Promise<Note> => ipcRenderer.invoke('ai:enhanceNotes', slug),
+  askRecording: (slug: string, question: string, history: AskTurn[], thorough?: boolean): Promise<AskAnswer> =>
+    ipcRenderer.invoke('ai:askRecording', slug, question, history, thorough),
+  askAll: (question: string, folder: string | null, history: AskTurn[], thorough?: boolean): Promise<AskAnswer> =>
+    ipcRenderer.invoke('ai:askAll', question, folder, history, thorough),
+  clientDynamics: (folder: string): Promise<Note> => ipcRenderer.invoke('ai:dynamics', folder),
+  callMissed: (id: string, minutes: number): Promise<string> => ipcRenderer.invoke('call:missed', id, minutes),
+  callNotes: (id: string, text: string): void => ipcRenderer.send('call:notes', id, text),
+
   // Запись звонка: две дорожки кусками на диск, сборка проекта в main.
   callOpen: (id: string): Promise<void> => ipcRenderer.invoke('call:open', id),
   callChunk: (id: string, kind: 'mic' | 'sys', data: ArrayBuffer): void =>
     ipcRenderer.send('call:chunk', id, kind, data),
-  callFinish: (id: string, opts: { title: string; names: [string, string]; app?: string }): Promise<ProjectMeta> =>
+  callFinish: (
+    id: string,
+    opts: { title: string; names: [string, string]; app?: string; myNotes?: string }
+  ): Promise<ProjectMeta> =>
     ipcRenderer.invoke('call:finish', id, opts),
   callCancel: (id: string): Promise<void> => ipcRenderer.invoke('call:cancel', id),
   callMute: (appId: string): Promise<void> => ipcRenderer.invoke('call:mute', appId),

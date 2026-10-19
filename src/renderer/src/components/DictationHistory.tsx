@@ -67,7 +67,7 @@ export default function DictationHistory(): React.JSX.Element {
           <div className="settings-status">Пока пусто.</div>
         ) : (
           items.map((e, i) => {
-            const text = e.polished ?? e.raw
+            const text = e.text ?? e.polished ?? e.raw
             return (
               <div className="dict-item" key={e.at + i}>
                 <div className="dict-item-head">

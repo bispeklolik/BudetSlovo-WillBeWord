@@ -7,6 +7,10 @@ import { useEscClose } from '../useEscClose'
 import { LOCAL_MODELS, localModel, formatBytes } from '../../../shared/localModels'
 import { showToast, humanError } from '../toast'
 import DictationHistory, { MicSelect } from './DictationHistory'
+import ConsentModal from './ConsentModal'
+import VocabPanel from './VocabPanel'
+import McpSection from './McpSection'
+import { DICT_MODES, TONE_NAMES, findMode, type DictTone } from '../../../shared/dictModes'
 
 // Клавиши для диктовки: без левых модификаторов (они испортили бы Ctrl+V
 // вставку), одиночные и правые — то, что редко занято.
@@ -75,6 +79,8 @@ export default function SettingsModal({
   const [pauseSec, setPauseSec] = useState(3)
   const [pauseExport, setPauseExport] = useState(true)
   const [callPrompt, setCallPrompt] = useState(true)
+  const [consentOpen, setConsentOpen] = useState(false)
+  const [vocabOpen, setVocabOpen] = useState(false)
   const [callMuted, setCallMuted] = useState<string[]>([])
 
   useEffect(() => {
@@ -436,6 +442,50 @@ export default function SettingsModal({
                   {dict.polish ? 'Вкл' : 'Выкл'}
                 </button>
               </div>
+              {dict.polish && (
+                <>
+                  <div className="settings-row">
+                    <span>Режим</span>
+                    <select className="rate" value={findMode(dict.mode, dict.customModes).id} onChange={(e) => saveDict({ mode: e.target.value })}>
+                      {DICT_MODES.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                      {(dict.customModes ?? []).map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {findMode(dict.mode, dict.customModes).hint && (
+                    <div className="panel-note">
+                      {findMode(dict.mode, dict.customModes).hint}
+                      {findMode(dict.mode, dict.customModes).reformat &&
+                        ' Переписывать текст лучше умеет облачный ИИ; локальная модель иногда ошибается — тогда вставится просто очищенный текст.'}
+                    </div>
+                  )}
+                  {findMode(dict.mode, dict.customModes).reformat && (
+                    <div className="settings-row">
+                      <span>Тон</span>
+                      <select className="rate" value={dict.tone ?? 'neutral'} onChange={(e) => saveDict({ tone: e.target.value as DictTone })}>
+                        {(Object.keys(TONE_NAMES) as DictTone[]).map((t) => (
+                          <option key={t} value={t}>
+                            {TONE_NAMES[t]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+              <div className="settings-row">
+                <span>Словарь, замены, сниппеты, свои режимы</span>
+                <button className="btn btn-sm" onClick={() => setVocabOpen(true)}>
+                  Открыть
+                </button>
+              </div>
               <div className="settings-row">
                 <span>Вставлять в активное окно</span>
                 <button
@@ -503,6 +553,13 @@ export default function SettingsModal({
               <DictationHistory />
             </>
           )}
+          {vocabOpen && (
+            <VocabPanel
+              customModes={dict.customModes ?? []}
+              onSaveModes={(customModes) => saveDict({ customModes })}
+              onClose={() => setVocabOpen(false)}
+            />
+          )}
         </div>
 
         <div className="settings-section">
@@ -564,11 +621,20 @@ export default function SettingsModal({
               </button>
             </div>
           )}
+          <div className="settings-row">
+            <span>Согласие клиента на запись</span>
+            <button className="btn btn-sm" onClick={() => setConsentOpen(true)}>
+              Открыть шаблон
+            </button>
+          </div>
           <div className="panel-note">
             «Слово» замечает, что Telegram, Zoom, WhatsApp, Teams или браузер включили микрофон, и предлагает
             записать разговор. Запись звонка — кнопкой на главном экране.
           </div>
+          {consentOpen && <ConsentModal onClose={() => setConsentOpen(false)} />}
         </div>
+
+        <McpSection />
 
         <div className="settings-section">
           <div className="settings-label">Горячие клавиши</div>

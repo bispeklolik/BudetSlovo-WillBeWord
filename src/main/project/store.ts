@@ -192,7 +192,7 @@ export async function createProjectFromFile(
  */
 export async function createProjectFromCall(
   callDir: string,
-  opts: { title: string; names: [string, string]; app?: string }
+  opts: { title: string; names: [string, string]; app?: string; myNotes?: string }
 ): Promise<ProjectMeta> {
   const micSrc = join(callDir, 'mic.webm')
   const sysSrc = join(callDir, 'sys.webm')
@@ -239,6 +239,16 @@ export async function createProjectFromCall(
       app: opts.app
     }
   }
+  // Мои заметки во время звонка: из окна записи или (после сбоя) из notes.txt.
+  let myNotes = opts.myNotes
+  if (myNotes === undefined && existsSync(join(callDir, 'notes.txt'))) {
+    try {
+      myNotes = readFileSync(join(callDir, 'notes.txt'), 'utf8')
+    } catch {
+      /* заметки не критичны */
+    }
+  }
+  if (myNotes?.trim()) meta.myNotes = myNotes
   writeJsonAtomic(join(dir, 'project.json'), meta)
   return meta
 }

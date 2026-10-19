@@ -11,7 +11,7 @@ import DictationRecorder from './components/DictationRecorder'
 import DictOverlay from './components/DictOverlay'
 import CallRecorder from './components/CallRecorder'
 
-type View = { page: 'home' } | { page: 'editor'; slug: string; search?: string }
+type View = { page: 'home' } | { page: 'editor'; slug: string; search?: string; sec?: number }
 
 export default function App(): React.JSX.Element {
   // Окно-оверлей диктовки грузит тот же бандл с #overlay — рендерим только плашку.
@@ -178,14 +178,16 @@ function MainApp(): React.JSX.Element {
       ) : view.page === 'home' ? (
         <Home
           key={homeKey}
-          onOpen={(slug, search) => setView({ page: 'editor', slug, search })}
+          onOpen={(slug, search, sec) => setView({ page: 'editor', slug, search, sec })}
           onOpenWelcome={() => setWelcomeOpen(true)}
           onRecordCall={() => setCallRec({})}
         />
       ) : (
         <Editor
+          key={view.slug + ':' + (view.sec ?? '')}
           slug={view.slug}
           initialSearch={view.search}
+          initialSec={view.sec}
           pauseMinSec={settings?.pauseMarkSec ?? 3}
         />
       )}

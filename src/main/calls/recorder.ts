@@ -1,9 +1,19 @@
 import { desktopCapturer, session } from 'electron'
-import { createWriteStream, existsSync, mkdirSync, readdirSync, rmSync, type WriteStream } from 'fs'
+import {
+  copyFileSync,
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+  type WriteStream
+} from 'fs'
 import { join } from 'path'
 import { DATA_DIR } from '../paths'
 import { createProjectFromCall } from '../project/store'
-import { hasAudio } from './ffmpeg'
+import { TEMP_DIR } from '../paths'
+import { hasAudio, tailMix } from './ffmpeg'
 import type { ProjectMeta } from '../../shared/types'
 
 // Запись звонка: renderer пишет две дорожки (микрофон и звук компьютера через
@@ -14,6 +24,7 @@ import type { ProjectMeta } from '../../shared/types'
 const CALLS_DIR = join(DATA_DIR, 'calls')
 const streams = new Map<string, WriteStream>()
 let active: string | null = null
+let openedAt = 0
 let onWriteError: (message: string) => void = () => {}
 
 export function isCallActive(): boolean {
@@ -59,6 +70,7 @@ export function openCall(id: string): void {
     })
     streams.set(sid + kind, ws)
   }
+  if (active !== sid) openedAt = Date.now()
   active = sid
 }
 
@@ -94,9 +106,55 @@ export function abandonActiveCall(): boolean {
   return true
 }
 
+/** Мои заметки во время звонка — сразу на диск: при сбое они соберутся вместе с записью. */
+export function saveCallNotes(id: string, text: string): void {
+  const dir = join(CALLS_DIR, safeId(id))
+  if (!existsSync(dir)) return
+  try {
+    writeFileSync(join(dir, 'notes.txt'), text, 'utf8')
+  } catch {
+    /* заметки не критичны: финальный текст придёт с «Остановить» */
+  }
+}
+
+/**
+ * «Что я пропустил?»: последние minutes минут идущей записи — обе дорожки
+ * сведены в один m4a во временной папке (вызывающий удаляет файл сам).
+ * Файлы пишутся прямо сейчас — работаем с их копией.
+ */
+export async function missedAudio(id: string, minutes: number): Promise<string> {
+  const sid = safeId(id)
+  if (active !== sid) throw new Error('Запись звонка не идёт.')
+  const dir = join(CALLS_DIR, sid)
+  const stamp = Date.now().toString(36)
+  const tmp = join(TEMP_DIR, `missed-${stamp}`)
+  mkdirSync(tmp, { recursive: true })
+  const inputs: string[] = []
+  for (const kind of ['mic', 'sys']) {
+    const src = join(dir, `${kind}.webm`)
+    if (!hasAudio(src)) continue
+    const copy = join(tmp, `${kind}.webm`)
+    copyFileSync(src, copy)
+    inputs.push(copy)
+  }
+  if (!inputs.length) {
+    rmSync(tmp, { recursive: true, force: true })
+    throw new Error('В записи пока нет звука.')
+  }
+  const elapsed = (Date.now() - openedAt) / 1000
+  const start = Math.max(0, elapsed - minutes * 60 - 5)
+  const dest = join(TEMP_DIR, `missed-${stamp}.m4a`)
+  try {
+    await tailMix(inputs, start, dest)
+  } finally {
+    rmSync(tmp, { recursive: true, force: true })
+  }
+  return dest
+}
+
 export async function finishCall(
   id: string,
-  opts: { title: string; names: [string, string]; app?: string }
+  opts: { title: string; names: [string, string]; app?: string; myNotes?: string }
 ): Promise<ProjectMeta> {
   const sid = safeId(id)
   await closeStreams(sid)

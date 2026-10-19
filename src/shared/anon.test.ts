@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildAnonOverlay, anonTurnText, type AnonRule } from './anon'
+import { buildAnonOverlay, anonTurnText, type AnonRule, anonPlain } from './anon'
 import type { Turn, Word } from './types'
 
 const W = (id: number, t: string): Word => ({ id, t, s: id, e: id + 0.4, p: 0.9 })
@@ -68,5 +68,21 @@ describe('buildAnonOverlay', () => {
     const turns = [turn([W(0, 'привет')])]
     expect(buildAnonOverlay(turns, [{ find: '', replace: 'X', kind: 'other' }]).size).toBe(0)
     expect(buildAnonOverlay(turns, [{ find: 'привет', replace: '  ', kind: 'other' }]).size).toBe(0)
+  })
+})
+
+describe('anonPlain и падежи имён (ревью волны 4)', () => {
+  const r = (find: string) => [{ find, replace: '[И]', kind: 'name' as const }]
+  it('короткое женское имя во всех падежах', () => {
+    expect(anonPlain('Ева, Евы, Еве, Еву, Евой. Европа, Евгений', r('Ева'))).toBe('[И], [И], [И], [И], [И]. Европа, Евгений')
+  })
+  it('мужские имена и фамилии', () => {
+    expect(anonPlain('Андрея и Андреем', r('Андрей'))).toBe('[И] и [И]')
+    expect(anonPlain('с Игорем', r('Игорь'))).toBe('с [И]')
+    expect(anonPlain('Ивановой и Ивановым', r('Иванов'))).toBe('[И] и [И]')
+  })
+  it('в расшифровке тоже ловит «Евой»', () => {
+    const turns = [{ id: 't', spk: 'S0', startSec: 0, words: [{ id: 1, t: 'с' }, { id: 2, t: 'Евой.' }] }]
+    expect(anonTurnText(turns[0], buildAnonOverlay(turns, r('Ева')))).toBe('с [И]')
   })
 })

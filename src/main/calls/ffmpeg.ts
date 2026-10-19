@@ -46,6 +46,34 @@ export function mixTwo(a: string, b: string, dest: string): Promise<void> {
   ])
 }
 
+/**
+ * Хвост идущей записи (от startSec до конца) из одной или двух дорожок → моно
+ * m4a. Дорожки ещё пишутся, конец файла может быть оборван — если ffmpeg
+ * ругается на конец, но звук получился, это не ошибка.
+ */
+export async function tailMix(inputs: string[], startSec: number, dest: string): Promise<void> {
+  const s = Math.max(0, startSec).toFixed(2)
+  const trims = inputs.map((_, i) => `[${i}:a]atrim=start=${s},asetpts=PTS-STARTPTS,aresample=async=1[a${i}]`)
+  const mix =
+    inputs.length > 1
+      ? `${inputs.map((_, i) => `[a${i}]`).join('')}amix=inputs=${inputs.length}:duration=longest:normalize=0,alimiter=limit=0.95[a]`
+      : '[a0]anull[a]'
+  const args = [
+    ...inputs.flatMap((f) => ['-i', f]),
+    '-filter_complex', [...trims, mix].join(';'),
+    '-map', '[a]',
+    '-ac', '1',
+    '-c:a', 'aac',
+    '-b:a', '64k',
+    dest
+  ]
+  try {
+    await runFfmpeg(args)
+  } catch (err) {
+    if (!(existsSync(dest) && statSync(dest).size > 2048)) throw err
+  }
+}
+
 /** Кусок записи «с — по» с перекодированием (точный рез, а не по ключевым кадрам). */
 export function trimAudio(src: string, dest: string, startSec: number, endSec: number): Promise<void> {
   const start = Math.max(0, startSec)

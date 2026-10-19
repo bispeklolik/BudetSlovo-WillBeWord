@@ -2,6 +2,7 @@ import { readFileSync } from 'fs'
 import type { MergeResult } from '../project/merge'
 import { deepgramToTurns, type DgResponse } from '../../shared/sttMappers'
 import { netSignal } from './net'
+import { cleanWords } from '../../shared/vocab'
 
 // Расшифровка через Deepgram (облако). Ключ хранится локально в настройках.
 // Аудио уходит на серверы Deepgram — в отличие от локального Whisper.
@@ -13,7 +14,7 @@ export async function transcribeWithDeepgram(
   audioPath: string,
   key: string,
   signal?: AbortSignal,
-  opts?: { verbatim?: boolean }
+  opts?: { verbatim?: boolean; terms?: string[] }
 ): Promise<MergeResult> {
   const body = readFileSync(audioPath)
   // ponytail: синхронный endpoint — тянет и многочасовые pre-recorded в одном
@@ -28,6 +29,8 @@ export async function transcribeWithDeepgram(
   })
   // filler_words официально только для английского — для русского «как получится».
   if (opts?.verbatim) params.set('filler_words', 'true')
+  // Словарь: nova-2 понимает keywords (термины и имена пишет как в словаре).
+  for (const t of cleanWords(opts?.terms).slice(0, 100)) params.append('keywords', t)
   const res = await fetch(`${DG_URL}?${params.toString()}`, {
     method: 'POST',
     headers: { Authorization: `Token ${key}`, 'Content-Type': 'audio/mp4' },
