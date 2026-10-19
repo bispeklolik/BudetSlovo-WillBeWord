@@ -38,7 +38,8 @@ export async function transcribeWithAssemblyAI(
   audioPath: string,
   key: string,
   emit: (p: Partial<JobInfo>) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  opts?: { verbatim?: boolean }
 ): Promise<MergeResult> {
   const auth = { authorization: key }
 
@@ -61,7 +62,9 @@ export async function transcribeWithAssemblyAI(
       audio_url: upload_url,
       language_code: 'ru',
       speaker_labels: true,
-      speech_model: 'best'
+      speech_model: 'best',
+      // disfluencies официально только для английского — для русского «как получится».
+      ...(opts?.verbatim ? { disfluencies: true } : {})
     }),
     signal: netSignal(60_000, signal)
   })

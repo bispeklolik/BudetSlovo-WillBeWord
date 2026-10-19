@@ -27,6 +27,19 @@ const DICT_KEYS: { id: string; label: string }[] = [
   { id: 'NumpadSubtract', label: 'Num −' }
 ]
 
+// Подписи программ для списка «не предлагать запись» (id — из shared/callDetect).
+const CALL_APP_NAMES: Record<string, string> = {
+  telegram: 'Telegram',
+  zoom: 'Zoom',
+  teams: 'Teams',
+  whatsapp: 'WhatsApp',
+  skype: 'Skype',
+  discord: 'Discord',
+  viber: 'Viber',
+  telemost: 'Телемост',
+  browser: 'браузер'
+}
+
 const MODELS: { id: string; label: string }[] = [
   { id: 'claude-haiku-4-5', label: 'Haiku · дёшево' },
   { id: 'claude-sonnet-4-6', label: 'Sonnet · баланс' },
@@ -59,6 +72,10 @@ export default function SettingsModal({
   const [localId, setLocalId] = useState('large-v3')
   const [device, setDevice] = useState<'auto' | 'cuda' | 'cpu'>('auto')
   const [backupBusy, setBackupBusy] = useState<string | null>(null)
+  const [pauseSec, setPauseSec] = useState(3)
+  const [pauseExport, setPauseExport] = useState(true)
+  const [callPrompt, setCallPrompt] = useState(true)
+  const [callMuted, setCallMuted] = useState<string[]>([])
 
   useEffect(() => {
     api.aiAvailable().then(setAiReady)
@@ -73,6 +90,10 @@ export default function SettingsModal({
       setDict({ ...defaultDictation, ...s.dictation })
       setLocalId(localModel(s.localModel).id)
       setDevice(s.localDevice ?? 'auto')
+      setPauseSec(s.pauseMarkSec ?? 3)
+      setPauseExport(s.pauseInExport !== false)
+      setCallPrompt(s.callPrompt !== false)
+      setCallMuted(s.callMuted ?? [])
     })
     api.setupInfo().then(setInfo)
   }, [])
@@ -482,6 +503,71 @@ export default function SettingsModal({
               <DictationHistory />
             </>
           )}
+        </div>
+
+        <div className="settings-section">
+          <div className="settings-label">Паузы и звонки</div>
+          <div className="settings-row">
+            <span>Отмечать паузы в тексте</span>
+            <select
+              className="rate"
+              value={pauseSec}
+              onChange={(e) => {
+                const v = Number(e.target.value)
+                setPauseSec(v)
+                save({ pauseMarkSec: v })
+              }}
+            >
+              <option value={0}>не отмечать</option>
+              {[2, 3, 5, 10].map((v) => (
+                <option key={v} value={v}>
+                  от {v} с
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="settings-row">
+            <span>Паузы и в экспорте (Word, txt, md)</span>
+            <button
+              className={'btn' + (pauseExport ? ' btn-primary' : '')}
+              onClick={() => {
+                setPauseExport(!pauseExport)
+                save({ pauseInExport: !pauseExport })
+              }}
+            >
+              {pauseExport ? 'Вкл' : 'Выкл'}
+            </button>
+          </div>
+          <div className="settings-row">
+            <span>Предлагать запись, когда начинается звонок</span>
+            <button
+              className={'btn' + (callPrompt ? ' btn-primary' : '')}
+              onClick={() => {
+                setCallPrompt(!callPrompt)
+                save({ callPrompt: !callPrompt })
+              }}
+            >
+              {callPrompt ? 'Вкл' : 'Выкл'}
+            </button>
+          </div>
+          {callMuted.length > 0 && (
+            <div className="settings-row">
+              <span className="settings-status">Не предлагать для: {callMuted.map((id) => CALL_APP_NAMES[id] ?? id).join(', ')}</span>
+              <button
+                className="btn btn-sm"
+                onClick={async () => {
+                  for (const id of callMuted) await api.callUnmute(id)
+                  setCallMuted([])
+                }}
+              >
+                Вернуть
+              </button>
+            </div>
+          )}
+          <div className="panel-note">
+            «Слово» замечает, что Telegram, Zoom, WhatsApp, Teams или браузер включили микрофон, и предлагает
+            записать разговор. Запись звонка — кнопкой на главном экране.
+          </div>
         </div>
 
         <div className="settings-section">

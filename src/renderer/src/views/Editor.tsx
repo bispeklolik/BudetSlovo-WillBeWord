@@ -48,10 +48,12 @@ interface IndexEntry {
 
 export default function Editor({
   slug,
-  initialSearch
+  initialSearch,
+  pauseMinSec = 3
 }: {
   slug: string
   initialSearch?: string
+  pauseMinSec?: number
 }): React.JSX.Element {
   const [meta, setMeta] = useState<ProjectMeta | null>(null)
   const [peaks, setPeaks] = useState<Int8Array | null>(null)
@@ -718,6 +720,7 @@ export default function Editor({
               searchTurnIndex={searchOpen ? (curMatch?.turnIndex ?? null) : null}
               anonMode={anonMode}
               anonOverlay={anonOverlay}
+              pauseMinSec={pauseMinSec}
             />
           </>
         ) : meta.engine?.completedAt ? (

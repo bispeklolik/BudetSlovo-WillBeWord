@@ -24,6 +24,11 @@ export interface Settings {
   engineDir?: string // своя папка движка Faster-Whisper-XXL (если не по умолчанию)
   localModel?: string // модель локального Whisper: 'large-v3' | 'large-v3-turbo' | 'medium' | 'small'
   localDevice?: 'auto' | 'cuda' | 'cpu' // на чём считать локально (auto — видеокарта NVIDIA, если есть)
+  pauseMarkSec?: number // отмечать паузы в тексте от N секунд (0 — не отмечать)
+  pauseInExport?: boolean // паузы и в экспорте Word/txt/md (субтитры — никогда)
+  callPrompt?: boolean // предлагать запись, когда начинается звонок
+  callMuted?: string[] // программы, для которых подсказку о звонке не показывать (id из callDetect)
+  callNames?: [string, string] // подписи дорожек звонка: микрофон / звук компьютера
 }
 
 // Системная диктовка: зажал клавишу — говоришь (push-to-talk), быстрый
@@ -67,7 +72,11 @@ export const defaultSettings: Settings = {
   aiEngine: 'local-llama',
   claudeModel: 'claude-sonnet-4-6',
   openrouterModel: 'anthropic/claude-sonnet-5',
-  sttEngine: 'local'
+  sttEngine: 'local',
+  pauseMarkSec: 3,
+  pauseInExport: true,
+  callPrompt: true,
+  callNames: ['Я', 'Собеседник']
 }
 
 // Конспект — сохранённая текстовая выжимка (саммари, лучшие мысли, заметка).
@@ -157,6 +166,8 @@ export interface ProjectMeta {
   anon?: AnonRule[]
   /** Пример из первого запуска: без звука, с готовыми результатами. */
   demo?: boolean
+  /** Запись звонка: две дорожки (файлы в папке записи) — говорящие известны заранее. */
+  channels?: { mic: string; sys: string; names: [string, string]; app?: string }
 }
 
 // Правило обезличивания: подстрока как в тексте → нейтральная замена.
@@ -174,6 +185,12 @@ export type ImportProgress =
 export interface TranscribeOptions {
   numSpeakers: number
   enhance: boolean
+  /** Имена говорящих по порядку появления (вводятся до расшифровки). */
+  names?: string[]
+  /** «Дословно»: сохранять «э-э», «ну», запинки (надёжно — только локальный движок). */
+  verbatim?: boolean
+  /** Расшифровать только кусок записи, секунды от начала. */
+  range?: { startSec: number; endSec: number }
 }
 
 export type JobStatus =

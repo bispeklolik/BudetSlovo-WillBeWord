@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, clipboard } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, clipboard, Notification } from 'electron'
 import { join } from 'path'
 import { existsSync, copyFileSync, writeFileSync, readFileSync } from 'fs'
 import { autoUpdater } from 'electron-updater'
@@ -62,6 +62,20 @@ import {
   type ClipMeta
 } from './dictation/manager'
 import { POLISH_SYSTEM, wrapForPolish } from './dictation/polish'
+import { setDictationBlocker, isDictating } from './dictation/manager'
+import {
+  registerCallCapture,
+  openCall,
+  writeChunk,
+  finishCall,
+  cancelCall,
+  recoverCalls,
+  isCallActive,
+  abandonActiveCall,
+  setCallWriteErrorHandler
+} from './calls/recorder'
+import { startCallWatcher, stopCallWatcher, snoozeCallPrompts } from './calls/watcher'
+import type { CallPrompt } from '../shared/callDetect'
 import {
   initQueue,
   setJobNotifier,
@@ -105,6 +119,7 @@ registerProvider(openrouterProvider)
 app.on('before-quit', () => {
   stopOllama()
   stopDictation()
+  stopCallWatcher()
 })
 
 let win: BrowserWindow | null = null
@@ -191,11 +206,66 @@ ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
   setClaudeConfig(settings.anthropicKey, settings.claudeModel)
   setOpenrouterConfig(settings.openrouterKey, settings.openrouterModel)
   if ('dictation' in patch) applyDictationSettings(settings.dictation)
+  if ('callPrompt' in patch) applyCallWatcher()
   return settings
 })
 
 // Аудио диктовки из renderer → распознать → вставить в активное окно.
 ipcMain.handle('dict:audio', (_e, data: ArrayBuffer, meta?: ClipMeta) => onDictationAudio(data, meta))
+
+// ---------- запись звонков ----------
+const callNames = (): [string, string] => settings.callNames ?? ['Я', 'Собеседник']
+ipcMain.handle('call:open', (_e, id: string) => openCall(id))
+// Куски летят каждые 2 с — без ответа (send), чтобы не держать renderer.
+ipcMain.on('call:chunk', (_e, id: string, kind: string, data: ArrayBuffer) => writeChunk(id, kind, data))
+ipcMain.handle('call:finish', (_e, id: string, opts: { title: string; names: [string, string]; app?: string }) => {
+  patchSettings({ callNames: opts.names })
+  return finishCall(id, opts)
+})
+ipcMain.handle('call:cancel', (_e, id: string) => cancelCall(id))
+ipcMain.handle('call:mute', (_e, appId: string) => {
+  const muted = new Set(settings.callMuted ?? [])
+  muted.add(appId)
+  patchSettings({ callMuted: [...muted] })
+})
+ipcMain.handle('call:unmute', (_e, appId: string) => {
+  patchSettings({ callMuted: (settings.callMuted ?? []).filter((a) => a !== appId) })
+})
+ipcMain.handle('call:snooze', () => snoozeCallPrompts())
+
+function onCallDetected(p: CallPrompt): void {
+  win?.webContents.send('call:prompt', { appId: p.appId, name: p.name })
+  // Окно свёрнуто или не в фокусе — системное уведомление; клик открывает окно записи.
+  if (win && !win.isFocused() && Notification.isSupported()) {
+    const n = new Notification({
+      title: `Похоже, идёт звонок в ${p.name}`,
+      body: 'Нажмите, чтобы записать разговор в «Слово».',
+      silent: true
+    })
+    n.on('click', () => {
+      if (!win) return
+      if (win.isMinimized()) win.restore()
+      win.show()
+      win.focus()
+      win.webContents.send('call:prompt', { appId: p.appId, name: p.name, open: true })
+    })
+    n.show()
+  }
+}
+
+function applyCallWatcher(): void {
+  stopCallWatcher()
+  // Выключили подсказки — уже показанную полосу тоже убрать.
+  if (settings.callPrompt === false) win?.webContents.send('call:prompt-gone')
+  if (settings.callPrompt !== false) {
+    startCallWatcher({
+      isMuted: (id) => (settings.callMuted ?? []).includes(id),
+      isBusy: () => isCallActive() || isDictating(),
+      onCall: onCallDetected,
+      onGone: () => win?.webContents.send('call:prompt-gone')
+    })
+  }
+}
 ipcMain.handle('dict:history', () => dictationHistory())
 ipcMain.handle('dict:retry', (_e, audio: string) => retryDictation(audio))
 
@@ -456,7 +526,14 @@ ipcMain.handle(
       filters: [{ name: ext.toUpperCase(), extensions: [ext] }]
     })
     if (res.canceled || !res.filePath) return null
-    await exportTranscript(meta, res.filePath, format, highlight, anon)
+    await exportTranscript(
+      meta,
+      res.filePath,
+      format,
+      highlight,
+      anon,
+      settings.pauseInExport === false ? 0 : (settings.pauseMarkSec ?? 3)
+    )
     shell.showItemInFolder(res.filePath)
     return res.filePath
   }
@@ -660,6 +737,38 @@ app.whenReady().then(() => {
     return provider.generate(POLISH_SYSTEM, wrapForPolish(raw))
   })
   applyDictationSettings(settings.dictation)
+
+  // Запись звонков: разрешение на звук компьютера, подсказка «идёт звонок»,
+  // сборка записей, прерванных сбоем.
+  registerCallCapture()
+  setDictationBlocker(() => isCallActive())
+  setCallWriteErrorHandler((message) => win?.webContents.send('call:write-error', message))
+  // Окно перезагрузили (Ctrl+R) или оно упало посреди записи: файлы закрыть и
+  // сразу собрать запись — иначе «идёт запись» висело бы до перезапуска.
+  const rescueCall = (): void => {
+    if (!abandonActiveCall()) return
+    recoverCalls(callNames())
+      .then((list) => {
+        if (!list.length) return
+        const tell = (): void => win?.webContents.send('call:recovered', list.length)
+        if (win?.webContents.isLoading()) win.webContents.once('did-finish-load', tell)
+        else tell()
+      })
+      .catch((err) => console.error('[calls] rescue', err))
+  }
+  win?.webContents.on('render-process-gone', rescueCall)
+  win?.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) rescueCall()
+  })
+  applyCallWatcher()
+  recoverCalls(callNames())
+    .then((list) => {
+      if (!list.length || !win) return
+      const tell = (): void => win?.webContents.send('call:recovered', list.length)
+      if (win.webContents.isLoading()) win.webContents.once('did-finish-load', tell)
+      else tell()
+    })
+    .catch((err) => console.error('[calls] recover', err))
 
   // Dev-хук: прогнать готовый клип через настоящий конвейер диктовки
   // (сохранение аудио → распознавание → чистка → журнал) без микрофона.

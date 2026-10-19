@@ -6,13 +6,15 @@ import {
   readdirSync,
   existsSync,
   copyFileSync,
-  unlinkSync
+  unlinkSync,
+  rmSync
 } from 'fs'
 import { join, basename, extname } from 'path'
 import { randomUUID } from 'crypto'
 import { PROJECTS_DIR } from '../paths'
 import { repairAndRemux } from '../audio/import'
 import { buildPeaks } from '../jobs/peaks'
+import { hasAudio, toMonoM4a, mixTwo } from '../calls/ffmpeg'
 import type { ProjectMeta, Turn, SpeakerInfo } from '../../shared/types'
 
 const TRANSLIT: Record<string, string> = {
@@ -179,5 +181,64 @@ export async function createProjectFromFile(
   }
   writeJsonAtomic(join(dir, 'project.json'), meta)
   onProgress?.('done')
+  return meta
+}
+
+/**
+ * Запись звонка → проект. В папке записи лежат mic.webm (микрофон) и sys.webm
+ * (звук компьютера). Каждая дорожка сохраняется отдельно (моно m4a) — их
+ * расшифровывают по отдельности, говорящие известны заранее. Для прослушивания
+ * собираем общую audio.m4a. Если одна дорожка пустая — запись из одной.
+ */
+export async function createProjectFromCall(
+  callDir: string,
+  opts: { title: string; names: [string, string]; app?: string }
+): Promise<ProjectMeta> {
+  const micSrc = join(callDir, 'mic.webm')
+  const sysSrc = join(callDir, 'sys.webm')
+  const haveMic = hasAudio(micSrc)
+  const haveSys = hasAudio(sysSrc)
+  if (!haveMic && !haveSys) throw new Error('Запись пустая: ни микрофон, ни звук компьютера не записались.')
+  mkdirSync(PROJECTS_DIR, { recursive: true })
+  const slug = uniqueSlug(slugify(opts.title))
+  const dir = projectDir(slug)
+  mkdirSync(dir, { recursive: true })
+  let durationSec: number
+  try {
+    if (haveMic) await toMonoM4a(micSrc, join(dir, 'mic.m4a'))
+    if (haveSys) await toMonoM4a(sysSrc, join(dir, 'sys.m4a'))
+    if (haveMic && haveSys) await mixTwo(join(dir, 'mic.m4a'), join(dir, 'sys.m4a'), join(dir, 'audio.m4a'))
+    else copyFileSync(join(dir, haveMic ? 'mic.m4a' : 'sys.m4a'), join(dir, 'audio.m4a'))
+    ;({ durationSec } = await buildPeaks(join(dir, 'audio.m4a'), join(dir, 'peaks.bin'), 50))
+  } catch (err) {
+    // Недостроенную папку убираем: без project.json её не видно в списке и не удалить,
+    // а восстановление при каждом запуске плодило бы новые (ревью волны 3).
+    // Исходные дорожки в calls\<id> остаются — запись не потеряна.
+    rmSync(dir, { recursive: true, force: true })
+    throw err
+  }
+  const now = new Date().toISOString()
+  const meta: ProjectMeta = {
+    version: 1,
+    id: randomUUID(),
+    slug,
+    title: opts.title,
+    createdAt: now,
+    updatedAt: now,
+    audio: {
+      file: 'audio.m4a',
+      originalPath: '',
+      durationSec: Math.round(durationSec * 100) / 100,
+      repairedPrefixBytes: 0,
+      peaks: { file: 'peaks.bin', perSec: 50 }
+    },
+    channels: {
+      mic: haveMic ? 'mic.m4a' : '',
+      sys: haveSys ? 'sys.m4a' : '',
+      names: opts.names,
+      app: opts.app
+    }
+  }
+  writeJsonAtomic(join(dir, 'project.json'), meta)
   return meta
 }

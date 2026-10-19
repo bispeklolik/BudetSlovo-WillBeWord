@@ -9,6 +9,7 @@ import Icon from './components/Icon'
 import SettingsModal from './components/SettingsModal'
 import DictationRecorder from './components/DictationRecorder'
 import DictOverlay from './components/DictOverlay'
+import CallRecorder from './components/CallRecorder'
 
 type View = { page: 'home' } | { page: 'editor'; slug: string; search?: string }
 
@@ -26,6 +27,29 @@ function MainApp(): React.JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false)
   // Мастер «С чего начнём?»: сам — при первом запуске, вручную — из настроек.
   const [welcomeOpen, setWelcomeOpen] = useState(false)
+  // Запись звонка: окно записи и полоса-подсказка «похоже, идёт звонок».
+  const [callRec, setCallRec] = useState<{ app?: { appId: string; name: string } } | null>(null)
+  const [callPrompt, setCallPrompt] = useState<{ appId: string; name: string } | null>(null)
+  const [homeKey, setHomeKey] = useState(0)
+
+  useEffect(() => {
+    const off1 = api.onCallPrompt((p) => {
+      if (p.open) {
+        setCallPrompt(null)
+        setCallRec({ app: { appId: p.appId, name: p.name } })
+      } else setCallPrompt({ appId: p.appId, name: p.name })
+    })
+    const off2 = api.onCallRecovered((n) => {
+      showToast(`Восстановлено записей звонков: ${n}. Они в списке записей.`)
+      setHomeKey((k) => k + 1)
+    })
+    const off3 = api.onCallPromptGone(() => setCallPrompt(null))
+    return () => {
+      off1()
+      off2()
+      off3()
+    }
+  }, [])
 
   useEffect(() => {
     api.getSettings().then((s) => {
@@ -115,6 +139,29 @@ function MainApp(): React.JSX.Element {
           </button>
         </div>
       </header>
+      {callPrompt && !callRec && (
+        <div className="call-prompt">
+          <span>Похоже, идёт звонок в {callPrompt.name}. Записать разговор?</span>
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={() => {
+              setCallRec({ app: callPrompt })
+              setCallPrompt(null)
+            }}
+          >
+            Записать
+          </button>
+          <button
+            className="btn btn-sm"
+            onClick={() => {
+              setCallPrompt(null)
+              void api.callSnooze()
+            }}
+          >
+            Не сейчас
+          </button>
+        </div>
+      )}
       {settings && (welcomeOpen || !settings.onboarded) ? (
         <Welcome
           onDone={async () => {
@@ -130,11 +177,17 @@ function MainApp(): React.JSX.Element {
         />
       ) : view.page === 'home' ? (
         <Home
+          key={homeKey}
           onOpen={(slug, search) => setView({ page: 'editor', slug, search })}
           onOpenWelcome={() => setWelcomeOpen(true)}
+          onRecordCall={() => setCallRec({})}
         />
       ) : (
-        <Editor slug={view.slug} initialSearch={view.search} />
+        <Editor
+          slug={view.slug}
+          initialSearch={view.search}
+          pauseMinSec={settings?.pauseMarkSec ?? 3}
+        />
       )}
       {(dragging || importing) && (
         <div className="drop-overlay">
@@ -143,11 +196,25 @@ function MainApp(): React.JSX.Element {
           </div>
         </div>
       )}
+      {callRec && (
+        <CallRecorder
+          app={callRec.app}
+          onClose={() => setCallRec(null)}
+          onDone={(slug) => {
+            setCallRec(null)
+            setView({ page: 'editor', slug })
+          }}
+        />
+      )}
       {settingsOpen && (
         <SettingsModal
           theme={settings?.theme ?? 'light'}
           onToggleTheme={toggleTheme}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => {
+            setSettingsOpen(false)
+            // Настройки могли поменять порог пауз и т.п. — подтянуть в редактор.
+            void api.getSettings().then(setSettings)
+          }}
           onOpenWelcome={() => {
             setSettingsOpen(false)
             setWelcomeOpen(true)

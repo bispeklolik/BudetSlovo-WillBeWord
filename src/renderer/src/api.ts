@@ -86,7 +86,22 @@ const stub: RendererApi = {
   },
   openExternal: async () => {},
   createBackup: async () => null,
-  restoreBackup: async () => null
+  restoreBackup: async () => null,
+  callOpen: async () => {
+    throw new Error('Запись звонка доступна только в приложении (Electron)')
+  },
+  callChunk: () => {},
+  callFinish: async () => {
+    throw new Error('Запись звонка доступна только в приложении (Electron)')
+  },
+  callCancel: async () => {},
+  callMute: async () => {},
+  callUnmute: async () => {},
+  callSnooze: async () => {},
+  onCallPrompt: () => () => {},
+  onCallWriteError: () => () => {},
+  onCallPromptGone: () => () => {},
+  onCallRecovered: () => () => {}
 }
 
 export const api: RendererApi = window.api ?? stub

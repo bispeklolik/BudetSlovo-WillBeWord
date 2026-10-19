@@ -1,6 +1,7 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import type { ProjectMeta, Turn, Word } from '../../../shared/types'
+import { computePauses, pauseMarker } from '../../../shared/pauses'
 
 function fmtTime(sec: number): string {
   const t = Math.floor(sec)
@@ -38,6 +39,8 @@ interface Props {
   searchTurnIndex: number | null
   anonMode: boolean
   anonOverlay: Map<number, string>
+  /** отмечать паузы от N секунд (0 — не отмечать) */
+  pauseMinSec?: number
 }
 
 // memo: родитель (Editor) перерисовывается 60 раз/с во время воспроизведения
@@ -46,6 +49,17 @@ function TranscriptView(props: Props): React.JSX.Element {
   const { meta, activeWordId, activeTurnIndex, follow } = props
   const turns = meta.turns ?? []
   const ref = useRef<VirtuosoHandle>(null)
+  // Паузы «(пауза 4 с)» — по таймкодам слов; не слова, а подписи: их не видят
+  // клик, правка, караоке и поиск (нет data-word, pointer-events: none).
+  const pauses = useMemo(() => computePauses(meta.turns ?? [], props.pauseMinSec ?? 0), [meta.turns, props.pauseMinSec])
+  const pauseEl = (wordId: number): React.JSX.Element | null => {
+    const gap = pauses.get(wordId)
+    return gap === undefined ? null : (
+      <span className="pause-mark" aria-hidden contentEditable={false}>
+        {pauseMarker(gap)}
+      </span>
+    )
+  }
 
   const [editId, setEditId] = useState<number | null>(null)
   const [draft, setDraft] = useState('')
@@ -151,6 +165,7 @@ function TranscriptView(props: Props): React.JSX.Element {
               const replaced = ov !== undefined
               return (
                 <span className="wtok" key={w.id}>
+                  {pauseEl(w.id)}
                   <span
                     className={
                       'word' +
@@ -167,6 +182,7 @@ function TranscriptView(props: Props): React.JSX.Element {
             }
             return (
             <span className="wtok" key={w.id}>
+                  {pauseEl(w.id)}
               <button
                 className="ins"
                 title="Вставить слово"

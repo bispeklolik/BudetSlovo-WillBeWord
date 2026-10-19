@@ -12,7 +12,8 @@ const DG_URL = 'https://api.deepgram.com/v1/listen'
 export async function transcribeWithDeepgram(
   audioPath: string,
   key: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  opts?: { verbatim?: boolean }
 ): Promise<MergeResult> {
   const body = readFileSync(audioPath)
   // ponytail: синхронный endpoint — тянет и многочасовые pre-recorded в одном
@@ -25,6 +26,8 @@ export async function transcribeWithDeepgram(
     punctuate: 'true',
     smart_format: 'true'
   })
+  // filler_words официально только для английского — для русского «как получится».
+  if (opts?.verbatim) params.set('filler_words', 'true')
   const res = await fetch(`${DG_URL}?${params.toString()}`, {
     method: 'POST',
     headers: { Authorization: `Token ${key}`, 'Content-Type': 'audio/mp4' },

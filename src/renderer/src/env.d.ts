@@ -88,6 +88,17 @@ export interface RendererApi {
   openExternal: (url: string) => Promise<void>
   createBackup: () => Promise<{ path: string; items: number; bytes: number } | null>
   restoreBackup: () => Promise<{ restored: string[]; savedTo: string } | null>
+  callOpen: (id: string) => Promise<void>
+  callChunk: (id: string, kind: 'mic' | 'sys', data: ArrayBuffer) => void
+  callFinish: (id: string, opts: { title: string; names: [string, string]; app?: string }) => Promise<ProjectMeta>
+  callCancel: (id: string) => Promise<void>
+  callMute: (appId: string) => Promise<void>
+  callUnmute: (appId: string) => Promise<void>
+  callSnooze: () => Promise<void>
+  onCallPrompt: (cb: (p: { appId: string; name: string; open?: boolean }) => void) => () => void
+  onCallWriteError: (cb: (message: string) => void) => () => void
+  onCallPromptGone: (cb: () => void) => () => void
+  onCallRecovered: (cb: (count: number) => void) => () => void
 }
 
 declare global {

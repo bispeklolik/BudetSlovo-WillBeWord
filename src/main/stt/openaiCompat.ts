@@ -6,6 +6,7 @@ import { ffmpegPath } from '../engine/location'
 import type { MergeResult } from '../project/merge'
 import { openaiToTurns, type OaResponse } from '../../shared/sttMappers'
 import { netSignal } from './net'
+import { VERBATIM_PROMPT_RU } from '../../shared/verbatim'
 
 // OpenAI и Groq: один и тот же контракт (multipart /audio/transcriptions,
 // verbose_json + word-таймкоды). Groq — тот же код, другой baseUrl+model.
@@ -16,7 +17,8 @@ export async function transcribeOpenAICompat(
   key: string,
   baseUrl: string,
   model: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  opts?: { verbatim?: boolean }
 ): Promise<MergeResult> {
   // ponytail: лимит 25 МБ на файл → перекодируем в моно 16 kbps m4a. Речь так
   // распознаётся без потерь, а многочасовая сессия влезает одним файлом.
@@ -36,6 +38,8 @@ export async function transcribeOpenAICompat(
     form.append('response_format', 'verbose_json')
     form.append('timestamp_granularities[]', 'word')
     form.append('timestamp_granularities[]', 'segment') // сегменты = границы реплик
+    // Whisper подражает стилю затравки: с «э-э»/«ну» в ней он их и оставляет.
+    if (opts?.verbatim) form.append('prompt', VERBATIM_PROMPT_RU)
     const res = await fetch(`${baseUrl}/audio/transcriptions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}` }, // Content-Type ставит fetch (boundary)

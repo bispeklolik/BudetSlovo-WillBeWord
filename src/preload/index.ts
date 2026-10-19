@@ -158,7 +158,38 @@ const api = {
   createBackup: (): Promise<{ path: string; items: number; bytes: number } | null> =>
     ipcRenderer.invoke('backup:create'),
   restoreBackup: (): Promise<{ restored: string[]; savedTo: string } | null> =>
-    ipcRenderer.invoke('backup:restore')
+    ipcRenderer.invoke('backup:restore'),
+
+  // Запись звонка: две дорожки кусками на диск, сборка проекта в main.
+  callOpen: (id: string): Promise<void> => ipcRenderer.invoke('call:open', id),
+  callChunk: (id: string, kind: 'mic' | 'sys', data: ArrayBuffer): void =>
+    ipcRenderer.send('call:chunk', id, kind, data),
+  callFinish: (id: string, opts: { title: string; names: [string, string]; app?: string }): Promise<ProjectMeta> =>
+    ipcRenderer.invoke('call:finish', id, opts),
+  callCancel: (id: string): Promise<void> => ipcRenderer.invoke('call:cancel', id),
+  callMute: (appId: string): Promise<void> => ipcRenderer.invoke('call:mute', appId),
+  callUnmute: (appId: string): Promise<void> => ipcRenderer.invoke('call:unmute', appId),
+  callSnooze: (): Promise<void> => ipcRenderer.invoke('call:snooze'),
+  onCallPrompt: (cb: (p: { appId: string; name: string; open?: boolean }) => void): (() => void) => {
+    const h = (_e: unknown, p: { appId: string; name: string; open?: boolean }): void => cb(p)
+    ipcRenderer.on('call:prompt', h)
+    return () => ipcRenderer.off('call:prompt', h)
+  },
+  onCallWriteError: (cb: (message: string) => void): (() => void) => {
+    const h = (_e: unknown, m: string): void => cb(m)
+    ipcRenderer.on('call:write-error', h)
+    return () => ipcRenderer.off('call:write-error', h)
+  },
+  onCallPromptGone: (cb: () => void): (() => void) => {
+    const h = (): void => cb()
+    ipcRenderer.on('call:prompt-gone', h)
+    return () => ipcRenderer.off('call:prompt-gone', h)
+  },
+  onCallRecovered: (cb: (count: number) => void): (() => void) => {
+    const h = (_e: unknown, n: number): void => cb(n)
+    ipcRenderer.on('call:recovered', h)
+    return () => ipcRenderer.off('call:recovered', h)
+  }
 }
 
 contextBridge.exposeInMainWorld('api', api)

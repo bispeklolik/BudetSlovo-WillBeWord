@@ -171,8 +171,19 @@ export async function retryDictation(audio: string): Promise<string> {
   return text
 }
 
+// Пока идёт запись звонка, микрофон занят ею — диктовку не начинаем.
+let blocked: () => boolean = () => false
+export function setDictationBlocker(fn: () => boolean): void {
+  blocked = fn
+}
+
+/** Идёт ли сейчас диктовка (подсказку о звонке в это время не показываем). */
+export function isDictating(): boolean {
+  return phase !== 'idle'
+}
+
 function startRecording(): void {
-  if (phase !== 'idle') return
+  if (phase !== 'idle' || blocked()) return
   console.log('[dictation] recording start')
   phase = 'recording'
   showOverlay()

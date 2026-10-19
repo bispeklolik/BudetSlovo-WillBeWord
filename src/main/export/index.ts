@@ -3,6 +3,12 @@ import { writeFileSync } from 'fs'
 import type { ProjectMeta, Word } from '../../shared/types'
 import { toSubtitles } from './subtitles'
 import { buildAnonOverlay } from '../../shared/anon'
+import { computePauses, pauseMarker } from '../../shared/pauses'
+
+// Паузы «(пауза 4 с)»: ключ — id слова ПОСЛЕ паузы. Считаем по исходным
+// таймкодам до обезличивания (оно пересобирает заменённые слова без таймкодов).
+type Pauses = Map<number, number>
+const NO_PAUSES: Pauses = new Map()
 
 export type ExportFormat = 'docx' | 'md' | 'txt' | 'srt' | 'vtt'
 
@@ -34,9 +40,12 @@ function speakerName(meta: ProjectMeta, spk: string): string {
   return meta.speakers?.find((s) => s.id === spk)?.name ?? spk
 }
 
-function turnText(words: Word[]): string {
+function turnText(words: Word[], pauses: Pauses = NO_PAUSES): string {
   return words
-    .map((w) => w.t)
+    .map((w) => {
+      const gap = pauses.get(w.id)
+      return gap !== undefined && w.t ? pauseMarker(gap) + ' ' + w.t : w.t
+    })
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -50,7 +59,7 @@ function confHighlight(w: Word): 'red' | 'yellow' | null {
   return null
 }
 
-async function buildDocx(meta: ProjectMeta, highlight: boolean): Promise<Buffer> {
+async function buildDocx(meta: ProjectMeta, highlight: boolean, pauses: Pauses = NO_PAUSES): Promise<Buffer> {
   const children: Paragraph[] = []
 
   children.push(
@@ -105,6 +114,8 @@ async function buildDocx(meta: ProjectMeta, highlight: boolean): Promise<Buffer>
     ]
     for (const w of turn.words) {
       if (!w.t) continue
+      const gap = pauses.get(w.id)
+      if (gap !== undefined) runs.push(new TextRun({ text: pauseMarker(gap) + ' ', italics: true, color: '7A7A7A' }))
       const text = w.t + ' '
       const hl = highlight ? confHighlight(w) : null
       if (hl === 'red') runs.push(new TextRun({ text, highlight: 'red', bold: true }))
@@ -130,21 +141,21 @@ async function buildDocx(meta: ProjectMeta, highlight: boolean): Promise<Buffer>
   return Packer.toBuffer(doc)
 }
 
-function buildMd(meta: ProjectMeta): string {
+function buildMd(meta: ProjectMeta, pauses: Pauses = NO_PAUSES): string {
   let out = `# Расшифровка: ${meta.title}\n\n`
   for (const turn of meta.turns ?? []) {
-    out += `**${speakerName(meta, turn.spk)} — ${fmtTime(turn.startSec)}:** ${turnText(turn.words)}\n\n`
+    out += `**${speakerName(meta, turn.spk)} — ${fmtTime(turn.startSec)}:** ${turnText(turn.words, pauses)}\n\n`
   }
   return out
 }
 
-function buildTxt(meta: ProjectMeta): string {
+function buildTxt(meta: ProjectMeta, pauses: Pauses = NO_PAUSES): string {
   let out = `Расшифровка: ${meta.title}\n`
   out += `Текст дословный, без редактуры.\n`
   out += '-'.repeat(60) + '\n\n'
   for (const turn of meta.turns ?? []) {
     out += `[${speakerName(meta, turn.spk)} — ${fmtTime(turn.startSec)}]\n`
-    out += turnText(turn.words) + '\n\n'
+    out += turnText(turn.words, pauses) + '\n\n'
   }
   return out
 }
@@ -175,17 +186,20 @@ export async function exportTranscript(
   outPath: string,
   format: ExportFormat,
   highlight: boolean,
-  anon = false
+  anon = false,
+  pauseMinSec = 0
 ): Promise<void> {
+  // Субтитрам паузы не нужны — в них и так есть время.
+  const pauses = format === 'srt' || format === 'vtt' ? NO_PAUSES : computePauses(meta.turns ?? [], pauseMinSec)
   const m = anon ? anonymizeMeta(meta) : meta
   if (format === 'docx') {
-    const buf = await buildDocx(m, anon ? false : highlight)
+    const buf = await buildDocx(m, anon ? false : highlight, pauses)
     writeFileSync(outPath, buf)
   } else if (format === 'md') {
-    writeFileSync(outPath, BOM + buildMd(m), 'utf8')
+    writeFileSync(outPath, BOM + buildMd(m, pauses), 'utf8')
   } else if (format === 'srt' || format === 'vtt') {
     writeFileSync(outPath, toSubtitles(m.turns ?? [], format), 'utf8')
   } else {
-    writeFileSync(outPath, BOM + buildTxt(m), 'utf8')
+    writeFileSync(outPath, BOM + buildTxt(m, pauses), 'utf8')
   }
 }

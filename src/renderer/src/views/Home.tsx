@@ -40,10 +40,12 @@ type Modal =
 
 export default function Home({
   onOpen,
-  onOpenWelcome
+  onOpenWelcome,
+  onRecordCall
 }: {
   onOpen: (slug: string, search?: string) => void
   onOpenWelcome: () => void
+  onRecordCall: () => void
 }): React.JSX.Element {
   const [projects, setProjects] = useState<ProjectMeta[]>([])
   const [folderList, setFolderList] = useState<string[]>([])
@@ -201,14 +203,19 @@ export default function Home({
             Превращаю запись разговора в текст и готовые результаты: конспект, заметку, письмо.
           </div>
           <EngineStatus onOpenWelcome={onOpenWelcome} />
-          <button
-            className="btn btn-primary"
-            onClick={doImport}
-            disabled={busy !== null}
-            data-testid="import-btn"
-          >
-            {busy ?? 'Импортировать запись'}
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="btn btn-primary"
+              onClick={doImport}
+              disabled={busy !== null}
+              data-testid="import-btn"
+            >
+              {busy ?? 'Импортировать запись'}
+            </button>
+            <button className="btn" onClick={onRecordCall}>
+              Записать звонок
+            </button>
+          </div>
           <div className="welcome-hint">или перетащите файл аудио/видео прямо в это окно</div>
         </div>
       </main>
@@ -227,6 +234,9 @@ export default function Home({
           data-testid="import-btn"
         >
           {busy ?? 'Импортировать запись'}
+        </button>
+        <button className="btn" onClick={onRecordCall}>
+          Записать звонок
         </button>
         <div className="global-search">
           <Icon name="search" size={16} />

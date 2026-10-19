@@ -2363,3 +2363,111 @@ body.overlay-mode {
   line-height: 1.45;
   white-space: pre-wrap;
 }
+
+/* ---------- запись звонка ---------- */
+
+.call-modal {
+  gap: 12px;
+}
+
+.call-names {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.call-names label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.call-note {
+  padding: 8px 12px;
+  border-radius: 9px;
+  background: var(--conf-mid-bg);
+  color: var(--conf-mid-text);
+  font-size: 13.5px;
+}
+
+.call-live {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 550;
+}
+
+.call-level {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.call-level-label {
+  width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.call-level-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.call-level-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.1s linear;
+}
+
+.call-prompt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+}
+
+.pause-mark {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+  margin-right: 4px;
+  user-select: none;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.names-field {
+  flex-wrap: wrap;
+}
+
+.names-inputs {
+  display: flex;
+  gap: 8px;
+}
+
+.names-inputs .text-input {
+  width: 160px;
+}
+
+.range-field {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.range-field .text-input {
+  width: 90px;
+}
