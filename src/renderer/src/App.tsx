@@ -44,10 +44,12 @@ function MainApp(): React.JSX.Element {
       setHomeKey((k) => k + 1)
     })
     const off3 = api.onCallPromptGone(() => setCallPrompt(null))
+    const off4 = api.onAppNotice((m) => showToast(m, 'info'))
     return () => {
       off1()
       off2()
       off3()
+      off4()
     }
   }, [])
 

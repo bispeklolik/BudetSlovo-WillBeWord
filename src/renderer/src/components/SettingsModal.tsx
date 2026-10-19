@@ -417,6 +417,13 @@ export default function SettingsModal({
               {dict.enabled ? 'Вкл' : 'Выкл'}
             </button>
           </div>
+          {/* Словарь работает и при расшифровке записей — открыт всегда (ревью волны 5). */}
+          <div className="settings-row">
+            <span>Словарь, замены, сниппеты, свои режимы</span>
+            <button className="btn btn-sm" onClick={() => setVocabOpen(true)}>
+              Открыть
+            </button>
+          </div>
           {dict.enabled && (
             <>
               <div className="settings-row">
@@ -480,12 +487,6 @@ export default function SettingsModal({
                   )}
                 </>
               )}
-              <div className="settings-row">
-                <span>Словарь, замены, сниппеты, свои режимы</span>
-                <button className="btn btn-sm" onClick={() => setVocabOpen(true)}>
-                  Открыть
-                </button>
-              </div>
               <div className="settings-row">
                 <span>Вставлять в активное окно</span>
                 <button

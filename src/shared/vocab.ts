@@ -76,15 +76,26 @@ export function applyReplacements(text: string, reps: Replacement[] | undefined)
   for (const r of list) {
     const re = phraseRe(r.from)
     if (!re) continue
-    out = out.replace(re, (m) => {
+    if (!r.to.trim()) {
+      // Пустая замена = удалить слово вместе с запятой и пробелом после него.
+      out = out.replace(new RegExp(re.source + '(?:\\s*[,;:])?[ \\t]*', re.flags), '')
+      continue
+    }
+    out = out.replace(re, (m, ...rest) => {
+      const offset = rest[rest.length - 2] as number
+      const whole = rest[rest.length - 1] as string
       const to = r.to
+      // Заглавную ставим, только если найденное начинало предложение (ревью волны 5:
+      // «Иван» → «клиент» посреди фразы не должно становиться «Клиент»).
+      const sentenceStart = /^\s*$|[.!?…]\s+$|\n\s*$/.test(whole.slice(0, offset))
       const first = m.charAt(0)
-      return first !== first.toLowerCase() && to && to.charAt(0) === to.charAt(0).toLowerCase()
+      return sentenceStart && first !== first.toLowerCase() && to.charAt(0) === to.charAt(0).toLowerCase()
         ? to.charAt(0).toUpperCase() + to.slice(1)
         : to
     })
   }
-  return out
+  // После удалений: двойные пробелы и запятая в начале строки.
+  return out.replace(/[ \t]{2,}/g, ' ').replace(/(^|\n)[ \t]*[,;:][ \t]*/g, '$1').trim()
 }
 
 /**

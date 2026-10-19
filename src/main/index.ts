@@ -41,6 +41,10 @@ import {
 } from './ai/insights'
 import { missedSystem } from '../shared/aiTasks'
 import { transcribeClip, transcribeAudioText } from './stt/clip'
+import { toDataURL as qrDataUrl } from 'qrcode'
+import { startPhoneUpload, stopPhoneUpload } from './phone/server'
+import { startWatchFolder, stopWatchFolder } from './watch/folder'
+import { downloadLink, installYtDlp, ytDlpInstalled, cancelLinkImport } from './link/import'
 import { claudeProvider, setClaudeConfig } from './ai/claude'
 import { openrouterProvider, setOpenrouterConfig } from './ai/openrouter'
 import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
@@ -130,6 +134,8 @@ registerProvider(localLlamaProvider)
 registerProvider(claudeProvider)
 registerProvider(openrouterProvider)
 app.on('before-quit', () => {
+  stopPhoneUpload()
+  stopWatchFolder()
   stopOllama()
   stopDictation()
   stopCallWatcher()
@@ -220,6 +226,7 @@ ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
   setOpenrouterConfig(settings.openrouterKey, settings.openrouterModel)
   if ('dictation' in patch || 'vocab' in patch) applyDictationSettings(settings.dictation, settings.vocab)
   if ('callPrompt' in patch) applyCallWatcher()
+  if ('watchFolder' in patch) applyWatchFolder(false)
   return settings
 })
 
@@ -477,6 +484,73 @@ ipcMain.handle('project:import', async () => {
 
 // Импорт по пути (перетаскивание файла в окно) — без диалога.
 ipcMain.handle('project:importPath', (_e, path: string) => importFromPath(path))
+
+// ---------- волна 5: запись с телефона, папка-наблюдатель, ссылка ----------
+const notifyProjects = (): void => win?.webContents.send('projects:changed')
+const notice = (message: string): void => win?.webContents.send('app:notice', message)
+
+ipcMain.handle('phone:start', async () => {
+  const s = await startPhoneUpload(async (path) => {
+    const meta = await createProjectFromFile(path)
+    // Файл пришёл во временную папку — ссылка на него в записи не нужна.
+    meta.audio.originalPath = ''
+    saveProject(meta)
+    notifyProjects()
+    win?.webContents.send('phone:received', { slug: meta.slug, title: meta.title })
+    return meta.title
+  })
+  return { urls: s.urls, qr: s.urls[0] ? await qrDataUrl(s.urls[0], { margin: 1, width: 240 }) : '' }
+})
+ipcMain.handle('phone:stop', () => stopPhoneUpload())
+
+function applyWatchFolder(takeExisting: boolean): void {
+  const w = settings.watchFolder
+  if (!w?.dir) {
+    stopWatchFolder()
+    return
+  }
+  startWatchFolder(w.dir, takeExisting, {
+    importFile: async (path) => {
+      const meta = await createProjectFromFile(path)
+      if (settings.watchFolder?.autoTranscribe) enqueueTranscribe(meta.slug, { numSpeakers: 2, enhance: true })
+      return meta.title
+    },
+    onImported: (title) => {
+      notifyProjects()
+      notice(`Из папки-наблюдателя: «${title}»${settings.watchFolder?.autoTranscribe ? ' — расшифровка в очереди' : ''}.`)
+    },
+    onError: notice
+  })
+}
+ipcMain.handle('watch:pick', async () => {
+  if (!win) return null
+  const res = await dialog.showOpenDialog(win, { title: 'Папка, за которой следить', properties: ['openDirectory'] })
+  return res.canceled || !res.filePaths[0] ? null : res.filePaths[0]
+})
+ipcMain.handle('watch:set', (_e, dir: string | null, autoTranscribe: boolean, takeExisting: boolean) => {
+  const prev = settings.watchFolder?.dir
+  patchSettings({ watchFolder: dir ? { dir, autoTranscribe: !!autoTranscribe } : undefined })
+  // Та же папка — только переключили «расшифровывать»: наблюдатель не перезапускаем.
+  if (dir !== prev) applyWatchFolder(!!takeExisting)
+})
+
+ipcMain.handle('link:status', () => ({ ytDlp: ytDlpInstalled() }))
+ipcMain.handle('link:install', () => installYtDlp((p) => win?.webContents.send('link:progress', p)))
+ipcMain.handle('link:cancel', () => cancelLinkImport())
+ipcMain.handle('link:import', async (_e, url: string) => {
+  const { file, title, dir } = await downloadLink(String(url), (p) => win?.webContents.send('link:progress', p))
+  try {
+    win?.webContents.send('link:progress', { phase: 'Готовлю запись', percent: null })
+    const meta = await createProjectFromFile(file)
+    if (title) meta.title = title
+    meta.audio.originalPath = String(url)
+    saveProject(meta)
+    notifyProjects()
+    return meta
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
 
 // Переименование записи (меняем отображаемое название; папка-slug не трогается).
 ipcMain.handle('project:rename', (_e, slug: string, title: string) => {
@@ -841,6 +915,8 @@ app.whenReady().then(() => {
   // Запись звонков: разрешение на звук компьютера, подсказка «идёт звонок»,
   // сборка записей, прерванных сбоем.
   registerCallCapture()
+  // Наблюдатель — после загрузки окна: иначе его предупреждения терялись.
+  win?.webContents.once('did-finish-load', () => applyWatchFolder(false))
   setDictationBlocker(() => isCallActive())
   setCallWriteErrorHandler((message) => win?.webContents.send('call:write-error', message))
   // Окно перезагрузили (Ctrl+R) или оно упало посреди записи: файлы закрыть и

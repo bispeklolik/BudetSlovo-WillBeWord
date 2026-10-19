@@ -12,6 +12,10 @@ import MoveModal from '../components/MoveModal'
 import NotesPane from '../components/NotesPane'
 import AskPanel from '../components/AskPanel'
 import NoteViewer from '../components/NoteViewer'
+import AddMenu from '../components/AddMenu'
+import PhoneModal from '../components/PhoneModal'
+import LinkModal from '../components/LinkModal'
+import WatchModal from '../components/WatchModal'
 
 function fmtDuration(sec: number): string {
   const t = Math.floor(sec)
@@ -61,6 +65,7 @@ export default function Home({
   const [askOpen, setAskOpen] = useState(false)
   const [dyn, setDyn] = useState<{ phase: string } | null>(null)
   const [resultNote, setResultNote] = useState<Note | null>(null)
+  const [addModal, setAddModal] = useState<'phone' | 'link' | 'watch' | null>(null)
 
   const refresh = (): void => {
     api.listProjects().then(setProjects)
@@ -69,6 +74,8 @@ export default function Home({
     api.listNotes().then((n) => setNotesCount(n.length))
   }
   useEffect(refresh, [])
+  // Записи с телефона, из папки-наблюдателя и по ссылке появляются сами.
+  useEffect(() => api.onProjectsChanged(refresh), [])
   useEffect(refreshNotes, [])
   useEffect(() => {
     api.getSettings().then((s) => setFolderList(s.folders ?? []))
@@ -212,9 +219,25 @@ export default function Home({
     }
   }
 
+  // Окна «Ещё ▾» — вне веток пустого и обычного экрана: первая запись с телефона
+  // переключает ветку, и окно (с сервером приёма) не должно пересоздаваться
+  // (ревью волны 5: телефон терял файлы 2..N).
+  const openAdded = (slug: string): void => {
+    setAddModal(null)
+    onOpen(slug)
+  }
+  const withAdd = (body: React.JSX.Element): React.JSX.Element => (
+    <>
+      {body}
+      {addModal === 'phone' && <PhoneModal onOpen={openAdded} onClose={() => setAddModal(null)} />}
+      {addModal === 'link' && <LinkModal onOpen={openAdded} onClose={() => setAddModal(null)} />}
+      {addModal === 'watch' && <WatchModal onClose={() => setAddModal(null)} />}
+    </>
+  )
+
   // Первый запуск: ни одной записи — приветствие.
   if (projects.length === 0) {
-    return (
+    return withAdd(
       <main className="home">
         <div className="empty welcome">
           <div className="welcome-badge">
@@ -237,6 +260,7 @@ export default function Home({
             <button className="btn" onClick={onRecordCall}>
               Записать звонок
             </button>
+            <AddMenu onPhone={() => setAddModal('phone')} onLink={() => setAddModal('link')} onWatch={() => setAddModal('watch')} />
           </div>
           <div className="welcome-hint">или перетащите файл аудио/видео прямо в это окно</div>
         </div>
@@ -246,7 +270,7 @@ export default function Home({
 
   const folderTitle = folder === '' ? 'Все записи' : folder.split('/').pop()
 
-  return (
+  return withAdd(
     <main className="home">
       <div className="home-toolbar">
         <button
@@ -260,6 +284,7 @@ export default function Home({
         <button className="btn" onClick={onRecordCall}>
           Записать звонок
         </button>
+        <AddMenu onPhone={() => setAddModal('phone')} onLink={() => setAddModal('link')} onWatch={() => setAddModal('watch')} />
         <button className="btn" onClick={() => setAskOpen(true)} title="Вопрос по всем записям — ответ со ссылками">
           Спросить записи
         </button>

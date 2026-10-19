@@ -13,7 +13,7 @@ const turn = (spk: string, startSec: number, text: string): Turn => ({
 function project(slug: string, turns: Turn[], extra: Partial<ProjectMeta> = {}): ProjectMeta {
   return {
     version: 1,
-    id: slug,
+    id: 'id-' + slug,
     slug,
     title: 'Сессия с Евой ' + slug,
     createdAt: '2026-10-01T10:00:00Z',
@@ -26,10 +26,12 @@ function project(slug: string, turns: Turn[], extra: Partial<ProjectMeta> = {}):
 }
 
 const ANON = [{ find: 'Ева', replace: '[Имя]', kind: 'name' as const }]
-const anonP = project('a', [turn('S1', 5, 'Ева скучает по маме')], { anon: ANON, folder: 'Ева' })
-const rawP = project('b', [turn('S1', 7, 'Ева злится на маму')])
+const anonP = project('eva-ivanova', [turn('S1', 5, 'Ева скучает по маме')], { anon: ANON, folder: 'Ева', id: 'u1' })
+const rawP = project('maria-petrova', [turn('S1', 7, 'Мария злится на маму')], { title: 'Мария Петрова', folder: 'Мария', id: 'u2' })
 const notes: Note[] = [
-  { id: 'n1', title: 'Динамика: Ева', body: 'Ева стала спать лучше', kind: 'summary', createdAt: '2026-10-02', updatedAt: '2026-10-02' }
+  { id: 'n1', title: 'Динамика: Ева', body: 'Ева стала спать лучше', kind: 'summary', sourceTitle: 'Ева', createdAt: '2026-10-02', updatedAt: '2026-10-02' },
+  { id: 'n2', title: 'Конспект: Мария Петрова', body: 'Мария плачет', kind: 'summary', sourceSlug: 'maria-petrova', createdAt: '2026-10-03', updatedAt: '2026-10-03' },
+  { id: 'n3', title: 'Конспект: Ева', body: 'Евы не было', kind: 'summary', sourceSlug: 'eva-ivanova', createdAt: '2026-10-04', updatedAt: '2026-10-04' }
 ]
 
 function store(settings: Partial<Settings> = {}): Store {
@@ -39,41 +41,52 @@ function store(settings: Partial<Settings> = {}): Store {
 const txt = (r: { content: { text: string }[] }): string => r.content[0].text
 
 describe('MCP: политика «только обезличенные»', () => {
-  it('список: у каждой записи видно, можно ли читать; названия обезличены', () => {
+  it('список: id вместо имени файла; папка и название обезличены; у необезличенной всё скрыто', () => {
     const t = txt(callTool(store(), 'list_recordings', {}))
-    expect(t).toContain('slug: a | название: Сессия с [Имя] a | папка: Ева')
-    expect(t).toContain('текст доступен')
+    expect(t).toContain('id: u1 | название: Сессия с [Имя] eva-ivanova | папка: [Имя]')
+    expect(t).toContain('название: (название скрыто: запись не обезличена)')
+    expect(t).not.toMatch(/Мария|maria|Петрова/)
     expect(t).toContain('текст закрыт (не обезличена)')
   })
-  it('обезличенную запись отдаёт с заменами и временем', () => {
-    const t = txt(callTool(store(), 'get_transcript', { slug: 'a' }))
+  it('обезличенную запись отдаёт по id с заменами и временем', () => {
+    const t = txt(callTool(store(), 'get_transcript', { id: 'u1' }))
     expect(t).toContain('[0:05] Клиент: [Имя] скучает по маме')
-    expect(t).not.toMatch(/Ева скучает/)
+    expect(t).toContain('Папка: [Имя]')
+    expect(t).not.toMatch(/Ева/)
   })
   it('необезличенную — не отдаёт', () => {
-    const r = callTool(store(), 'get_transcript', { slug: 'b' })
+    const r = callTool(store(), 'get_transcript', { id: 'u2' })
     expect(r.isError).toBe(true)
     expect(txt(r)).toContain('не обезличена')
   })
-  it('поиск только по обезличенным', () => {
+  it('поиск только по обезличенным, в заголовке — id', () => {
     const t = txt(callTool(store(), 'search_recordings', { query: 'мама маме маму' }))
     expect(t).toContain('[Имя] скучает')
+    expect(t).toContain('(id u1)')
     expect(t).not.toContain('злится')
   })
-  it('конспекты — с правилами всех записей', () => {
-    expect(txt(callTool(store(), 'get_note', { id: 'n1' }))).toBe('# Динамика: [Имя]\n\n[Имя] стала спать лучше')
+  it('конспекты: только те, чьи записи обезличены; чистятся их правилами', () => {
+    const list = txt(callTool(store(), 'list_notes', {}))
+    expect(list).toContain('id: n1 | Динамика: [Имя]')
+    expect(list).toContain('id: n3 | Конспект: [Имя]')
+    expect(list).not.toContain('Мария')
+    expect(list).toContain('скрыто: 1')
+    expect(txt(callTool(store(), 'get_note', { id: 'n3' }))).toBe('# Конспект: [Имя]\n\n[Имя] не было')
+    const r = callTool(store(), 'get_note', { id: 'n2' })
+    expect(r.isError).toBe(true)
+    expect(txt(r)).not.toContain('Мария')
   })
 })
 
 describe('MCP: политика «все записи»', () => {
-  it('отдаёт и необезличенную, как есть', () => {
-    expect(txt(callTool(store({ mcpPolicy: 'all' }), 'get_transcript', { slug: 'b' }))).toContain('Ева злится')
-    expect(txt(callTool(store({ mcpPolicy: 'all' }), 'get_note', { id: 'n1' }))).toContain('Ева стала')
+  it('отдаёт и необезличенную, как есть; старый параметр slug тоже понимает', () => {
+    expect(txt(callTool(store({ mcpPolicy: 'all' }), 'get_transcript', { slug: 'maria-petrova' }))).toContain('Мария злится')
+    expect(txt(callTool(store({ mcpPolicy: 'all' }), 'get_note', { id: 'n2' }))).toContain('Мария плачет')
   })
   it('фильтр по папке', () => {
     const t = txt(callTool(store({ mcpPolicy: 'all' }), 'list_recordings', { folder: 'Ева' }))
-    expect(t).toContain('slug: a')
-    expect(t).not.toContain('slug: b')
+    expect(t).toContain('id: u1')
+    expect(t).not.toContain('u2')
   })
 })
 

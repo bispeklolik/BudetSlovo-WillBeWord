@@ -165,6 +165,37 @@ const api = {
   mcpConfig: (): Promise<{ ok: boolean; json: string; configDir: string }> => ipcRenderer.invoke('mcp:config'),
   openClaudeConfigDir: (): Promise<boolean> => ipcRenderer.invoke('mcp:openConfigDir'),
 
+  // Волна 5: запись с телефона, папка-наблюдатель, ссылка.
+  phoneStart: (): Promise<{ urls: string[]; qr: string }> => ipcRenderer.invoke('phone:start'),
+  phoneStop: (): Promise<void> => ipcRenderer.invoke('phone:stop'),
+  onPhoneReceived: (cb: (p: { slug: string; title: string }) => void): (() => void) => {
+    const h = (_e: unknown, p: { slug: string; title: string }): void => cb(p)
+    ipcRenderer.on('phone:received', h)
+    return () => ipcRenderer.off('phone:received', h)
+  },
+  watchPick: (): Promise<string | null> => ipcRenderer.invoke('watch:pick'),
+  watchSet: (dir: string | null, autoTranscribe: boolean, takeExisting: boolean): Promise<void> =>
+    ipcRenderer.invoke('watch:set', dir, autoTranscribe, takeExisting),
+  linkStatus: (): Promise<{ ytDlp: boolean }> => ipcRenderer.invoke('link:status'),
+  linkInstall: (): Promise<void> => ipcRenderer.invoke('link:install'),
+  linkImport: (url: string): Promise<ProjectMeta> => ipcRenderer.invoke('link:import', url),
+  linkCancel: (): Promise<void> => ipcRenderer.invoke('link:cancel'),
+  onLinkProgress: (cb: (p: { phase: string; percent: number | null }) => void): (() => void) => {
+    const h = (_e: unknown, p: { phase: string; percent: number | null }): void => cb(p)
+    ipcRenderer.on('link:progress', h)
+    return () => ipcRenderer.off('link:progress', h)
+  },
+  onProjectsChanged: (cb: () => void): (() => void) => {
+    const h = (): void => cb()
+    ipcRenderer.on('projects:changed', h)
+    return () => ipcRenderer.off('projects:changed', h)
+  },
+  onAppNotice: (cb: (message: string) => void): (() => void) => {
+    const h = (_e: unknown, m: string): void => cb(m)
+    ipcRenderer.on('app:notice', h)
+    return () => ipcRenderer.off('app:notice', h)
+  },
+
   // Волна 4: мои заметки → конспект, «Спросить запись», динамика клиента.
   setMyNotes: (slug: string, text: string): Promise<void> => ipcRenderer.invoke('project:setMyNotes', slug, text),
   enhanceNotes: (slug: string): Promise<Note> => ipcRenderer.invoke('ai:enhanceNotes', slug),

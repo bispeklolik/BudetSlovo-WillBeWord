@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Replacement, Snippet, Vocab } from '../../../shared/vocab'
 import type { CustomDictMode } from '../../../shared/dictModes'
 import { api } from '../api'
@@ -25,13 +25,25 @@ export default function VocabPanel({
   onSaveModes: (modes: CustomDictMode[]) => void
   onClose: () => void
 }): React.JSX.Element {
-  useEscClose(onClose)
   const [tab, setTab] = useState<Tab>('words')
   const [words, setWords] = useState('')
   const [reps, setReps] = useState<Replacement[]>([])
   const [snips, setSnips] = useState<Snippet[]>([])
   const [modes, setModes] = useState<CustomDictMode[]>(customModes)
   const [saved, setSaved] = useState(false)
+  // Правки сохраняются и при закрытии (Esc, «Закрыть», клик мимо) — как везде
+  // в настройках; раньше они молча пропадали (ревью волны 5).
+  const dirty = useRef(false)
+  const downOnOverlay = useRef(false)
+  const close = (): void => {
+    if (dirty.current) void save()
+    onClose()
+  }
+  useEscClose(close)
+  const touch = <T,>(set: (v: T) => void) => (v: T): void => {
+    dirty.current = true
+    set(v)
+  }
 
   useEffect(() => {
     api.getSettings().then((s) => {
@@ -48,7 +60,13 @@ export default function VocabPanel({
       snippets: snips.filter((s) => s.trigger.trim() && s.text.trim())
     }
     await api.setSettings({ vocab })
-    onSaveModes(modes.filter((m) => m.name.trim() && m.prompt.trim()))
+    // Режим без названия получает название; без описания — хранится, но не работает (видно подсказку).
+    onSaveModes(
+      modes
+        .filter((m) => m.name.trim() || m.prompt.trim())
+        .map((m) => ({ ...m, name: m.name.trim() || 'Свой режим' }))
+    )
+    dirty.current = false
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
   }
@@ -56,11 +74,17 @@ export default function VocabPanel({
   const setAt = <T,>(list: T[], i: number, patch: Partial<T>): T[] => list.map((x, k) => (k === i ? { ...x, ...patch } : x))
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="modal-overlay"
+      onMouseDown={(e) => (downOnOverlay.current = e.target === e.currentTarget)}
+      onClick={(e) => {
+        if (downOnOverlay.current && e.target === e.currentTarget) close()
+      }}
+    >
+      <div className="modal modal-wide">
         <div className="modal-head">
           <span className="modal-title">Словарь и сниппеты</span>
-          <button className="btn" onClick={onClose}>
+          <button className="btn" onClick={close}>
             Закрыть
           </button>
         </div>
@@ -77,13 +101,14 @@ export default function VocabPanel({
             <>
               <div className="panel-note">
                 Имена, фамилии, термины — по одному в строке. Движок распознавания будет писать их именно так (и в
-                диктовке, и при расшифровке записей).
+                диктовке, и при расшифровке записей). Локальный Whisper, OpenAI и Groq берут первые ~40 слов — самые
+                важные ставьте наверх. ElevenLabs подсказок не принимает.
               </div>
               <textarea
                 className="note-body"
                 value={words}
                 placeholder={'КПТ\nгештальт\nШварцман'}
-                onChange={(e) => setWords(e.target.value)}
+                onChange={(e) => touch(setWords)(e.target.value)}
               />
             </>
           )}
@@ -96,16 +121,16 @@ export default function VocabPanel({
               </div>
               {reps.map((r, i) => (
                 <div className="vocab-row" key={i}>
-                  <input className="text-input" placeholder="кэпэтэ" value={r.from} onChange={(e) => setReps(setAt(reps, i, { from: e.target.value }))} />
+                  <input className="text-input" placeholder="кэпэтэ" value={r.from} onChange={(e) => touch(setReps)(setAt(reps, i, { from: e.target.value }))} />
                   <span>→</span>
-                  <input className="text-input" placeholder="КПТ" value={r.to} onChange={(e) => setReps(setAt(reps, i, { to: e.target.value }))} />
-                  <button className="btn btn-icon" title="Удалить" onClick={() => setReps(reps.filter((_, k) => k !== i))}>
+                  <input className="text-input" placeholder="КПТ" value={r.to} onChange={(e) => touch(setReps)(setAt(reps, i, { to: e.target.value }))} />
+                  <button className="btn btn-icon" title="Удалить" onClick={() => touch(setReps)(reps.filter((_, k) => k !== i))}>
                     ×
                   </button>
                 </div>
               ))}
               <div>
-                <button className="btn btn-sm" onClick={() => setReps([...reps, { from: '', to: '' }])}>
+                <button className="btn btn-sm" onClick={() => touch(setReps)([...reps, { from: '', to: '' }])}>
                   + Замена
                 </button>
               </div>
@@ -119,16 +144,16 @@ export default function VocabPanel({
               </div>
               {snips.map((s, i) => (
                 <div className="vocab-row vocab-row-top" key={i}>
-                  <input className="text-input" placeholder="моя подпись" value={s.trigger} onChange={(e) => setSnips(setAt(snips, i, { trigger: e.target.value }))} />
+                  <input className="text-input" placeholder="моя подпись" value={s.trigger} onChange={(e) => touch(setSnips)(setAt(snips, i, { trigger: e.target.value }))} />
                   <span>→</span>
-                  <textarea className="text-input" rows={3} placeholder={'С уважением,\nАнна, +7 …'} value={s.text} onChange={(e) => setSnips(setAt(snips, i, { text: e.target.value }))} />
-                  <button className="btn btn-icon" title="Удалить" onClick={() => setSnips(snips.filter((_, k) => k !== i))}>
+                  <textarea className="text-input" rows={3} placeholder={'С уважением,\nАнна, +7 …'} value={s.text} onChange={(e) => touch(setSnips)(setAt(snips, i, { text: e.target.value }))} />
+                  <button className="btn btn-icon" title="Удалить" onClick={() => touch(setSnips)(snips.filter((_, k) => k !== i))}>
                     ×
                   </button>
                 </div>
               ))}
               <div>
-                <button className="btn btn-sm" onClick={() => setSnips([...snips, { trigger: '', text: '' }])}>
+                <button className="btn btn-sm" onClick={() => touch(setSnips)([...snips, { trigger: '', text: '' }])}>
                   + Сниппет
                 </button>
               </div>
@@ -143,24 +168,25 @@ export default function VocabPanel({
               </div>
               {modes.map((m, i) => (
                 <div className="vocab-row vocab-row-top" key={m.id}>
-                  <input className="text-input" placeholder="Пост в канал" value={m.name} onChange={(e) => setModes(setAt(modes, i, { name: e.target.value }))} />
+                  <input className="text-input" placeholder="Пост в канал" value={m.name} onChange={(e) => touch(setModes)(setAt(modes, i, { name: e.target.value }))} />
                   <span>→</span>
                   <textarea
                     className="text-input"
                     rows={3}
                     placeholder="Оформи как короткий пост для Telegram-канала: заголовок и 2–3 абзаца."
                     value={m.prompt}
-                    onChange={(e) => setModes(setAt(modes, i, { prompt: e.target.value }))}
+                    onChange={(e) => touch(setModes)(setAt(modes, i, { prompt: e.target.value }))}
                   />
-                  <button className="btn btn-icon" title="Удалить" onClick={() => setModes(modes.filter((_, k) => k !== i))}>
+                  <button className="btn btn-icon" title="Удалить" onClick={() => touch(setModes)(modes.filter((_, k) => k !== i))}>
                     ×
                   </button>
+                  {m.name.trim() && !m.prompt.trim() && <div className="key-bad vocab-hint">Без описания режим не работает.</div>}
                 </div>
               ))}
               <div>
                 <button
                   className="btn btn-sm"
-                  onClick={() => setModes([...modes, { id: 'm' + Date.now().toString(36), name: '', prompt: '' }])}
+                  onClick={() => touch(setModes)([...modes, { id: 'm' + Date.now().toString(36), name: '', prompt: '' }])}
                 >
                   + Режим
                 </button>

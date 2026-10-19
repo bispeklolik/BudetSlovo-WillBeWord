@@ -35,6 +35,7 @@ export interface Settings {
   consentText?: string // мой вариант согласия на запись (пусто — шаблон)
   vocab?: Vocab // словарь: слова для распознавания, точные замены, сниппеты
   mcpPolicy?: 'anon' | 'all' // что Claude (MCP) может читать: только обезличенные записи (по умолчанию) или все
+  watchFolder?: { dir: string; autoTranscribe: boolean } // папка-наблюдатель: новые записи берутся сами
 }
 
 // Системная диктовка: зажал клавишу — говоришь (push-to-talk), быстрый

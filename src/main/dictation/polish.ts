@@ -58,6 +58,8 @@ export function acceptPolished(
   // Заготовки «[Ваше имя]» отдельной строкой — убрать, а не вставлять человеку.
   if (opts.reformat) p = p.split('\n').filter((l) => !/^\s*\[[^\]]{1,40}\]\s*$/.test(l)).join('\n').trim()
   if (!p) return null
+  // Заготовка посреди текста («С уважением, [Ваше имя]») — режим не справился.
+  if (opts.reformat && /\[[^\]\n]{1,40}\]/.test(p) && !/\[/.test(raw)) return null
   if (p.includes(TRUNCATED)) return null
   if (foreignScript(raw, p)) return null
   const r = raw.trim()

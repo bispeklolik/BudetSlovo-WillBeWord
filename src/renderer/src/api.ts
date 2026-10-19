@@ -87,6 +87,24 @@ const stub: RendererApi = {
   openExternal: async () => {},
   createBackup: async () => null,
   restoreBackup: async () => null,
+  phoneStart: async () => {
+    throw new Error('Доступно только в приложении (Electron)')
+  },
+  phoneStop: async () => {},
+  onPhoneReceived: () => () => {},
+  watchPick: async () => null,
+  watchSet: async () => {},
+  linkStatus: async () => ({ ytDlp: false }),
+  linkInstall: async () => {
+    throw new Error('Доступно только в приложении (Electron)')
+  },
+  linkImport: async () => {
+    throw new Error('Доступно только в приложении (Electron)')
+  },
+  linkCancel: async () => {},
+  onLinkProgress: () => () => {},
+  onProjectsChanged: () => () => {},
+  onAppNotice: () => () => {},
   mcpConfig: async () => ({ ok: false, json: '', configDir: '' }),
   openClaudeConfigDir: async () => false,
   setMyNotes: async () => {},

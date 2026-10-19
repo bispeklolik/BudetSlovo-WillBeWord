@@ -90,6 +90,18 @@ export interface RendererApi {
   openExternal: (url: string) => Promise<void>
   createBackup: () => Promise<{ path: string; items: number; bytes: number } | null>
   restoreBackup: () => Promise<{ restored: string[]; savedTo: string } | null>
+  phoneStart: () => Promise<{ urls: string[]; qr: string }>
+  phoneStop: () => Promise<void>
+  onPhoneReceived: (cb: (p: { slug: string; title: string }) => void) => () => void
+  watchPick: () => Promise<string | null>
+  watchSet: (dir: string | null, autoTranscribe: boolean, takeExisting: boolean) => Promise<void>
+  linkStatus: () => Promise<{ ytDlp: boolean }>
+  linkInstall: () => Promise<void>
+  linkImport: (url: string) => Promise<ProjectMeta>
+  linkCancel: () => Promise<void>
+  onLinkProgress: (cb: (p: { phase: string; percent: number | null }) => void) => () => void
+  onProjectsChanged: (cb: () => void) => () => void
+  onAppNotice: (cb: (message: string) => void) => () => void
   mcpConfig: () => Promise<{ ok: boolean; json: string; configDir: string }>
   openClaudeConfigDir: () => Promise<boolean>
   setMyNotes: (slug: string, text: string) => Promise<void>
