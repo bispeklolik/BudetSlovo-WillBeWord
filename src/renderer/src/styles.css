@@ -2335,3 +2335,31 @@ body.overlay-mode {
 .modal-scroll > * {
   flex-shrink: 0;
 }
+
+.dict-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dict-item {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dict-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.dict-item-text {
+  font-size: 13.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}

@@ -34,6 +34,19 @@ export interface DictationSettings {
   polish: boolean // LLM-чистка текста (паразиты/самоисправления/пунктуация)
   autoPaste: boolean // вставлять в активное окно (false = только в буфер)
   sounds: boolean // звуковые сигналы старта/стопа записи
+  tailMs?: number // дописывать после отпускания клавиши, мс (чтобы не съесть последнее слово)
+  pauseMedia?: boolean // ставить музыку/видео на паузу на время диктовки
+  keepAudioDays?: number // сколько дней хранить аудио диктовок для «Повторить» (0 — не хранить)
+  micId?: string // выбранный микрофон (deviceId); пусто — системный по умолчанию
+}
+
+// Запись журнала диктовок (dictation-history.jsonl) — для списка «Последние диктовки».
+export interface DictationEntry {
+  at: string
+  raw: string
+  polished: string | null
+  error?: string
+  audio?: string // имя файла клипа в папке dictation (если ещё хранится)
 }
 
 export const defaultDictation: DictationSettings = {
@@ -41,7 +54,11 @@ export const defaultDictation: DictationSettings = {
   hotkey: 'F9',
   polish: false,
   autoPaste: true,
-  sounds: true
+  sounds: true,
+  tailMs: 300,
+  pauseMedia: true,
+  keepAudioDays: 7,
+  micId: ''
 }
 
 export const defaultSettings: Settings = {

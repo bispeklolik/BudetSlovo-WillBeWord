@@ -13,7 +13,8 @@ import type {
   SetupInfo,
   SetupProgress,
   OllamaStatus,
-  KeyVerdict
+  KeyVerdict,
+  DictationEntry
 } from '../shared/types'
 
 const api = {
@@ -83,13 +84,18 @@ const api = {
   transcribeClip: (data: ArrayBuffer): Promise<string> => ipcRenderer.invoke('stt:clip', data),
 
   // Системная диктовка: main командует записью, renderer шлёт аудио обратно.
-  sendDictAudio: (data: ArrayBuffer): Promise<void> => ipcRenderer.invoke('dict:audio', data),
-  onDictRecord: (cb: (cmd: 'start' | 'stop' | 'cancel', opts?: { sounds?: boolean }) => void): (() => void) => {
+  sendDictAudio: (data: ArrayBuffer, meta?: { silent?: boolean; error?: string }): Promise<void> =>
+    ipcRenderer.invoke('dict:audio', data, meta),
+  dictHistory: (): Promise<DictationEntry[]> => ipcRenderer.invoke('dict:history'),
+  retryDict: (audio: string): Promise<string> => ipcRenderer.invoke('dict:retry', audio),
+  onDictRecord: (
+    cb: (cmd: 'start' | 'stop' | 'cancel', opts?: { sounds?: boolean; tailMs?: number; micId?: string }) => void
+  ): (() => void) => {
     const hs = (
       ['dict:record-start', 'dict:record-stop', 'dict:record-cancel'] as const
     ).map((ch) => {
       const cmd = ch.split('-')[1] as 'start' | 'stop' | 'cancel'
-      const h = (_e: unknown, opts?: { sounds?: boolean }): void => cb(cmd, opts)
+      const h = (_e: unknown, opts?: { sounds?: boolean; tailMs?: number; micId?: string }): void => cb(cmd, opts)
       ipcRenderer.on(ch, h)
       return [ch, h] as const
     })

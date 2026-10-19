@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn, spawnSync, type ChildProcess } from 'child_process'
+import { dirname } from 'path'
 import { OLLAMA_ADDR, ollamaExe, ollamaModelsOverride } from '../paths'
 
 // Управление локальным движком ИИ (Ollama) как подпроцессом — тот же паттерн,
@@ -17,11 +18,29 @@ async function reachable(): Promise<boolean> {
   }
 }
 
+// После аварийного выхода (сбой, «снять задачу») llama-server из НАШЕЙ папки
+// Ollama остаётся сиротой и держит видеопамять — новая модель не влезает
+// (живой прогон: «cudaMalloc failed: out of memory»). Убираем только сирот
+// из своей папки: чужие установки Ollama и процессы с живым родителем не трогаем.
+function reapOrphanRunners(exe: string): void {
+  const dir = dirname(exe).replace(/'/g, "''")
+  const ps =
+    "Get-CimInstance Win32_Process -Filter \"Name='llama-server.exe'\" | " +
+    `Where-Object { $_.ExecutablePath -like '${dir}\*' -and -not (Get-Process -Id $_.ParentProcessId -ErrorAction SilentlyContinue) } | ` +
+    'ForEach-Object { Stop-Process -Id $_.ProcessId -Force }'
+  try {
+    spawnSync('powershell', ['-NoProfile', '-Command', ps], { windowsHide: true, timeout: 10000 })
+  } catch {
+    // не критично
+  }
+}
+
 export async function ensureOllama(): Promise<boolean> {
   if (await reachable()) return true
   const exe = ollamaExe()
   if (!exe) return false
   if (!child || child.exitCode !== null) {
+    reapOrphanRunners(exe)
     const models = ollamaModelsOverride(exe)
     child = spawn(exe, ['serve'], {
       env: {
@@ -46,9 +65,12 @@ export async function ensureOllama(): Promise<boolean> {
 }
 
 export function stopOllama(): void {
-  if (child && child.exitCode === null) {
+  if (child && child.exitCode === null && child.pid) {
+    // Гасим всё дерево: `ollama serve` запускает llama-server с моделью, и
+    // child.kill() убивал только родителя — сирота держал ~5 ГБ видеопамяти
+    // после выхода из «Слова» (поймано живым прогоном: игра рядом упала по памяти).
     try {
-      child.kill()
+      spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true })
     } catch {
       // ignore
     }

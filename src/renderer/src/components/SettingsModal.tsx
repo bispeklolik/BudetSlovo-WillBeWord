@@ -6,6 +6,7 @@ import { STT_ENGINES, sttMeta, sttModeLabel } from '../../../shared/sttEngines'
 import { useEscClose } from '../useEscClose'
 import { LOCAL_MODELS, localModel, formatBytes } from '../../../shared/localModels'
 import { showToast, humanError } from '../toast'
+import DictationHistory, { MicSelect } from './DictationHistory'
 
 // Клавиши для диктовки: без левых модификаторов (они испортили бы Ctrl+V
 // вставку), одиночные и правые — то, что редко занято.
@@ -432,12 +433,53 @@ export default function SettingsModal({
                   {dict.sounds ? 'Вкл' : 'Выкл'}
                 </button>
               </div>
+              <div className="settings-row">
+                <span>Микрофон</span>
+                <MicSelect value={dict.micId ?? ''} onChange={(id) => saveDict({ micId: id })} />
+              </div>
+              <div className="settings-row">
+                <span>Ставить музыку и видео на паузу</span>
+                <button
+                  className={'btn' + (dict.pauseMedia !== false ? ' btn-primary' : '')}
+                  onClick={() => saveDict({ pauseMedia: dict.pauseMedia === false })}
+                >
+                  {dict.pauseMedia !== false ? 'Вкл' : 'Выкл'}
+                </button>
+              </div>
+              <div className="settings-row">
+                <span>Дописывать после отпускания клавиши</span>
+                <select
+                  className="rate"
+                  value={dict.tailMs ?? 300}
+                  onChange={(e) => saveDict({ tailMs: Number(e.target.value) })}
+                >
+                  {[0, 150, 300, 500, 800].map((ms) => (
+                    <option key={ms} value={ms}>
+                      {ms === 0 ? 'нет' : `${ms} мс`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="settings-row">
+                <span>Хранить аудио диктовок для «Повторить»</span>
+                <select
+                  className="rate"
+                  value={dict.keepAudioDays ?? 7}
+                  onChange={(e) => saveDict({ keepAudioDays: Number(e.target.value) })}
+                >
+                  <option value={0}>не хранить</option>
+                  <option value={1}>1 день</option>
+                  <option value={7}>7 дней</option>
+                  <option value={30}>30 дней</option>
+                </select>
+              </div>
               <div className="panel-note">
                 Зажмите клавишу — говорите, отпустите — текст вставится туда, где курсор. Быстрое
                 двойное нажатие — запись без рук до следующего нажатия. Esc — отмена. Распознаёт
-                движок из раздела «Расшифровка»; чистку делает движок из раздела «ИИ». Все диктовки
-                сохраняются в журнал в папке данных.
+                движок из раздела «Расшифровка»; чистку делает движок из раздела «ИИ». Если ИИ-чистка
+                ошиблась или не ответила, вставится сырой текст — диктовка не теряется.
               </div>
+              <DictationHistory />
             </>
           )}
         </div>

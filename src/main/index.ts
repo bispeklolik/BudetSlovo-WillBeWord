@@ -1,6 +1,6 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, clipboard } from 'electron'
 import { join } from 'path'
-import { existsSync, copyFileSync, writeFileSync } from 'fs'
+import { existsSync, copyFileSync, writeFileSync, readFileSync } from 'fs'
 import { autoUpdater } from 'electron-updater'
 import { DATA_DIR, loadSettings, saveSettings } from './settings'
 import { registerMediaScheme, installMediaProtocol } from './protocol'
@@ -56,8 +56,12 @@ import {
   initDictation,
   applyDictationSettings,
   stopDictation,
-  onDictationAudio
+  onDictationAudio,
+  dictationHistory,
+  retryDictation,
+  type ClipMeta
 } from './dictation/manager'
+import { POLISH_SYSTEM, wrapForPolish } from './dictation/polish'
 import {
   initQueue,
   setJobNotifier,
@@ -80,8 +84,12 @@ app.setPath('userData', join(DATA_DIR, 'electron'))
 
 // Второй экземпляр портит очередь задач и перезатирает настройки/конспекты —
 // разрешаем ровно один: повторный запуск просто поднимает уже открытое окно.
-if (!app.requestSingleInstanceLock()) {
-  app.quit()
+// app.quit() асинхронный: второй экземпляр успевал пройти whenReady — открыть
+// окно, запустить опрос клавиши диктовки (сирота-PowerShell) и обработчики.
+// Поэтому — немедленный выход и whenReady только у владельца блокировки.
+const primaryInstance = app.requestSingleInstanceLock()
+if (!primaryInstance) {
+  app.exit(0)
 }
 app.on('second-instance', () => {
   if (win) {
@@ -187,7 +195,9 @@ ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
 })
 
 // Аудио диктовки из renderer → распознать → вставить в активное окно.
-ipcMain.handle('dict:audio', (_e, data: ArrayBuffer) => onDictationAudio(data))
+ipcMain.handle('dict:audio', (_e, data: ArrayBuffer, meta?: ClipMeta) => onDictationAudio(data, meta))
+ipcMain.handle('dict:history', () => dictationHistory())
+ipcMain.handle('dict:retry', (_e, audio: string) => retryDictation(audio))
 
 // ---------- первый запуск («три двери»), движок, бэкап ----------
 function patchSettings(patch: Partial<Settings>): void {
@@ -591,6 +601,7 @@ ipcMain.handle('ai:setAnon', (_e, slug: string, rules: AnonRule[]) => {
 })
 
 app.whenReady().then(() => {
+  if (!primaryInstance) return
   initQueue()
   setJobNotifier((job) => {
     win?.webContents.send('job:update', job)
@@ -645,16 +656,23 @@ app.whenReady().then(() => {
   const overlay = createDictationOverlay()
   initDictation(win!, overlay, rendererUrl('overlay'), async (raw) => {
     const provider = await prepareEngine()
-    // Промт-чистка: минимум правил (вычитанием) — паразиты, самоисправления,
-    // пунктуация; текст не пересказывать.
-    return provider.generate(
-      'Это надиктованный текст. Убери слова-паразиты и оговорки, оставь только ' +
-        'исправленную версию самоисправлений («во вторник, нет, в среду» → «в среду»), ' +
-        'расставь пунктуацию и абзацы. Смысл и слова не менять. Верни ТОЛЬКО текст.',
-      raw
-    )
+    // Промт и проверка ответа — в dictation/polish.ts (под тестами и живым прогоном).
+    return provider.generate(POLISH_SYSTEM, wrapForPolish(raw))
   })
   applyDictationSettings(settings.dictation)
+
+  // Dev-хук: прогнать готовый клип через настоящий конвейер диктовки
+  // (сохранение аудио → распознавание → чистка → журнал) без микрофона.
+  const devClip = process.env['SLOVO_DICT_CLIP']
+  if (devClip) {
+    const prevClip = clipboard.readText()
+    onDictationAudio(readFileSync(devClip).buffer as ArrayBuffer, {
+      silent: process.env['SLOVO_DICT_SILENT'] === '1'
+    })
+      .then(() => console.log('[SLOVO_DICT_CLIP] ok ' + JSON.stringify(dictationHistory(1)[0] ?? null)))
+      .catch((err) => console.error('[SLOVO_DICT_CLIP] fail ' + String(err)))
+      .finally(() => setTimeout(() => clipboard.writeText(prevClip), 1500))
+  }
 
   // Dev-хук: headless-проверка пайплайна импорта без диалога.
   const devImport = process.env['SLOVO_IMPORT']

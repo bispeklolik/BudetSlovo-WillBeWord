@@ -13,7 +13,8 @@ import type {
   SetupInfo,
   SetupProgress,
   OllamaStatus,
-  KeyVerdict
+  KeyVerdict,
+  DictationEntry
 } from '../../shared/types'
 
 export interface RendererApi {
@@ -57,9 +58,11 @@ export interface RendererApi {
   ) => Promise<string | null>
   runPromptAi: (slug: string, system: string) => Promise<string | null>
   transcribeClip: (data: ArrayBuffer) => Promise<string>
-  sendDictAudio: (data: ArrayBuffer) => Promise<void>
+  sendDictAudio: (data: ArrayBuffer, meta?: { silent?: boolean; error?: string }) => Promise<void>
+  dictHistory: () => Promise<DictationEntry[]>
+  retryDict: (audio: string) => Promise<string>
   onDictRecord: (
-    cb: (cmd: 'start' | 'stop' | 'cancel', opts?: { sounds?: boolean }) => void
+    cb: (cmd: 'start' | 'stop' | 'cancel', opts?: { sounds?: boolean; tailMs?: number; micId?: string }) => void
   ) => () => void
   onDictState: (cb: (state: string) => void) => () => void
   highlightAi: (slug: string) => Promise<ProjectMeta | null>

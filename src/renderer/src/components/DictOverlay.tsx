@@ -10,7 +10,9 @@ const LABEL: Record<string, string> = {
   processing: 'Распознаю…',
   done: 'Вставлено ✓',
   empty: 'Ничего не расслышал',
-  error: 'Ошибка — текст в журнале'
+  silent: 'Микрофон молчит — проверьте его',
+  nomic: 'Нет доступа к микрофону',
+  error: 'Не распознал. Запись сохранена'
 }
 
 export default function DictOverlay(): React.JSX.Element {
