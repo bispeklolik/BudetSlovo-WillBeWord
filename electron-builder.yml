@@ -6,6 +6,14 @@ directories:
 files:
   - out/**
   - package.json
+  # распаковщик 7z нужен только под Windows x64
+  - '!node_modules/7zip-bin/{mac,linux}/**'
+  - '!node_modules/7zip-bin/win/{arm64,ia32}/**'
+# ffmpeg (импорт, волна, облако) и 7za (установка движка) — исполняемые файлы:
+# из app.asar их не запустить, поэтому кладём рядом распакованными.
+asarUnpack:
+  - node_modules/ffmpeg-static/**
+  - node_modules/7zip-bin/win/x64/**
 win:
   target: nsis
   icon: build/icon.ico

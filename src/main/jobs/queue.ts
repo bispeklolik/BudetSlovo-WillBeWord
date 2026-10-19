@@ -5,6 +5,7 @@ import { DATA_DIR } from '../paths'
 import { writeJsonAtomic } from '../project/store'
 import type { JobInfo, TranscribeOptions } from '../../shared/types'
 import { runTranscribe, killJobProcess } from './transcribe'
+import { holdAwake, releaseAwake } from '../wakeLock'
 
 const JOBS_FILE = join(DATA_DIR, 'jobs.json')
 const HISTORY_LIMIT = 50
@@ -93,8 +94,12 @@ export function cancelJob(id: string): JobInfo | null {
 async function pump(): Promise<void> {
   if (running) return
   const job = jobs.find((j) => j.status === 'queued')
-  if (!job) return
+  if (!job) {
+    releaseAwake('transcribe')
+    return
+  }
   running = true
+  holdAwake('transcribe')
   update(job, { status: 'running', startedAt: new Date().toISOString(), phase: 'Подготовка' })
   try {
     await runTranscribe(job, (patch) => update(job, patch))

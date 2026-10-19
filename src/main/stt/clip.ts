@@ -1,8 +1,10 @@
 import { spawn, spawnSync } from 'child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { ENGINE_DIR, ENGINE_EXE, FFMPEG, MODELS_DIR, STT_TEMP } from '../paths'
-import { engineEnv } from '../jobs/transcribe'
+import { TEMP_DIR } from '../paths'
+import { enginePaths, engineEnv, ffmpegPath } from '../engine/location'
+import { detectGpu } from '../engine/sysinfo'
+import { deviceArgs, localModel } from '../../shared/localModels'
 import { loadSettings } from '../settings'
 import { CLOUD_RUN } from './index'
 
@@ -13,19 +15,25 @@ import { CLOUD_RUN } from './index'
 async function localClipText(m4a: string, outDir: string): Promise<string> {
   return new Promise((resolve, reject) => {
     // Без диаризации и чистки — клип короткий, надиктован одним голосом в упор.
+    const eng = enginePaths()
+    if (!eng.installed) {
+      reject(new Error('Локальный движок не установлен — выберите облачный движок или скачайте локальный.'))
+      return
+    }
+    const s = loadSettings()
     const args = [
       m4a,
-      '--model', 'large-v3',
-      '--model_dir', MODELS_DIR,
+      '--model', localModel(s.localModel).id,
+      '--model_dir', eng.modelsDir,
       '--language', 'ru',
-      '--compute_type', 'float16',
+      ...deviceArgs(s.localDevice, !!detectGpu()),
       '--beam_size', '5',
       '--condition_on_previous_text', 'False',
       '--output_dir', outDir,
       '--output_format', 'json',
       '--beep_off'
     ]
-    const child = spawn(ENGINE_EXE, args, { cwd: ENGINE_DIR, env: engineEnv(), windowsHide: true })
+    const child = spawn(eng.exe, args, { cwd: eng.dir, env: engineEnv(), windowsHide: true })
     child.on('error', (err) => reject(new Error('Не удалось запустить движок: ' + err.message)))
     child.on('close', () => {
       // Успех — по наличию результата, не по коду (движок может падать на teardown).
@@ -47,14 +55,14 @@ async function localClipText(m4a: string, outDir: string): Promise<string> {
 }
 
 export async function transcribeClip(webm: Buffer): Promise<string> {
-  mkdirSync(STT_TEMP, { recursive: true })
+  mkdirSync(TEMP_DIR, { recursive: true })
   const stamp = Date.now().toString(36)
-  const src = join(STT_TEMP, `clip-${stamp}.webm`)
-  const m4a = join(STT_TEMP, `clip-${stamp}.m4a`)
-  const outDir = join(STT_TEMP, `clip-${stamp}-out`)
+  const src = join(TEMP_DIR, `clip-${stamp}.webm`)
+  const m4a = join(TEMP_DIR, `clip-${stamp}.m4a`)
+  const outDir = join(TEMP_DIR, `clip-${stamp}-out`)
   writeFileSync(src, webm)
   try {
-    const ff = spawnSync(FFMPEG, ['-y', '-i', src, '-ac', '1', '-b:a', '48k', '-vn', m4a], {
+    const ff = spawnSync(ffmpegPath(), ['-y', '-i', src, '-ac', '1', '-b:a', '48k', '-vn', m4a], {
       windowsHide: true
     })
     if (ff.status !== 0 || !existsSync(m4a)) throw new Error('Не удалось обработать запись микрофона (ffmpeg).')

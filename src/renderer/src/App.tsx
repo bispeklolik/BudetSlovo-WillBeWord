@@ -4,6 +4,7 @@ import { api } from './api'
 import { showToast, humanError } from './toast'
 import Home from './views/Home'
 import Editor from './views/Editor'
+import Welcome from './views/Welcome'
 import Icon from './components/Icon'
 import SettingsModal from './components/SettingsModal'
 import DictationRecorder from './components/DictationRecorder'
@@ -23,6 +24,8 @@ function MainApp(): React.JSX.Element {
   const [dragging, setDragging] = useState(false)
   const [importing, setImporting] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // Мастер «С чего начнём?»: сам — при первом запуске, вручную — из настроек.
+  const [welcomeOpen, setWelcomeOpen] = useState(false)
 
   useEffect(() => {
     api.getSettings().then((s) => {
@@ -100,7 +103,7 @@ function MainApp(): React.JSX.Element {
           </span>
           <span className="app-title">Слово</span>
         </span>
-        <span className="app-sub">локальные расшифровки</span>
+        <span className="app-sub">разговор → результат</span>
         <div style={{ marginLeft: 'auto' }}>
           <button
             className="btn btn-icon"
@@ -112,8 +115,24 @@ function MainApp(): React.JSX.Element {
           </button>
         </div>
       </header>
-      {view.page === 'home' ? (
-        <Home onOpen={(slug, search) => setView({ page: 'editor', slug, search })} />
+      {settings && (welcomeOpen || !settings.onboarded) ? (
+        <Welcome
+          onDone={async () => {
+            setSettings(await api.getSettings())
+            setWelcomeOpen(false)
+            setView({ page: 'home' })
+          }}
+          onOpenProject={async (slug) => {
+            setSettings(await api.getSettings())
+            setWelcomeOpen(false)
+            setView({ page: 'editor', slug })
+          }}
+        />
+      ) : view.page === 'home' ? (
+        <Home
+          onOpen={(slug, search) => setView({ page: 'editor', slug, search })}
+          onOpenWelcome={() => setWelcomeOpen(true)}
+        />
       ) : (
         <Editor slug={view.slug} initialSearch={view.search} />
       )}
@@ -129,6 +148,10 @@ function MainApp(): React.JSX.Element {
           theme={settings?.theme ?? 'light'}
           onToggleTheme={toggleTheme}
           onClose={() => setSettingsOpen(false)}
+          onOpenWelcome={() => {
+            setSettingsOpen(false)
+            setWelcomeOpen(true)
+          }}
         />
       )}
     </div>

@@ -58,7 +58,31 @@ const stub: RendererApi = {
   },
   cancelJob: async () => null,
   listJobs: async () => [],
-  onJobUpdate: () => () => {}
+  onJobUpdate: () => () => {},
+  setupInfo: async () => ({
+    dataDir: '',
+    engine: { installed: false, source: 'default', dir: '', modelsDir: '' },
+    installedModels: [],
+    localModel: 'large-v3',
+    gpu: null,
+    freeBytes: null,
+    pending: null,
+    progress: null
+  }),
+  startSetup: async () => {},
+  stopSetup: async () => {},
+  onSetupProgress: () => () => {},
+  ollamaStatus: async () => ({ installed: false, running: false, models: [] }),
+  pullOllama: async () => {},
+  stopOllamaPull: async () => {},
+  onOllamaProgress: () => () => {},
+  checkKey: async () => ({ ok: false, message: 'Проверка доступна только в приложении' }),
+  createDemo: async () => {
+    throw new Error('Пример доступен только в приложении (Electron)')
+  },
+  openExternal: async () => {},
+  createBackup: async () => null,
+  restoreBackup: async () => null
 }
 
 export const api: RendererApi = window.api ?? stub

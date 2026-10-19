@@ -9,7 +9,11 @@ import type {
   SpeakerInfo,
   Note,
   NoteInput,
-  AnonRule
+  AnonRule,
+  SetupInfo,
+  SetupProgress,
+  OllamaStatus,
+  KeyVerdict
 } from '../../shared/types'
 
 export interface RendererApi {
@@ -68,6 +72,19 @@ export interface RendererApi {
   cancelJob: (id: string) => Promise<JobInfo | null>
   listJobs: () => Promise<JobInfo[]>
   onJobUpdate: (cb: (j: JobInfo) => void) => () => void
+  setupInfo: () => Promise<SetupInfo>
+  startSetup: (modelId: string) => Promise<void>
+  stopSetup: () => Promise<void>
+  onSetupProgress: (cb: (p: SetupProgress) => void) => () => void
+  ollamaStatus: () => Promise<OllamaStatus>
+  pullOllama: (name: string) => Promise<void>
+  stopOllamaPull: () => Promise<void>
+  onOllamaProgress: (cb: (p: { status: string; done: number; total: number }) => void) => () => void
+  checkKey: (service: string, key: string) => Promise<KeyVerdict>
+  createDemo: () => Promise<ProjectMeta>
+  openExternal: (url: string) => Promise<void>
+  createBackup: () => Promise<{ path: string; items: number; bytes: number } | null>
+  restoreBackup: () => Promise<{ restored: string[]; savedTo: string } | null>
 }
 
 declare global {

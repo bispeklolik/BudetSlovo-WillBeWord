@@ -9,7 +9,11 @@ import type {
   SpeakerInfo,
   Note,
   NoteInput,
-  AnonRule
+  AnonRule,
+  SetupInfo,
+  SetupProgress,
+  OllamaStatus,
+  KeyVerdict
 } from '../shared/types'
 
 const api = {
@@ -122,7 +126,33 @@ const api = {
     return () => {
       ipcRenderer.off('job:update', handler)
     }
-  }
+  },
+
+  // Первый запуск («три двери»), локальный движок, бэкап.
+  setupInfo: (): Promise<SetupInfo> => ipcRenderer.invoke('setup:info'),
+  startSetup: (modelId: string): Promise<void> => ipcRenderer.invoke('setup:start', modelId),
+  stopSetup: (): Promise<void> => ipcRenderer.invoke('setup:stop'),
+  onSetupProgress: (cb: (p: SetupProgress) => void): (() => void) => {
+    const h = (_e: unknown, p: SetupProgress): void => cb(p)
+    ipcRenderer.on('setup:progress', h)
+    return () => ipcRenderer.off('setup:progress', h)
+  },
+  ollamaStatus: (): Promise<OllamaStatus> => ipcRenderer.invoke('setup:ollama'),
+  pullOllama: (name: string): Promise<void> => ipcRenderer.invoke('setup:pullOllama', name),
+  stopOllamaPull: (): Promise<void> => ipcRenderer.invoke('setup:stopOllama'),
+  onOllamaProgress: (cb: (p: { status: string; done: number; total: number }) => void): (() => void) => {
+    const h = (_e: unknown, p: { status: string; done: number; total: number }): void => cb(p)
+    ipcRenderer.on('setup:ollamaProgress', h)
+    return () => ipcRenderer.off('setup:ollamaProgress', h)
+  },
+  checkKey: (service: string, key: string): Promise<KeyVerdict> =>
+    ipcRenderer.invoke('setup:checkKey', service, key),
+  createDemo: (): Promise<ProjectMeta> => ipcRenderer.invoke('setup:demo'),
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke('app:openExternal', url),
+  createBackup: (): Promise<{ path: string; items: number; bytes: number } | null> =>
+    ipcRenderer.invoke('backup:create'),
+  restoreBackup: (): Promise<{ restored: string[]; savedTo: string } | null> =>
+    ipcRenderer.invoke('backup:restore')
 }
 
 contextBridge.exposeInMainWorld('api', api)

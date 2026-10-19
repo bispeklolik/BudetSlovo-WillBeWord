@@ -2,8 +2,9 @@ import { join } from 'path'
 import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'fs'
 import type { Settings } from '../shared/types'
 import { defaultSettings } from '../shared/types'
+import { DATA_DIR } from './paths'
 
-export const DATA_DIR = 'D:\\Apps\\slovo-data'
+export { DATA_DIR }
 const FILE = join(DATA_DIR, 'settings.json')
 
 export function loadSettings(): Settings {

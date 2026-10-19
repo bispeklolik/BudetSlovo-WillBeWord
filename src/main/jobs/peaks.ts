@@ -1,6 +1,6 @@
 import { spawn } from 'child_process'
 import { writeFileSync } from 'fs'
-import { FFMPEG } from '../paths'
+import { ffmpegPath } from '../engine/location'
 
 const SAMPLE_RATE = 16000
 
@@ -14,7 +14,7 @@ export function buildPeaks(audioPath: string, outPath: string, perSec = 50): Pro
   const samplesPerBucket = Math.floor(SAMPLE_RATE / perSec)
   return new Promise((resolve, reject) => {
     const ff = spawn(
-      FFMPEG,
+      ffmpegPath(),
       ['-v', 'error', '-nostdin', '-i', audioPath, '-ac', '1', '-ar', String(SAMPLE_RATE), '-f', 's16le', '-'],
       { windowsHide: true }
     )

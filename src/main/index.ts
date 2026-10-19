@@ -32,7 +32,23 @@ import { chunkByLines } from '../shared/chunk'
 import { claudeProvider, setClaudeConfig } from './ai/claude'
 import { openrouterProvider, setOpenrouterConfig } from './ai/openrouter'
 import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
-import { stopOllama, ensureOllama } from './ai/ollamaServer'
+import { stopOllama, ensureOllama, ollamaStatus, pullOllamaModel } from './ai/ollamaServer'
+import { LEGACY_DATA_DIR } from './pathsResolve'
+import { enginePaths } from './engine/location'
+import { detectGpu, freeBytes } from './engine/sysinfo'
+import {
+  startSetup,
+  stopSetup,
+  setupStatus,
+  pendingSetup,
+  setSetupNotifier,
+  modelInstalled
+} from './engine/setup'
+import { LOCAL_MODELS, DEFAULT_LOCAL_MODEL } from '../shared/localModels'
+import { checkKey } from './keyCheck'
+import { createDemoProject } from './demo'
+import { createBackup, restoreBackup } from './backup'
+import { holdAwake, releaseAwake } from './wakeLock'
 import { applyHighlights, clearHighlights } from './ai/highlight'
 import { listNotes, saveNote, deleteNote } from './notes/store'
 import { transcribeClip } from './stt/clip'
@@ -59,7 +75,7 @@ import type {
   ProjectMeta
 } from '../shared/types'
 
-// Все данные Chromium-профиля строго на D: — C: почти полон.
+// Профиль Chromium — внутри папки данных (у владельца это D:, где есть место).
 app.setPath('userData', join(DATA_DIR, 'electron'))
 
 // Второй экземпляр портит очередь задач и перезатирает настройки/конспекты —
@@ -126,6 +142,12 @@ function createWindow(): void {
     }
   })
   win.on('page-title-updated', (e) => e.preventDefault())
+  // Скрытое окно-плашка диктовки держит приложение живым: без этого после
+  // закрытия главного окна «Слово» оставалось работать невидимым.
+  win.on('closed', () => {
+    win = null
+    app.quit()
+  })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -166,6 +188,115 @@ ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
 
 // Аудио диктовки из renderer → распознать → вставить в активное окно.
 ipcMain.handle('dict:audio', (_e, data: ArrayBuffer) => onDictationAudio(data))
+
+// ---------- первый запуск («три двери»), движок, бэкап ----------
+function patchSettings(patch: Partial<Settings>): void {
+  settings = { ...settings, ...patch }
+  saveSettings(settings)
+}
+
+// Владелец со старыми данными или человек, у которого уже есть записи, мастер
+// первого запуска не видит — он для новых людей.
+if (!settings.onboarded && (DATA_DIR === LEGACY_DATA_DIR || listProjects().length > 0)) {
+  patchSettings({ onboarded: true })
+}
+
+setSetupNotifier((p) => {
+  win?.webContents.send('setup:progress', p)
+  const busy = p.stage === 'engine' || p.stage === 'extract' || p.stage === 'model'
+  if (busy) holdAwake('setup')
+  else releaseAwake('setup')
+  // Прогресс загрузки — и на кнопке в панели задач.
+  if (win && !win.isDestroyed()) win.setProgressBar(busy && p.total > 0 ? p.done / p.total : -1)
+})
+
+ipcMain.handle('setup:info', () => {
+  const e = enginePaths()
+  return {
+    dataDir: DATA_DIR,
+    engine: { installed: e.installed, source: e.source, dir: e.dir, modelsDir: e.modelsDir },
+    installedModels: LOCAL_MODELS.filter((m) => modelInstalled(e.modelsDir, m.id)).map((m) => m.id),
+    localModel: settings.localModel ?? DEFAULT_LOCAL_MODEL,
+    gpu: detectGpu(),
+    freeBytes: freeBytes(e.dir),
+    pending: pendingSetup(),
+    progress: setupStatus()
+  }
+})
+ipcMain.handle('setup:start', (_e, modelId: string) => {
+  startSetup(modelId, (id) => patchSettings({ localModel: id }))
+})
+ipcMain.handle('setup:stop', () => stopSetup())
+ipcMain.handle('setup:ollama', () => ollamaStatus())
+
+let ollamaPull: AbortController | null = null
+ipcMain.handle('setup:pullOllama', async (_e, name: string) => {
+  if (ollamaPull) return
+  ollamaPull = new AbortController()
+  holdAwake('ollama')
+  try {
+    await pullOllamaModel(name, (p) => win?.webContents.send('setup:ollamaProgress', p), ollamaPull.signal)
+  } finally {
+    ollamaPull = null
+    releaseAwake('ollama')
+  }
+})
+ipcMain.handle('setup:stopOllama', () => ollamaPull?.abort())
+ipcMain.handle('setup:checkKey', (_e, service: string, key: string) => checkKey(service, key))
+ipcMain.handle('setup:demo', () => createDemoProject())
+
+// Внешние ссылки из мастера — только из белого списка (сайты ключей и Ollama).
+const EXTERNAL_OK = [
+  'https://ollama.com/',
+  'https://elevenlabs.io/',
+  'https://console.deepgram.com/',
+  'https://www.assemblyai.com/',
+  'https://platform.openai.com/',
+  'https://console.groq.com/',
+  'https://console.anthropic.com/',
+  'https://openrouter.ai/'
+]
+ipcMain.handle('app:openExternal', (_e, url: string) => {
+  if (EXTERNAL_OK.some((p) => url.startsWith(p))) return shell.openExternal(url)
+})
+
+ipcMain.handle('backup:create', async () => {
+  const stamp = new Date().toLocaleDateString('sv-SE') // местная дата ГГГГ-ММ-ДД
+  const r = await dialog.showSaveDialog(win!, {
+    title: 'Сохранить резервную копию',
+    defaultPath: join(app.getPath('documents'), `Слово-копия-${stamp}.zip`),
+    filters: [{ name: 'Архив ZIP', extensions: ['zip'] }]
+  })
+  if (r.canceled || !r.filePath) return null
+  const res = await createBackup(DATA_DIR, r.filePath)
+  return { path: r.filePath, ...res }
+})
+
+ipcMain.handle('backup:restore', async () => {
+  const r = await dialog.showOpenDialog(win!, {
+    title: 'Выберите резервную копию «Слова»',
+    properties: ['openFile'],
+    filters: [{ name: 'Архив ZIP', extensions: ['zip'] }]
+  })
+  if (r.canceled || !r.filePaths[0]) return null
+  const ok = await dialog.showMessageBox(win!, {
+    type: 'warning',
+    buttons: ['Восстановить', 'Отмена'],
+    defaultId: 1,
+    cancelId: 1,
+    title: 'Восстановить из копии?',
+    message: 'Записи, конспекты и настройки заменятся данными из копии.',
+    detail:
+      'Нынешние версии не удалятся: они переедут в папку «_before-restore-…» внутри папки данных. После восстановления «Слово» перезапустится.'
+  })
+  if (ok.response !== 0) return null
+  const res = await restoreBackup(DATA_DIR, r.filePaths[0])
+  setTimeout(() => {
+    app.relaunch()
+    app.exit(0)
+  }, 1500)
+  return res
+})
 
 // ---------- конспекты ----------
 ipcMain.handle('notes:list', () => listNotes())

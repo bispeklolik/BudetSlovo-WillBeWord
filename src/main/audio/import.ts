@@ -2,7 +2,7 @@ import { openSync, readSync, closeSync, createReadStream, createWriteStream, exi
 import { spawnSync } from 'child_process'
 import { join } from 'path'
 import { pipeline } from 'stream/promises'
-import { FFMPEG } from '../paths'
+import { ffmpegPath } from '../engine/location'
 
 // Перенос с iPhone иногда добавляет мусорные байты перед боксом ftyp
 // (наблюдалось: 2 байта \r\n) — из-за этого файл не открывается.
@@ -29,7 +29,7 @@ interface Probe {
 // потоках в stderr и завершается с кодом 1 — это ожидаемо, парсим stderr.
 // Обложку альбома ffmpeg помечает как Video ... (attached pic) — это не видео.
 function probe(src: string): Probe {
-  const res = spawnSync(FFMPEG, ['-hide_banner', '-nostdin', '-i', src], {
+  const res = spawnSync(ffmpegPath(), ['-hide_banner', '-nostdin', '-i', src], {
     windowsHide: true,
     encoding: 'utf8'
   })
@@ -77,7 +77,7 @@ export async function repairAndRemux(
   let ok = false
   if (!hasVideo) {
     const r = spawnSync(
-      FFMPEG,
+      ffmpegPath(),
       ['-y', '-v', 'error', '-nostdin', '-i', work, '-vn', '-c:a', 'copy', '-movflags', '+faststart', out],
       { windowsHide: true, encoding: 'utf8' }
     )
@@ -88,7 +88,7 @@ export async function repairAndRemux(
   if (!ok) {
     if (hasVideo) onVideoExtract?.()
     const r = spawnSync(
-      FFMPEG,
+      ffmpegPath(),
       [
         '-y', '-v', 'error', '-nostdin', '-i', work,
         '-vn', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out

@@ -1,7 +1,8 @@
 import { spawnSync } from 'child_process'
-import { readFileSync, rmSync } from 'fs'
+import { readFileSync, rmSync, mkdirSync } from 'fs'
 import { join } from 'path'
-import { FFMPEG, STT_TEMP } from '../paths'
+import { TEMP_DIR } from '../paths'
+import { ffmpegPath } from '../engine/location'
 import type { MergeResult } from '../project/merge'
 import { openaiToTurns, type OaResponse } from '../../shared/sttMappers'
 import { netSignal } from './net'
@@ -20,8 +21,9 @@ export async function transcribeOpenAICompat(
   // ponytail: лимит 25 МБ на файл → перекодируем в моно 16 kbps m4a. Речь так
   // распознаётся без потерь, а многочасовая сессия влезает одним файлом.
   // Потолок ~3 ч; если понадобится длиннее — нарезка с офсетом таймкодов.
-  const small = join(STT_TEMP, `oa-${Date.now()}.m4a`)
-  const ff = spawnSync(FFMPEG, ['-y', '-i', audioPath, '-ac', '1', '-b:a', '16k', '-vn', small], {
+  mkdirSync(TEMP_DIR, { recursive: true })
+  const small = join(TEMP_DIR, `oa-${Date.now()}.m4a`)
+  const ff = spawnSync(ffmpegPath(), ['-y', '-i', audioPath, '-ac', '1', '-b:a', '16k', '-vn', small], {
     windowsHide: true
   })
   if (ff.status !== 0) throw new Error('Не удалось подготовить аудио для облака (ffmpeg).')

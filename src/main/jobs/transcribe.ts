@@ -1,7 +1,9 @@
 import { spawn, spawnSync, type ChildProcess } from 'child_process'
 import { createWriteStream, existsSync, mkdirSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { ENGINE_EXE, ENGINE_DIR, MODELS_DIR, STT_TEMP } from '../paths'
+import { enginePaths, engineEnv } from '../engine/location'
+import { detectGpu } from '../engine/sysinfo'
+import { deviceArgs, localModel } from '../../shared/localModels'
 import { projectDir, getProject, saveProject } from '../project/store'
 import { mergeEngineOutputs } from '../project/merge'
 import { loadSettings } from '../settings'
@@ -34,19 +36,7 @@ function outputsValid(engineOut: string): boolean {
   }
 }
 
-export function engineEnv(): NodeJS.ProcessEnv {
-  // Все кэши движка строго на D: — тот же набор, что в проверенном Transcribe.ps1.
-  return {
-    ...process.env,
-    HF_HOME: 'D:\\STT\\models\\hf',
-    HUGGINGFACE_HUB_CACHE: 'D:\\STT\\models\\hf\\hub',
-    TORCH_HOME: 'D:\\STT\\models\\torch',
-    XDG_CACHE_HOME: 'D:\\STT\\models\\cache',
-    PYANNOTE_CACHE: 'D:\\STT\\models\\pyannote',
-    TEMP: STT_TEMP,
-    TMP: STT_TEMP
-  }
-}
+export { engineEnv }
 
 function parseTimecodeSec(tc: string): number {
   const parts = tc.split(':')
@@ -112,25 +102,32 @@ export function runTranscribe(
       return
     }
 
-    if (!existsSync(ENGINE_EXE)) {
-      reject(new Error('Движок не найден: ' + ENGINE_EXE))
+    const eng = enginePaths()
+    if (!eng.installed) {
+      reject(
+        new Error(
+          'Локальный движок расшифровки ещё не установлен. Скачайте его в «Настройки → С чего начать» или выберите облачный движок.'
+        )
+      )
       return
     }
+    const settings = loadSettings()
+    const modelId = localModel(settings.localModel).id
 
     const dir = projectDir(job.slug)
     const engineOut = join(dir, 'engine')
     mkdirSync(engineOut, { recursive: true })
-    mkdirSync(STT_TEMP, { recursive: true })
+    mkdirSync(eng.temp, { recursive: true })
 
     const audio = join(dir, 'audio.m4a')
     const durationSec = meta.audio.durationSec || 0
 
     const args = [
       audio,
-      '--model', 'large-v3',
-      '--model_dir', MODELS_DIR,
+      '--model', modelId,
+      '--model_dir', eng.modelsDir,
       '--language', 'ru',
-      '--compute_type', 'float16',
+      ...deviceArgs(settings.localDevice, !!detectGpu()),
       '--beam_size', '5',
       '--vad_filter', 'True',
       // Не переносить контекст между сегментами: иначе одна ошибка на трудном
@@ -148,11 +145,11 @@ export function runTranscribe(
     }
 
     const log = createWriteStream(join(dir, 'job.log'), { flags: 'w' })
-    log.write(`[slovo] ${new Date().toISOString()}\n[slovo] ${ENGINE_EXE}\n[slovo] args: ${args.join(' ')}\n\n`)
+    log.write(`[slovo] ${new Date().toISOString()}\n[slovo] ${eng.exe}\n[slovo] args: ${args.join(' ')}\n\n`)
 
     const startedAt = Date.now()
-    const child = spawn(ENGINE_EXE, args, {
-      cwd: ENGINE_DIR,
+    const child = spawn(eng.exe, args, {
+      cwd: eng.dir,
       env: engineEnv(),
       windowsHide: true
     })
@@ -221,7 +218,7 @@ export function runTranscribe(
         const fresh = getProject(job.slug)
         if (fresh) {
           fresh.transcription = { numSpeakers: n, enhance: job.options?.enhance !== false }
-          fresh.engine = { model: 'large-v3', completedAt: new Date().toISOString() }
+          fresh.engine = { model: modelId, completedAt: new Date().toISOString() }
           try {
             const merged = mergeEngineOutputs(job.slug)
             fresh.speakers = merged.speakers
@@ -240,7 +237,7 @@ export function runTranscribe(
       if (elapsed < 3000) {
         reject(
           new Error(
-            `Движок мгновенно завершился (код ${code}). Похоже на блокировку антивирусом — добавьте D:\\STT и D:\\Apps\\slovo в исключения Kaspersky. Подробности: job.log`
+            `Движок мгновенно завершился (код ${code}). Похоже на блокировку антивирусом — добавьте папку движка (${eng.dir}) в исключения антивируса. Подробности: job.log`
           )
         )
         return

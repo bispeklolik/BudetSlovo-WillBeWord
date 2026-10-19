@@ -523,6 +523,12 @@ export default function Editor({
 
   return (
     <main className="editor">
+      {meta.demo && (
+        <div className="demo-banner">
+          Это пример без звука. Нажмите «✨ Сделать из текста», чтобы получить результат. Два готовых
+          результата по этой записи уже лежат в «Конспектах» на главном экране.
+        </div>
+      )}
       <div className="editor-head">
         <h1 className="editor-title">{meta.title}</h1>
         <span className="editor-sub">
@@ -585,19 +591,21 @@ export default function Editor({
               onAnonymize={runAnonymize}
               onAnonList={() => setAnonPanelOpen(true)}
             />
-            <button
-              className="btn"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    'Перераспознать запись заново? Текущий текст и правки будут заменены.'
+            {!meta.demo && (
+              <button
+                className="btn"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Перераспознать запись заново? Текущий текст и правки будут заменены.'
+                    )
                   )
-                )
-                  setReproc(true)
-              }}
-            >
-              Перераспознать
-            </button>
+                    setReproc(true)
+                }}
+              >
+                Перераспознать
+              </button>
+            )}
             <ExportMenu slug={slug} meta={meta} anon={anonMode} />
           </div>
         )}

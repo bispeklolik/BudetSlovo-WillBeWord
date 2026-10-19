@@ -4,6 +4,7 @@ import { searchProjects } from '../../../shared/search'
 import { buildFolderTree, ancestorPaths } from '../../../shared/folders'
 import { api } from '../api'
 import { showToast, humanError } from '../toast'
+import EngineStatus from '../components/EngineStatus'
 import Icon from '../components/Icon'
 import Sidebar, { NOTES_KEY } from '../components/Sidebar'
 import InputModal from '../components/InputModal'
@@ -38,9 +39,11 @@ type Modal =
   | null
 
 export default function Home({
-  onOpen
+  onOpen,
+  onOpenWelcome
 }: {
   onOpen: (slug: string, search?: string) => void
+  onOpenWelcome: () => void
 }): React.JSX.Element {
   const [projects, setProjects] = useState<ProjectMeta[]>([])
   const [folderList, setFolderList] = useState<string[]>([])
@@ -195,9 +198,9 @@ export default function Home({
           </div>
           <div className="empty-title">Добро пожаловать в «Слово»</div>
           <div className="welcome-sub">
-            Превращаю аудио и видео в текст — целиком на вашем компьютере. Записи никуда не
-            загружаются, всё остаётся у вас.
+            Превращаю запись разговора в текст и готовые результаты: конспект, заметку, письмо.
           </div>
+          <EngineStatus onOpenWelcome={onOpenWelcome} />
           <button
             className="btn btn-primary"
             onClick={doImport}
@@ -244,6 +247,7 @@ export default function Home({
         </div>
       </div>
 
+      <EngineStatus onOpenWelcome={onOpenWelcome} />
       {activeJobs.length > 0 && (
         <div className="queue-strip">
           {activeJobs.map((j) => (

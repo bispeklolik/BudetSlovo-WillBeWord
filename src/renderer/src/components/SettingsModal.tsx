@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import type { Theme, AiEngine, SttEngine, Settings, DictationSettings } from '../../../shared/types'
+import type { Theme, AiEngine, SttEngine, Settings, DictationSettings, SetupInfo } from '../../../shared/types'
 import { defaultDictation } from '../../../shared/types'
 import { STT_ENGINES, sttMeta, sttModeLabel } from '../../../shared/sttEngines'
 import { useEscClose } from '../useEscClose'
+import { LOCAL_MODELS, localModel, formatBytes } from '../../../shared/localModels'
+import { showToast, humanError } from '../toast'
 
 // Клавиши для диктовки: без левых модификаторов (они испортили бы Ctrl+V
 // вставку), одиночные и правые — то, что редко занято.
@@ -33,11 +35,13 @@ const MODELS: { id: string; label: string }[] = [
 export default function SettingsModal({
   theme,
   onToggleTheme,
-  onClose
+  onClose,
+  onOpenWelcome
 }: {
   theme: Theme
   onToggleTheme: () => void
   onClose: () => void
+  onOpenWelcome: () => void
 }): React.JSX.Element {
   useEscClose(onClose)
   const [aiReady, setAiReady] = useState<boolean | null>(null)
@@ -50,6 +54,10 @@ export default function SettingsModal({
   const [sttKeys, setSttKeys] = useState<Record<string, string>>({})
   const [showAllStt, setShowAllStt] = useState(false)
   const [dict, setDict] = useState<DictationSettings>({ ...defaultDictation })
+  const [info, setInfo] = useState<SetupInfo | null>(null)
+  const [localId, setLocalId] = useState('large-v3')
+  const [device, setDevice] = useState<'auto' | 'cuda' | 'cpu'>('auto')
+  const [backupBusy, setBackupBusy] = useState<string | null>(null)
 
   useEffect(() => {
     api.aiAvailable().then(setAiReady)
@@ -62,8 +70,34 @@ export default function SettingsModal({
       setStt(s.sttEngine ?? 'local')
       setSttKeys(s.sttKeys ?? {})
       setDict({ ...defaultDictation, ...s.dictation })
+      setLocalId(localModel(s.localModel).id)
+      setDevice(s.localDevice ?? 'auto')
     })
+    api.setupInfo().then(setInfo)
   }, [])
+
+  const doBackup = async (): Promise<void> => {
+    setBackupBusy('Создаю копию…')
+    try {
+      const r = await api.createBackup()
+      if (r) showToast(`Копия сохранена: ${r.path} (${formatBytes(r.bytes)})`)
+    } catch (err) {
+      showToast('Копия не создалась: ' + humanError(err))
+    } finally {
+      setBackupBusy(null)
+    }
+  }
+  const doRestore = async (): Promise<void> => {
+    setBackupBusy('Восстанавливаю…')
+    try {
+      const r = await api.restoreBackup()
+      if (r) showToast('Данные восстановлены. «Слово» перезапускается…')
+    } catch (err) {
+      showToast('Восстановить не удалось: ' + humanError(err))
+    } finally {
+      setBackupBusy(null)
+    }
+  }
 
   const saveDict = (patch: Partial<DictationSettings>): void => {
     const next = { ...dict, ...patch }
@@ -79,7 +113,7 @@ export default function SettingsModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-scroll" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <span className="modal-title">Настройки</span>
           <button className="btn" onClick={onClose}>
@@ -95,10 +129,37 @@ export default function SettingsModal({
             </button>
           </div>
           <div className="settings-row">
-            <span>Папка с записями и данными</span>
-            <button className="btn" onClick={() => void api.openDataDir()}>
-              Открыть
+            <span>С чего начать: пример, облако или движок на этом компьютере</span>
+            <button className="btn" onClick={onOpenWelcome}>
+              Открыть мастер
             </button>
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <div className="settings-label">Данные и резервная копия</div>
+          <div className="settings-row">
+            <span className="settings-status" style={{ wordBreak: 'break-all' }}>
+              {info?.dataDir ?? '…'}
+            </span>
+            <button className="btn" onClick={() => void api.openDataDir()}>
+              Открыть папку
+            </button>
+          </div>
+          <div className="settings-row">
+            <span>Все записи, конспекты и настройки — одним файлом .zip</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className="btn" disabled={!!backupBusy} onClick={doBackup}>
+                {backupBusy === 'Создаю копию…' ? backupBusy : 'Сделать копию'}
+              </button>
+              <button className="btn" disabled={!!backupBusy} onClick={doRestore}>
+                {backupBusy === 'Восстанавливаю…' ? backupBusy : 'Восстановить'}
+              </button>
+            </div>
+          </div>
+          <div className="panel-note">
+            В копии лежат ваши записи и ключи сервисов — храните её так же бережно, как записи клиентов.
+            Модели и движок в копию не входят: их можно скачать заново.
           </div>
         </div>
 
@@ -144,7 +205,57 @@ export default function SettingsModal({
               </div>
             </>
           ) : (
-            <div className="panel-note">Расшифровка на вашем компьютере — аудио никуда не уходит.</div>
+            <>
+              {info && !info.engine.installed ? (
+                <div className="settings-row">
+                  <span className="key-bad">Локальный движок ещё не установлен.</span>
+                  <button className="btn btn-primary" onClick={onOpenWelcome}>
+                    Скачать
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="settings-row">
+                    <span>Модель</span>
+                    <select
+                      className="rate"
+                      value={localId}
+                      onChange={(e) => {
+                        setLocalId(e.target.value)
+                        save({ localModel: e.target.value })
+                      }}
+                    >
+                      {LOCAL_MODELS.filter((m) => info?.installedModels.includes(m.id) || m.id === localId).map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label}
+                          {info?.installedModels.includes(m.id) ? '' : ' · скачается при первой расшифровке'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="settings-row">
+                    <span>Считать на</span>
+                    <select
+                      className="rate"
+                      value={device}
+                      onChange={(e) => {
+                        const d = e.target.value as 'auto' | 'cuda' | 'cpu'
+                        setDevice(d)
+                        save({ localDevice: d })
+                      }}
+                    >
+                      <option value="auto">Автоматически{info?.gpu ? ` (${info.gpu.name})` : ' (процессор)'}</option>
+                      <option value="cuda">Видеокарте NVIDIA</option>
+                      <option value="cpu">Процессоре</option>
+                    </select>
+                  </div>
+                  <button className="text-link" onClick={onOpenWelcome}>
+                    Скачать другую модель
+                  </button>
+                </>
+              )}
+              <div className="panel-note">Расшифровка на вашем компьютере — аудио никуда не уходит.</div>
+            </>
           )}
           <button className="text-link" onClick={() => setShowAllStt((v) => !v)}>
             {showAllStt ? 'Скрыть дополнительные движки' : 'Показать все движки (OpenAI, Groq, AssemblyAI)'}

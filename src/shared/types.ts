@@ -20,6 +20,10 @@ export interface Settings {
   sttKeys?: Record<string, string> // ключи облачных STT по id движка (хранятся локально)
   customPrompts?: CustomPrompt[] // пользовательские карточки-промты для библиотеки
   dictation?: DictationSettings // системная диктовка (глобальная горячая клавиша)
+  onboarded?: boolean // первый запуск («три двери») пройден
+  engineDir?: string // своя папка движка Faster-Whisper-XXL (если не по умолчанию)
+  localModel?: string // модель локального Whisper: 'large-v3' | 'large-v3-turbo' | 'medium' | 'small'
+  localDevice?: 'auto' | 'cuda' | 'cpu' // на чём считать локально (auto — видеокарта NVIDIA, если есть)
 }
 
 // Системная диктовка: зажал клавишу — говоришь (push-to-talk), быстрый
@@ -134,6 +138,8 @@ export interface ProjectMeta {
   turns?: Turn[]
   /** Правила обезличивания (ИИ нашёл имена/места/организации). Оригинал не меняется. */
   anon?: AnonRule[]
+  /** Пример из первого запуска: без звука, с готовыми результатами. */
+  demo?: boolean
 }
 
 // Правило обезличивания: подстрока как в тексте → нейтральная замена.
@@ -174,4 +180,39 @@ export interface JobInfo {
   createdAt: string
   startedAt?: string
   endedAt?: string
+}
+
+// ---------- первый запуск и локальный движок ----------
+export type SetupStage = 'engine' | 'extract' | 'model' | 'done' | 'error' | 'stopped'
+
+export interface SetupProgress {
+  stage: SetupStage
+  modelId: string
+  label: string
+  done: number
+  total: number
+  bytesPerSec: number
+  error?: string
+}
+
+export interface SetupInfo {
+  dataDir: string
+  engine: { installed: boolean; source: 'custom' | 'legacy' | 'default'; dir: string; modelsDir: string }
+  installedModels: string[]
+  localModel: string
+  gpu: { name: string; vramMb: number } | null
+  freeBytes: number | null
+  pending: { modelId: string } | null
+  progress: SetupProgress | null
+}
+
+export interface OllamaStatus {
+  installed: boolean
+  running: boolean
+  models: string[]
+}
+
+export interface KeyVerdict {
+  ok: boolean
+  message: string
 }
