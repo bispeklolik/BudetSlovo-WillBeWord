@@ -42,43 +42,46 @@ const txt = (r: { content: { text: string }[] }): string => r.content[0].text
 
 describe('MCP: политика «только обезличенные»', () => {
   it('список: id вместо имени файла; папка и название обезличены; у необезличенной всё скрыто', () => {
-    const t = txt(callTool(store(), 'list_recordings', {}))
+    const t = txt(callTool(store({ mcpPolicy: 'anon' }), 'list_recordings', {}))
     expect(t).toContain('id: u1 | название: Сессия с [Имя] eva-ivanova | папка: [Имя]')
     expect(t).toContain('название: (название скрыто: запись не обезличена)')
     expect(t).not.toMatch(/Мария|maria|Петрова/)
     expect(t).toContain('текст закрыт (не обезличена)')
   })
   it('обезличенную запись отдаёт по id с заменами и временем', () => {
-    const t = txt(callTool(store(), 'get_transcript', { id: 'u1' }))
+    const t = txt(callTool(store({ mcpPolicy: 'anon' }), 'get_transcript', { id: 'u1' }))
     expect(t).toContain('[0:05] Клиент: [Имя] скучает по маме')
     expect(t).toContain('Папка: [Имя]')
     expect(t).not.toMatch(/Ева/)
   })
   it('необезличенную — не отдаёт', () => {
-    const r = callTool(store(), 'get_transcript', { id: 'u2' })
+    const r = callTool(store({ mcpPolicy: 'anon' }), 'get_transcript', { id: 'u2' })
     expect(r.isError).toBe(true)
     expect(txt(r)).toContain('не обезличена')
   })
   it('поиск только по обезличенным, в заголовке — id', () => {
-    const t = txt(callTool(store(), 'search_recordings', { query: 'мама маме маму' }))
+    const t = txt(callTool(store({ mcpPolicy: 'anon' }), 'search_recordings', { query: 'мама маме маму' }))
     expect(t).toContain('[Имя] скучает')
     expect(t).toContain('(id u1)')
     expect(t).not.toContain('злится')
   })
   it('конспекты: только те, чьи записи обезличены; чистятся их правилами', () => {
-    const list = txt(callTool(store(), 'list_notes', {}))
+    const list = txt(callTool(store({ mcpPolicy: 'anon' }), 'list_notes', {}))
     expect(list).toContain('id: n1 | Динамика: [Имя]')
     expect(list).toContain('id: n3 | Конспект: [Имя]')
     expect(list).not.toContain('Мария')
     expect(list).toContain('скрыто: 1')
-    expect(txt(callTool(store(), 'get_note', { id: 'n3' }))).toBe('# Конспект: [Имя]\n\n[Имя] не было')
-    const r = callTool(store(), 'get_note', { id: 'n2' })
+    expect(txt(callTool(store({ mcpPolicy: 'anon' }), 'get_note', { id: 'n3' }))).toBe('# Конспект: [Имя]\n\n[Имя] не было')
+    const r = callTool(store({ mcpPolicy: 'anon' }), 'get_note', { id: 'n2' })
     expect(r.isError).toBe(true)
     expect(txt(r)).not.toContain('Мария')
   })
 })
 
 describe('MCP: политика «все записи»', () => {
+  it('без настройки — все записи (так решил владелец)', () => {
+    expect(txt(callTool(store(), 'get_transcript', { id: 'u2' }))).toContain('Мария злится')
+  })
   it('отдаёт и необезличенную, как есть; старый параметр slug тоже понимает', () => {
     expect(txt(callTool(store({ mcpPolicy: 'all' }), 'get_transcript', { slug: 'maria-petrova' }))).toContain('Мария злится')
     expect(txt(callTool(store({ mcpPolicy: 'all' }), 'get_note', { id: 'n2' }))).toContain('Мария плачет')

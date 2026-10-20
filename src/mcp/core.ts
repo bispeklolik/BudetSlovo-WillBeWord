@@ -5,9 +5,9 @@ import { buildPassages, rankPassages, terms, timedTranscript, clock } from '../s
 import { anonPlain } from '../shared/anon'
 
 // MCP-сервер «Слова» (волна 5): Claude (Desktop, Code) читает записи и конспекты.
-// Только чтение. Текст уходит в облако Anthropic вместе с разговором — поэтому
-// по умолчанию Claude видит только ОБЕЗЛИЧЕННЫЕ записи (у которых есть правила
-// обезличивания); «все записи» — только если человек сам так выбрал в настройках.
+// Только чтение. Текст уходит в облако Anthropic вместе с разговором. По
+// умолчанию — все записи (решение владельца: имя без фамилии клиента и так не
+// выдаёт); политика «только обезличенные» закрывает всё, что не обезличено.
 // Логика — здесь (под тестами), stdio-обвязка — в server.ts.
 
 export const SERVER_INFO = { name: 'slovo', version: '1.0.0' }
@@ -126,7 +126,7 @@ export function callTool(
 }
 
 function runTool(store: Store, name: string, args: Record<string, unknown>): string {
-  const policy = store.settings().mcpPolicy ?? 'anon'
+  const policy = store.settings().mcpPolicy ?? 'all'
   const anon = policy !== 'all'
   const str = (k: string): string | undefined => (typeof args[k] === 'string' ? (args[k] as string) : undefined)
   const projects = store.projects().filter((p) => !p.demo)

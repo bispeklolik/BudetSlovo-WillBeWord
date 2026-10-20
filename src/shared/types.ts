@@ -34,7 +34,7 @@ export interface Settings {
   missedMinutes?: number // «Что я пропустил?» — за сколько последних минут пересказать
   consentText?: string // мой вариант согласия на запись (пусто — шаблон)
   vocab?: Vocab // словарь: слова для распознавания, точные замены, сниппеты
-  mcpPolicy?: 'anon' | 'all' // что Claude (MCP) может читать: только обезличенные записи (по умолчанию) или все
+  mcpPolicy?: 'anon' | 'all' // что Claude (MCP) может читать: все записи (по умолчанию) или только обезличенные
   watchFolder?: { dir: string; autoTranscribe: boolean } // папка-наблюдатель: новые записи берутся сами
 }
 
