@@ -34,8 +34,14 @@ const FILLERS = new Set([
 
 const norm = (w: string): string => w.toLowerCase().replace(/ё/g, 'е')
 
+// Числительные: «пятнадцатое» законно становится «15» (числа цифрами) — не считаем их потерей.
+const NUMERAL =
+  /^(ноль|нол[яюе]|один|одн|дв[аеу]|двух|три|тр[её]х|четыр|пят[иь]?|шест|сем[ьи]$|восем|девят|десят|\p{L}+надцат|двадцат|тридцат|сорок|пятьдесят|шестьдесят|семьдесят|восемьдесят|девяност|сто$|сотн|двест|трист|четырест|тысяч|миллион|миллиард|перв|втор|трет|четв[её]рт|половин|полтор)/u
+
 function contentWords(text: string): string[] {
-  return (text.match(/[\p{L}\p{N}]+/gu) ?? []).map(norm).filter((w) => w.length >= 4 && !FILLERS.has(w))
+  return (text.match(/[\p{L}\p{N}]+/gu) ?? [])
+    .map(norm)
+    .filter((w) => w.length >= 4 && !FILLERS.has(w) && !NUMERAL.test(w) && !/^\d+$/.test(w))
 }
 
 /** Письменности, которых не было в надиктовке (иероглифы, арабская вязь…). */
@@ -85,5 +91,18 @@ export function acceptPolished(
     const novel = out.filter((w) => !src.some((s) => s.startsWith(w.slice(0, 5)) || w.startsWith(s.slice(0, 5))))
     if (novel.length > Math.max(5, out.length * 0.5)) return null
   }
+  return p
+}
+
+/**
+ * Ответ модели на правку выделенного: не пустой, не обрезанный, без чужой
+ * письменности, без тегов. null — текст в окне не трогаем.
+ */
+export function acceptEdit(original: string, edited: string | null | undefined): string | null {
+  const p = (edited ?? '').trim().replace(/^<\/?text>|<\/?text>$/g, '').trim()
+  if (!p) return null
+  if (p.includes(TRUNCATED)) return null
+  if (foreignScript(original, p)) return null
+  if (p.length > original.length * 4 + 600) return null
   return p
 }

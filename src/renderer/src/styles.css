@@ -2667,3 +2667,68 @@ body.overlay-mode {
   font-size: 13px;
   word-break: break-all;
 }
+
+/* ---------- волна 6: история диктовок учит словарь ---------- */
+.dict-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dict-edit textarea {
+  resize: vertical;
+  font: inherit;
+}
+
+.dict-learn {
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Плашка: подпись режима под надписью (волна 6) */
+.dict-label {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  min-width: 0;
+}
+
+.dict-mode {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dict-noselection .dict-label,
+.dict-edit-error .dict-label,
+.dict-edit-moved .dict-label,
+.dict-edit-console .dict-label {
+  color: #e5484d;
+}
+
+/* Текст во время речи (волна 6): плашка вырастает, внизу — последние слова */
+.dict-pill.dict-has-live {
+  height: auto;
+  min-height: 48px;
+  flex-wrap: wrap;
+  padding-block: 8px;
+  border-radius: 16px;
+}
+
+.dict-live {
+  flex-basis: 100%;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+  max-height: 3.9em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}

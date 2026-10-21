@@ -45,6 +45,8 @@ const stub: RendererApi = {
     throw new Error('Голосовая правка доступна только в приложении (Electron)')
   },
   sendDictAudio: async () => {},
+  sendDictChunk: () => {},
+  onDictLive: () => () => {},
   dictHistory: async () => [],
   retryDict: async () => {
     throw new Error('Доступно только в приложении (Electron)')

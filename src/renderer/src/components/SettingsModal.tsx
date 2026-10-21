@@ -473,6 +473,18 @@ export default function SettingsModal({
                         ' Переписывать текст лучше умеет облачный ИИ; локальная модель иногда ошибается — тогда вставится просто очищенный текст.'}
                     </div>
                   )}
+                  <div className="settings-row">
+                    <span>Режим по программе (Telegram → «Сообщение», почта → «Письмо»)</span>
+                    <button className={'btn' + (dict.autoMode !== false ? ' btn-primary' : '')} onClick={() => saveDict({ autoMode: dict.autoMode === false })}>
+                      {dict.autoMode !== false ? 'Вкл' : 'Выкл'}
+                    </button>
+                  </div>
+                  <div className="settings-row">
+                    <span>Числа и даты цифрами</span>
+                    <button className={'btn' + (dict.digits !== false ? ' btn-primary' : '')} onClick={() => saveDict({ digits: dict.digits === false })}>
+                      {dict.digits !== false ? 'Вкл' : 'Выкл'}
+                    </button>
+                  </div>
                   {findMode(dict.mode, dict.customModes).reformat && (
                     <div className="settings-row">
                       <span>Тон</span>
@@ -487,6 +499,30 @@ export default function SettingsModal({
                   )}
                 </>
               )}
+              <div className="settings-row">
+                <span>Текст во время речи (в плашке; сейчас — с движком Deepgram)</span>
+                <button className={'btn' + (dict.livePreview !== false ? ' btn-primary' : '')} onClick={() => saveDict({ livePreview: dict.livePreview === false })}>
+                  {dict.livePreview !== false ? 'Вкл' : 'Выкл'}
+                </button>
+              </div>
+              <div className="settings-row">
+                <span>Пунктуация голосом: «запятая», «с новой строки»</span>
+                <button className={'btn' + (dict.voicePunct !== false ? ' btn-primary' : '')} onClick={() => saveDict({ voicePunct: dict.voicePunct === false })}>
+                  {dict.voicePunct !== false ? 'Вкл' : 'Выкл'}
+                </button>
+              </div>
+              <div className="settings-row">
+                <span>Исправлять слова, похожие на слова из словаря</span>
+                <button className={'btn' + (dict.fuzzyVocab !== false ? ' btn-primary' : '')} onClick={() => saveDict({ fuzzyVocab: dict.fuzzyVocab === false })}>
+                  {dict.fuzzyVocab !== false ? 'Вкл' : 'Выкл'}
+                </button>
+              </div>
+              <div className="settings-row">
+                <span>Shift + клавиша — правка выделенного текста голосом</span>
+                <button className={'btn' + (dict.editByVoice !== false ? ' btn-primary' : '')} onClick={() => saveDict({ editByVoice: dict.editByVoice === false })}>
+                  {dict.editByVoice !== false ? 'Вкл' : 'Выкл'}
+                </button>
+              </div>
               <div className="settings-row">
                 <span>Вставлять в активное окно</span>
                 <button
@@ -547,7 +583,9 @@ export default function SettingsModal({
               </div>
               <div className="panel-note">
                 Зажмите клавишу — говорите, отпустите — текст вставится туда, где курсор. Быстрое
-                двойное нажатие — запись без рук до следующего нажатия. Esc — отмена. Распознаёт
+                двойное нажатие — запись без рук до следующего нажатия. Esc — отмена. Выделите текст и
+                зажмите Shift + клавишу — скажите, что с ним сделать («сделай мягче», «сократи»): текст
+                заменится. Для правки нужен ИИ из раздела «ИИ». Распознаёт
                 движок из раздела «Расшифровка»; чистку делает движок из раздела «ИИ». Если ИИ-чистка
                 ошиблась или не ответила, вставится сырой текст — диктовка не теряется.
               </div>
@@ -557,7 +595,8 @@ export default function SettingsModal({
           {vocabOpen && (
             <VocabPanel
               customModes={dict.customModes ?? []}
-              onSaveModes={(customModes) => saveDict({ customModes })}
+              appRules={dict.appRules}
+              onSaveDict={(patch) => saveDict(patch)}
               onClose={() => setVocabOpen(false)}
             />
           )}

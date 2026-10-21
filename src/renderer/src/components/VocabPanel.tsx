@@ -1,28 +1,33 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Replacement, Snippet, Vocab } from '../../../shared/vocab'
-import type { CustomDictMode } from '../../../shared/dictModes'
+import { DICT_MODES, type CustomDictMode } from '../../../shared/dictModes'
+import { DEFAULT_APP_RULES, type AppModeRule } from '../../../shared/appModes'
 import { api } from '../api'
 import { useEscClose } from '../useEscClose'
 
 // Словарь (волна 5): слова для распознавания, точные замены, сниппеты и свои
 // режимы диктовки. Сохраняется кнопкой — так проще править несколько строк.
 
-type Tab = 'words' | 'reps' | 'snippets' | 'modes'
+type Tab = 'words' | 'reps' | 'snippets' | 'modes' | 'apps'
 
 const TABS: { id: Tab; name: string }[] = [
   { id: 'words', name: 'Словарь' },
   { id: 'reps', name: 'Замены' },
   { id: 'snippets', name: 'Сниппеты' },
-  { id: 'modes', name: 'Свои режимы' }
+  { id: 'modes', name: 'Свои режимы' },
+  { id: 'apps', name: 'Программы' }
 ]
 
 export default function VocabPanel({
   customModes,
-  onSaveModes,
+  appRules,
+  onSaveDict,
   onClose
 }: {
   customModes: CustomDictMode[]
-  onSaveModes: (modes: CustomDictMode[]) => void
+  appRules?: AppModeRule[]
+  /** Одним вызовом: два подряд затирали друг друга (старое состояние в замыкании). */
+  onSaveDict: (patch: { customModes: CustomDictMode[]; appRules: AppModeRule[] }) => void
   onClose: () => void
 }): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('words')
@@ -30,6 +35,7 @@ export default function VocabPanel({
   const [reps, setReps] = useState<Replacement[]>([])
   const [snips, setSnips] = useState<Snippet[]>([])
   const [modes, setModes] = useState<CustomDictMode[]>(customModes)
+  const [rules, setRules] = useState<AppModeRule[]>(appRules?.length ? appRules : DEFAULT_APP_RULES)
   const [saved, setSaved] = useState(false)
   // Правки сохраняются и при закрытии (Esc, «Закрыть», клик мимо) — как везде
   // в настройках; раньше они молча пропадали (ревью волны 5).
@@ -61,11 +67,12 @@ export default function VocabPanel({
     }
     await api.setSettings({ vocab })
     // Режим без названия получает название; без описания — хранится, но не работает (видно подсказку).
-    onSaveModes(
-      modes
+    onSaveDict({
+      customModes: modes
         .filter((m) => m.name.trim() || m.prompt.trim())
-        .map((m) => ({ ...m, name: m.name.trim() || 'Свой режим' }))
-    )
+        .map((m) => ({ ...m, name: m.name.trim() || 'Свой режим' })),
+      appRules: rules.filter((r) => r.match.trim())
+    })
     dirty.current = false
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
@@ -155,6 +162,44 @@ export default function VocabPanel({
               <div>
                 <button className="btn btn-sm" onClick={() => touch(setSnips)([...snips, { trigger: '', text: '' }])}>
                   + Сниппет
+                </button>
+              </div>
+            </>
+          )}
+
+          {tab === 'apps' && (
+            <>
+              <div className="panel-note">
+                Какой режим ИИ-чистки включать в какой программе. Ищем слово в имени программы или в заголовке окна
+                (например, «gmail» найдётся во вкладке браузера с почтой). Снимков экрана не делаем.
+              </div>
+              {rules.map((r, i) => (
+                <div className="vocab-row" key={i}>
+                  <input className="text-input" placeholder="telegram" value={r.match} onChange={(e) => touch(setRules)(setAt(rules, i, { match: e.target.value }))} />
+                  <span>→</span>
+                  <select className="rate" value={r.mode} onChange={(e) => touch(setRules)(setAt(rules, i, { mode: e.target.value }))}>
+                    {DICT_MODES.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                    {modes.filter((m) => m.name.trim()).map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button className="btn btn-icon" title="Удалить" onClick={() => touch(setRules)(rules.filter((_, k) => k !== i))}>
+                    ×
+                  </button>
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-sm" onClick={() => touch(setRules)([...rules, { match: '', mode: 'message' }])}>
+                  + Правило
+                </button>
+                <button className="btn btn-sm" onClick={() => touch(setRules)(DEFAULT_APP_RULES)}>
+                  Вернуть как было
                 </button>
               </div>
             </>

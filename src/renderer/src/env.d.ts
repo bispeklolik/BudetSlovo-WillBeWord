@@ -60,11 +60,13 @@ export interface RendererApi {
   ) => Promise<string | null>
   runPromptAi: (slug: string, system: string) => Promise<string | null>
   transcribeClip: (data: ArrayBuffer) => Promise<string>
-  sendDictAudio: (data: ArrayBuffer, meta?: { silent?: boolean; error?: string }) => Promise<void>
+  sendDictAudio: (data: ArrayBuffer, meta?: { silent?: boolean; error?: string; tooShort?: boolean }) => Promise<void>
+  sendDictChunk: (data: ArrayBuffer) => void
+  onDictLive: (cb: (text: string) => void) => () => void
   dictHistory: () => Promise<DictationEntry[]>
   retryDict: (audio: string) => Promise<string>
   onDictRecord: (
-    cb: (cmd: 'start' | 'stop' | 'cancel', opts?: { sounds?: boolean; tailMs?: number; micId?: string }) => void
+    cb: (cmd: 'start' | 'stop' | 'cancel', opts?: { sounds?: boolean; tailMs?: number; micId?: string; live?: boolean }) => void
   ) => () => void
   onDictState: (cb: (state: string) => void) => () => void
   highlightAi: (slug: string) => Promise<ProjectMeta | null>

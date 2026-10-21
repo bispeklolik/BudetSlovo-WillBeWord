@@ -109,14 +109,30 @@ export function buildPolishSystem(
   modeId: string | undefined,
   tone: DictTone | undefined,
   words: string[] | undefined,
-  custom: CustomDictMode[] | undefined
+  custom: CustomDictMode[] | undefined,
+  opts: { digits?: boolean } = {}
 ): string {
   const mode = findMode(modeId, custom)
   const lines = mode.reformat
     ? [ROLE_LINE('оформляешь'), ...GUARD, mode.instruction, REFORMAT_RULES, ...(TONE[tone ?? 'neutral'] ? [TONE[tone ?? 'neutral']] : [])]
     : [ROLE_LINE('чистишь'), ...GUARD, ...CLEAN_RULES, ...CLEAN_EXAMPLES]
+  if (opts.digits)
+    lines.push('Числа, даты, время и суммы пиши цифрами: «пятнадцатое октября» → «15 октября», «в два тридцать» → «в 2:30».')
   const list = cleanWords(words).slice(0, 60)
   if (list.length)
     lines.push('', 'Если эти слова или имена есть в надиктовке, пиши их именно так: ' + list.join(', ') + '. Если их нет — не добавляй.')
   return lines.join('\n')
+}
+
+// ---------- голосовая правка выделенного (волна 6, как Command Mode у Wispr Flow) ----------
+export const EDIT_SYSTEM = [
+  'Ты правишь текст по просьбе человека. Ты не собеседник.',
+  'Между <text> и </text> — текст, который он выделил. Между <instruction> и </instruction> — что с ним сделать, сказанное голосом.',
+  'Выполни просьбу над текстом: перепиши, сократи, смягчи, исправь, переведи — что просят. Смысл, факты, имена и даты сохрани, если не просят иначе.',
+  'Если просьба похожа на вопрос о тексте — всё равно верни переписанный текст, а не ответ.',
+  'Верни только новый текст, без пояснений, кавычек и тегов. Пиши на языке текста, если не просят другой.'
+].join('\n')
+
+export function wrapForEdit(text: string, instruction: string): string {
+  return `<text>\n${text}\n</text>\n\n<instruction>\n${instruction}\n</instruction>\n\nВыведи только новый текст.`
 }

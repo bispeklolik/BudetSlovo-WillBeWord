@@ -86,18 +86,25 @@ const api = {
   transcribeClip: (data: ArrayBuffer): Promise<string> => ipcRenderer.invoke('stt:clip', data),
 
   // Системная диктовка: main командует записью, renderer шлёт аудио обратно.
-  sendDictAudio: (data: ArrayBuffer, meta?: { silent?: boolean; error?: string }): Promise<void> =>
+  sendDictAudio: (data: ArrayBuffer, meta?: { silent?: boolean; error?: string; tooShort?: boolean }): Promise<void> =>
     ipcRenderer.invoke('dict:audio', data, meta),
+  // Кусок звука во время записи — для текста в плашке (поток), без ответа.
+  sendDictChunk: (data: ArrayBuffer): void => ipcRenderer.send('dict:chunk', data),
+  onDictLive: (cb: (text: string) => void): (() => void) => {
+    const h = (_e: unknown, t: string): void => cb(t)
+    ipcRenderer.on('dict:live', h)
+    return () => ipcRenderer.off('dict:live', h)
+  },
   dictHistory: (): Promise<DictationEntry[]> => ipcRenderer.invoke('dict:history'),
   retryDict: (audio: string): Promise<string> => ipcRenderer.invoke('dict:retry', audio),
   onDictRecord: (
-    cb: (cmd: 'start' | 'stop' | 'cancel', opts?: { sounds?: boolean; tailMs?: number; micId?: string }) => void
+    cb: (cmd: 'start' | 'stop' | 'cancel', opts?: { sounds?: boolean; tailMs?: number; micId?: string; live?: boolean }) => void
   ): (() => void) => {
     const hs = (
       ['dict:record-start', 'dict:record-stop', 'dict:record-cancel'] as const
     ).map((ch) => {
       const cmd = ch.split('-')[1] as 'start' | 'stop' | 'cancel'
-      const h = (_e: unknown, opts?: { sounds?: boolean; tailMs?: number; micId?: string }): void => cb(cmd, opts)
+      const h = (_e: unknown, opts?: { sounds?: boolean; tailMs?: number; micId?: string; live?: boolean }): void => cb(cmd, opts)
       ipcRenderer.on(ch, h)
       return [ch, h] as const
     })

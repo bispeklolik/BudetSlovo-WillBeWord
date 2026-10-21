@@ -3,6 +3,7 @@ export type Theme = 'light' | 'dark'
 import type { CustomPrompt } from './prompts'
 import type { Vocab } from './vocab'
 import type { DictTone, CustomDictMode } from './dictModes'
+import type { AppModeRule } from './appModes'
 
 export type AiEngine = 'local-llama' | 'claude' | 'openrouter'
 
@@ -53,6 +54,13 @@ export interface DictationSettings {
   mode?: string // режим ИИ-чистки: clean | email | message | note | id своего режима
   tone?: DictTone // тон для режимов, которые переписывают текст
   customModes?: CustomDictMode[] // свои режимы: название + что сделать с текстом
+  autoMode?: boolean // режим по программе (Telegram → сообщение, почта → письмо); по умолчанию вкл
+  appRules?: AppModeRule[] // свои правила «программа → режим» (пусто — встроенные)
+  voicePunct?: boolean // «запятая», «с новой строки» → знаки; по умолчанию вкл
+  digits?: boolean // числа и даты цифрами (при ИИ-чистке); по умолчанию вкл
+  fuzzyVocab?: boolean // похожие на слова из словаря — писать как в словаре; по умолчанию вкл
+  editByVoice?: boolean // Shift + клавиша — голосовая правка выделенного; по умолчанию вкл
+  livePreview?: boolean // текст во время речи в плашке; по умолчанию вкл (где движок умеет)
 }
 
 // Запись журнала диктовок (dictation-history.jsonl) — для списка «Последние диктовки».

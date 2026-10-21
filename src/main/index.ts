@@ -72,6 +72,7 @@ import {
   applyDictationSettings,
   stopDictation,
   onDictationAudio,
+  onDictationChunk,
   dictationHistory,
   retryDictation,
   type ClipMeta
@@ -232,6 +233,7 @@ ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
 
 // Аудио диктовки из renderer → распознать → вставить в активное окно.
 ipcMain.handle('dict:audio', (_e, data: ArrayBuffer, meta?: ClipMeta) => onDictationAudio(data, meta))
+ipcMain.on('dict:chunk', (_e, data: ArrayBuffer) => onDictationChunk(data))
 
 // ---------- запись звонков ----------
 const callNames = (): [string, string] => settings.callNames ?? ['Я', 'Собеседник']
