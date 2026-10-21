@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type ChildProcess } from 'child_process'
-import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, type WriteStream } from 'fs'
-import { join } from 'path'
+import { copyFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, type WriteStream } from 'fs'
+import { dirname, join } from 'path'
 import { enginePaths, engineEnv } from '../engine/location'
 import { detectGpu } from '../engine/sysinfo'
 import { deviceArgs, localModel } from '../../shared/localModels'
@@ -81,6 +81,42 @@ interface EngineRun {
   allowEmpty?: boolean
 }
 
+/**
+ * Разметку говорящих (--diarize_dump) движок кладёт РЯДОМ С ИСХОДНЫМ ФАЙЛОМ
+ * (проверено вживую), а при чистке звука — возможно, рядом с временным.
+ * Забираем свежую в папку результатов как <base>.dump.txt.
+ */
+function collectDiarizeDump(input: string, extraDirs: string[], dest: string, since: number, log: WriteStream): void {
+  const name = input.replace(/\\/g, '/').split('/').pop()!
+  const dirs = [dirname(input), ...extraDirs]
+  let best: { path: string; mtime: number } | null = null
+  for (const d of dirs) {
+    let files: string[] = []
+    try {
+      files = readdirSync(d)
+    } catch {
+      continue
+    }
+    for (const f of files) {
+      if (!/_diarize_.*_dump\.txt$/.test(f)) continue
+      if (d === dirname(input) && !f.startsWith(name + '_diarize_')) continue
+      const p = join(d, f)
+      const mtime = statSync(p).mtimeMs
+      if (mtime >= since - 1000 && (!best || mtime > best.mtime)) best = { path: p, mtime }
+    }
+  }
+  if (!best) {
+    log.write('\n[slovo] разметка говорящих (dump) не найдена — метки по предложениям\n')
+    return
+  }
+  try {
+    copyFileSync(best.path, dest)
+    rmSync(best.path, { force: true })
+  } catch (err) {
+    log.write(`\n[slovo] не удалось забрать разметку говорящих: ${String(err)}\n`)
+  }
+}
+
 /** Один запуск локального движка; успех — по наличию результата, не по коду. */
 function runLocalEngine(job: JobInfo, r: EngineRun, emit: Emit, log: WriteStream): Promise<void> {
   checkCancel(job)
@@ -92,7 +128,7 @@ function runLocalEngine(job: JobInfo, r: EngineRun, emit: Emit, log: WriteStream
   // Старые результаты прошлого запуска убираем: иначе при сбое движка их
   // приняли бы за успех (ревью волны 3: «устаревший audio.json»).
   const base = r.input.replace(/\\/g, '/').split('/').pop()!.replace(/\.[^.]+$/, '')
-  for (const ext of ['json', 'txt', 'srt']) rmSync(join(r.outDir, `${base}.${ext}`), { force: true })
+  for (const ext of ['json', 'txt', 'srt', 'dump.txt']) rmSync(join(r.outDir, `${base}.${ext}`), { force: true })
   const args = [
     r.input,
     '--model', modelId,
@@ -109,7 +145,10 @@ function runLocalEngine(job: JobInfo, r: EngineRun, emit: Emit, log: WriteStream
     '--beep_off'
   ]
   if (r.diarize) {
-    args.push('--diarize', 'pyannote_v3.1')
+    // --diarize_dump: «сырая» разметка «кто когда говорил» — по ней метка
+    // ставится каждому слову, а не предложению (иначе «угу» внутри чужой
+    // фразы сливалось с ней).
+    args.push('--diarize', 'pyannote_v3.1', '--diarize_dump')
     if (r.numSpeakers > 0) args.push('--num_speakers', String(r.numSpeakers))
   }
   if (r.enhance) args.push('--ff_loudnorm', '--ff_lowhighpass', '--ff_fftdn', '10')
@@ -161,6 +200,7 @@ function runLocalEngine(job: JobInfo, r: EngineRun, emit: Emit, log: WriteStream
       if (job.cancelRequested) return reject(new Cancelled())
       if (outputsValid(r.outDir, base, r.allowEmpty)) {
         if (code !== 0) log.write(`\n[slovo] движок вышел с кодом ${code}, но результат записан полностью — считаем успехом\n`)
+        if (r.diarize) collectDiarizeDump(r.input, [eng.temp], join(r.outDir, `${base}.dump.txt`), startedAt, log)
         return resolve()
       }
       if (Date.now() - startedAt < 3000) {
@@ -176,7 +216,15 @@ function runLocalEngine(job: JobInfo, r: EngineRun, emit: Emit, log: WriteStream
 }
 
 /** Облачный движок на одном файле (вся логика ключей, отмены и таймаутов). */
-async function runCloudOn(job: JobInfo, engineId: string, input: string, verbatim: boolean, emit: Emit, label: string): Promise<MergeResult> {
+async function runCloudOn(
+  job: JobInfo,
+  engineId: string,
+  input: string,
+  verbatim: boolean,
+  emit: Emit,
+  label: string,
+  speakers?: number
+): Promise<MergeResult> {
   const run = CLOUD_RUN[engineId]
   const name = sttMeta(engineId)?.label ?? engineId
   const key = (loadSettings().sttKeys?.[engineId] ?? '').trim()
@@ -187,7 +235,7 @@ async function runCloudOn(job: JobInfo, engineId: string, input: string, verbati
   const ctrl = new AbortController()
   cloudAborts.set(job.id, ctrl)
   try {
-    const result = await run(input, key, emit, ctrl.signal, { verbatim, terms: loadSettings().vocab?.words })
+    const result = await run(input, key, emit, ctrl.signal, { verbatim, terms: loadSettings().vocab?.words, speakers })
     checkCancel(job) // отменили, пока сервис отвечал, — результат не сохраняем
     return result
   } catch (err) {
@@ -241,7 +289,7 @@ async function runSingle(job: JobInfo, meta: ProjectMeta, emit: Emit, log: Write
   try {
     const input = await prepareInput(job, join(dir, 'audio.m4a'), tmp, opts)
     if (engineId !== 'local' && CLOUD_RUN[engineId]) {
-      const result = await runCloudOn(job, engineId, input, !!opts?.verbatim, emit, '')
+      const result = await runCloudOn(job, engineId, input, !!opts?.verbatim, emit, '', opts?.numSpeakers || undefined)
       emit({ phase: 'Сохранение результата', percent: null })
       saveResult(job, result, engineId, opts)
       return
@@ -300,7 +348,8 @@ async function runChannels(job: JobInfo, meta: ProjectMeta, emit: Emit, log: Wri
       const input = await prepareInput(job, join(dir, ch[kind]), tmp, opts)
       if (cloud) {
         try {
-          const r = await runCloudOn(job, engineId, input, !!opts?.verbatim, emit, label)
+          // Одна дорожка звонка — один голос.
+          const r = await runCloudOn(job, engineId, input, !!opts?.verbatim, emit, label, 1)
           words[kind] = wordsFromTurns(r.turns)
         } catch (err) {
           // Молчащая сторона (слушал вебинар, выключил микрофон) — норма, а не провал звонка.

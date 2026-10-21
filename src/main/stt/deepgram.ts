@@ -14,7 +14,7 @@ export async function transcribeWithDeepgram(
   audioPath: string,
   key: string,
   signal?: AbortSignal,
-  opts?: { verbatim?: boolean; terms?: string[] }
+  opts?: { verbatim?: boolean; terms?: string[]; speakers?: number }
 ): Promise<MergeResult> {
   const body = readFileSync(audioPath)
   // ponytail: синхронный endpoint — тянет и многочасовые pre-recorded в одном
@@ -23,7 +23,10 @@ export async function transcribeWithDeepgram(
   const params = new URLSearchParams({
     model: 'nova-2',
     language: 'ru',
-    diarize: 'true',
+    // diarize=true устарел и ведёт на старый разделитель v1; diarize_model=v2 —
+    // новый (документация Deepgram «Diarization», совместим с Nova-2; оба
+    // параметра сразу Deepgram отклоняет). Числа говорящих Deepgram не принимает.
+    diarize_model: 'v2',
     punctuate: 'true',
     smart_format: 'true'
   })

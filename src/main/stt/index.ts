@@ -11,6 +11,8 @@ export interface CloudOpts {
   verbatim?: boolean
   /** Слова из словаря пользователя — подсказка движку (имена, термины). */
   terms?: string[]
+  /** Сколько говорящих, если известно (2 — я и клиент; 1 — одна дорожка звонка). */
+  speakers?: number
 }
 type RunFn = (
   audioPath: string,
@@ -25,7 +27,7 @@ type RunFn = (
 export const CLOUD_RUN: Record<string, RunFn> = {
   deepgram: (a, k, _e, s, o) => transcribeWithDeepgram(a, k, s, o),
   assemblyai: (a, k, e, s, o) => transcribeWithAssemblyAI(a, k, e, s, o),
-  elevenlabs: (a, k, _e, s) => transcribeWithElevenLabs(a, k, s), // Scribe и так пишет близко к дословному
+  elevenlabs: (a, k, _e, s, o) => transcribeWithElevenLabs(a, k, s, o), // Scribe и так пишет близко к дословному
   openai: (a, k, _e, s, o) => transcribeOpenAICompat(a, k, 'https://api.openai.com/v1', 'whisper-1', s, o),
   groq: (a, k, _e, s, o) =>
     transcribeOpenAICompat(a, k, 'https://api.groq.com/openai/v1', 'whisper-large-v3-turbo', s, o)

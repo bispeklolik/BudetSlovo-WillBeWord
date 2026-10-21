@@ -10,12 +10,15 @@ import { netSignal } from './net'
 export async function transcribeWithElevenLabs(
   audioPath: string,
   key: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  opts?: { speakers?: number }
 ): Promise<MergeResult> {
   const form = new FormData()
   form.append('file', new Blob([readFileSync(audioPath)], { type: 'audio/mp4' }), 'audio.m4a')
   form.append('model_id', 'scribe_v2')
   form.append('diarize', 'true')
+  // Верхняя граница числа говорящих (у ElevenLabs это максимум, не точное число).
+  if (opts?.speakers && opts.speakers > 0) form.append('num_speakers', String(opts.speakers))
   form.append('language_code', 'rus')
   form.append('timestamps_granularity', 'word')
   const res = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {

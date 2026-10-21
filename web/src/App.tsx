@@ -88,7 +88,8 @@ async function sttTranscribe(file: File, engine: SttId, key: string): Promise<Me
     const params = new URLSearchParams({
       model: 'nova-2',
       language: 'ru',
-      diarize: 'true',
+      // diarize=true устарел (разделитель v1); diarize_model=v2 — новый, для Nova-2.
+      diarize_model: 'v2',
       punctuate: 'true',
       smart_format: 'true'
     })

@@ -1,6 +1,7 @@
-import { readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { projectDir } from './store'
+import { parseDiarizeDump, assignWordSpeakers } from '../../shared/diarize'
 
 interface EngineWord {
   start: number
@@ -76,6 +77,9 @@ export function mergeEngineOutputs(slug: string): MergeResult {
   }
   const txt = readFileSync(join(dir, 'audio.txt'), 'utf8')
   const intervals = parseSpeakerIntervals(txt)
+  // «Сырая» разметка движка (если есть): метка каждому слову, а не предложению.
+  const dumpFile = join(dir, 'audio.dump.txt')
+  const diarTurns = existsSync(dumpFile) ? parseDiarizeDump(readFileSync(dumpFile, 'utf8')) : []
 
   // Плоский список слов; говорящий — по максимальному перекрытию с диаризацией.
   // Сегменты без words[] превращаем в одно «слово»-блок.
@@ -105,5 +109,9 @@ export function mergeEngineOutputs(slug: string): MergeResult {
     }
   }
 
+  if (diarTurns.length && flat.length) {
+    const labels = assignWordSpeakers(flat, diarTurns, flat[0].label)
+    flat.forEach((w, i) => (w.label = labels[i]))
+  }
   return buildTurns(flat)
 }
