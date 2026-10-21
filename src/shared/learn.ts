@@ -79,6 +79,13 @@ export function suggestFromEdit(before: string, after: string): Suggestion[] {
   })
 }
 
+/** Сколько первых букв у двух строк совпадает. */
+function commonPrefix(a: string, b: string): number {
+  let k = 0
+  while (k < a.length && k < b.length && a[k] === b[k]) k++
+  return k
+}
+
 /** Расстояние Левенштейна с ранним выходом, если больше max. */
 export function editDistance(x: string, y: string, max = 3): number {
   if (Math.abs(x.length - y.length) > max) return max + 1
@@ -108,6 +115,9 @@ export function editDistance(x: string, y: string, max = 3): number {
 export function fuzzyFixVocab(text: string, vocab: string[] | undefined): string {
   const list = (vocab ?? []).map((w) => w.trim()).filter((w) => w.length >= 5 && !/\s/.test(w))
   if (!list.length) return text
+  // Заглавная в начале предложения остаётся, даже если в словаре слово строчное.
+  const keepCap = (out: string, w: string): string =>
+    w[0] !== w[0].toLowerCase() && out[0] === out[0].toLowerCase() ? out[0].toUpperCase() + out.slice(1) : out
   return text.replace(/[\p{L}][\p{L}'’-]*/gu, (w) => {
     if (w.length < 5) return w
     const nw = norm(w)
@@ -119,18 +129,21 @@ export function fuzzyFixVocab(text: string, vocab: string[] | undefined): string
       if (nv === nw) return v === w ? w : w[0] === w[0].toUpperCase() && v[0] !== v[0].toUpperCase() ? w : v
       if (nv[0] !== nw[0]) continue
       const sv = stem(v)
-      if (sv === sw) {
-        // Своё окончание — другой падеж того же слова. Без окончания
-        // («гешталт» при «гештальт») — ошибка, пишем как в словаре.
-        if (nw.length > sw.length) return w
-        return v
-      }
+      // Та же основа — другая форма того же слова («Марине», «тревог»), не трогаем.
+      if (sv === sw) return w
       if (sv.length < 6) continue
+      // Не ослышка, а родственное слово (повторное ревью волны 6):
+      //  - одна основа — начало другой («конфликтный», «Николая», «супервизии»);
+      //  - основы одной длины расходятся только последней буквой — чередование
+      //    («тревожит» при «тревога», «проект» при «проекция»).
+      // «Гешталт» при «гештальт» (буква пропущена в середине) по-прежнему правим.
+      const cp = commonPrefix(sw, sv)
+      if (cp === Math.min(sw.length, sv.length) || (sw.length === sv.length && cp === sw.length - 1)) continue
       const max = Math.max(sv.length, sw.length) <= 7 ? 1 : 2
       const d = editDistance(sw, sv, max)
       if (d <= max && d < bestD) {
         bestD = d
-        best = v.slice(0, sv.length) + w.slice(sw.length)
+        best = keepCap(v.slice(0, sv.length) + w.slice(sw.length), w)
       }
     }
     return best ?? w

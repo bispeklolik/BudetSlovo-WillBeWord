@@ -47,8 +47,13 @@ let appAtStart: ForegroundApp | null = null
 // Поток «текст во время речи» (если движок умеет): куски звука идут сразу.
 let live: LiveSession | null = null
 let liveTall = false
-// Esc во время распознавания/правки: результат не вставляем (в журнале он останется).
-let cancelled = false
+// Номер текущей диктовки. Рекордер присылает его вместе со звуком. Esc во
+// время распознавания меняет номер: клавиша сразу свободна, а запоздавший
+// звук и результат той диктовки уже не трогают новую (повторное ревью волны 6).
+let gen = 0
+// Звук какой диктовки уже пришёл; сторож ждёт звук не дольше 15 с.
+let audioGen = -1
+let stuckTimer: NodeJS.Timeout | null = null
 let hideTimer: NodeJS.Timeout | null = null
 // Shift + клавиша диктовки, «проглоченная» для жеста правки (см. applyDictationSettings).
 let editAccel = ''
@@ -358,12 +363,12 @@ function startRecording(): void {
   console.log('[dictation] recording start')
   phase = 'recording'
   kind = 'dictate'
-  cancelled = false
+  gen++
   appAtStart = hotkeyHook.lastApp
   showOverlay()
   overlayState('listening|' + modeLabel(appAtStart))
   live = openLive()
-  send('dict:record-start', { sounds: cfg.sounds, tailMs: cfg.tailMs ?? 300, micId: cfg.micId ?? '', live: !!live })
+  send('dict:record-start', { sounds: cfg.sounds, tailMs: cfg.tailMs ?? 300, micId: cfg.micId ?? '', live: !!live, id: gen })
   if (cfg.pauseMedia !== false) pausedMedia = pauseMedia().catch(() => [])
   // Esc отменяет запись — регистрируем только на время записи.
   globalShortcut.register('Escape', () => cancelRecording())
@@ -376,12 +381,12 @@ function startEdit(): void {
   console.log('[dictation] edit start')
   phase = 'recording'
   kind = 'edit'
-  cancelled = false
+  gen++
   appAtStart = hotkeyHook.lastApp
   showOverlay()
   overlayState('edit')
   live = openLive()
-  send('dict:record-start', { sounds: cfg.sounds, tailMs: cfg.tailMs ?? 300, micId: cfg.micId ?? '', live: !!live })
+  send('dict:record-start', { sounds: cfg.sounds, tailMs: cfg.tailMs ?? 300, micId: cfg.micId ?? '', live: !!live, id: gen })
   if (cfg.pauseMedia !== false) pausedMedia = pauseMedia().catch(() => [])
   globalShortcut.register('Escape', () => cancelRecording())
 }
@@ -393,13 +398,37 @@ function stopRecording(): void {
   // Esc остаётся: пока распознаём и правим, ещё можно передумать.
   overlayState(kind === 'edit' ? 'editing' : 'processing')
   send('dict:record-stop')
+  // Сторож: звук так и не пришёл (микрофон отключили посреди записи) —
+  // не висим в «Распознаю…» и не держим клавишу до перезапуска.
+  const my = gen
+  if (stuckTimer) clearTimeout(stuckTimer)
+  stuckTimer = setTimeout(() => {
+    stuckTimer = null
+    if (gen !== my || phase !== 'processing' || audioGen === my) return
+    console.warn('[dictation] звук записи не пришёл — сбрасываю')
+    logHistory({ at: new Date().toISOString(), raw: '', polished: null, error: 'Запись не дошла до распознавания' })
+    release()
+    finish('error', 3000)
+  }, 15_000)
+}
+
+/** Освободить клавишу: текущая диктовка закончена или отменена. */
+function release(): void {
+  gen++
+  if (stuckTimer) clearTimeout(stuckTimer)
+  stuckTimer = null
+  globalShortcut.unregister('Escape')
+  phase = 'idle'
+  hotkeyHook.reset()
+  live?.abort()
+  live = null
 }
 
 function cancelRecording(): void {
   if (phase === 'processing') {
-    // Запись уже ушла на распознавание: дождёмся её, но вставлять не будем.
-    globalShortcut.unregister('Escape')
-    cancelled = true
+    // Запись уже распознаётся: результат не вставляем (в журнале он останется),
+    // а клавишу освобождаем сразу — можно диктовать заново.
+    release()
     hideOverlay()
     void restoreMedia()
     return
@@ -422,22 +451,36 @@ export interface ClipMeta {
   error?: string
   /** клавишу отпустили раньше, чем открылся микрофон */
   tooShort?: boolean
+  /** номер диктовки из dict:record-start */
+  id?: number
 }
 
 // Renderer прислал записанный клип (или сообщил, что записи нет).
 export async function onDictationAudio(data: ArrayBuffer, meta: ClipMeta = {}): Promise<void> {
+  const my = meta.id ?? gen
+  // Звук отменённой (Esc) диктовки — текущую не трогаем.
+  if (my !== gen || phase !== 'processing') return
+  audioGen = my
+  if (stuckTimer) clearTimeout(stuckTimer)
+  stuckTimer = null
+  // Всё, что дальше, относится к этой диктовке, даже если началась новая.
+  const current = (): boolean => my === gen
+  const end = (state: string, ms: number): void => {
+    if (current()) finish(state, ms)
+  }
+  const app = appAtStart
   try {
-    if (cancelled || meta.tooShort) {
+    if (meta.tooShort) {
       live?.abort()
       live = null
-      if (!cancelled) finish('empty', 1200)
+      end('empty', 1200)
       return
     }
     if (meta.error) {
       live?.abort()
       live = null
       logHistory({ at: new Date().toISOString(), raw: '', polished: null, error: meta.error })
-      finish('nomic', 3000)
+      end('nomic', 3000)
       return
     }
     const buf = Buffer.from(data)
@@ -447,16 +490,16 @@ export async function onDictationAudio(data: ArrayBuffer, meta: ClipMeta = {}): 
       live?.abort()
       live = null
       logHistory({ at: new Date().toISOString(), raw: '', polished: null, error: 'Микрофон молчал', audio })
-      finish('silent', 3000)
+      end('silent', 3000)
       return
     }
     if (kind === 'edit') {
-      await handleEdit(buf, audio, liveText)
+      await handleEdit(buf, audio, liveText, app, current, end)
       return
     }
     let result: { raw: string; text: string; polished: string | null; mode?: string }
     try {
-      result = await recognize(buf, appAtStart, liveText)
+      result = await recognize(buf, app, liveText)
     } catch (err) {
       logHistory({
         at: new Date().toISOString(),
@@ -466,12 +509,12 @@ export async function onDictationAudio(data: ArrayBuffer, meta: ClipMeta = {}): 
         audio
       })
       console.error('[dictation]', err)
-      finish('error', 3000)
+      end('error', 3000)
       return
     }
     console.log('[dictation] transcribed chars:', result.raw.length, 'polished:', result.polished !== null)
     if (!result.raw) {
-      finish('empty', 1600)
+      end('empty', 1600)
       return
     }
     logHistory({
@@ -482,14 +525,13 @@ export async function onDictationAudio(data: ArrayBuffer, meta: ClipMeta = {}): 
       mode: result.mode,
       audio
     })
-    if (cancelled) return // Esc: текст в «Последних диктовках», никуда не вставляем
+    if (!current()) return // Esc: текст в «Последних диктовках», никуда не вставляем
     if (cfg.autoPaste) await pasteIntoActiveWindow(result.text)
     else clipboard.writeText(result.text)
-    finish('done', 1200)
+    end('done', 1200)
   } finally {
-    globalShortcut.unregister('Escape')
-    phase = 'idle'
-    hotkeyHook.reset()
+    // Отменённая диктовка не освобождает клавишу заново — её уже держит новая.
+    if (current()) release()
   }
 }
 
@@ -500,40 +542,49 @@ export async function onDictationAudio(data: ArrayBuffer, meta: ClipMeta = {}): 
  * не трогаем. Пока ИИ думал, человек ушёл в другое окно — не вставляем,
  * результат оставляем в буфере.
  */
-async function handleEdit(buf: Buffer, audio: string | undefined, liveText = ''): Promise<void> {
+async function handleEdit(
+  buf: Buffer,
+  audio: string | undefined,
+  liveText: string,
+  app: ForegroundApp | null,
+  current: () => boolean,
+  end: (state: string, ms: number) => void
+): Promise<void> {
   const at = new Date().toISOString()
   let instruction = liveText
   try {
     if (!instruction) instruction = (await transcribeClip(buf)).trim()
   } catch (err) {
     logHistory({ at, raw: '', polished: null, error: err instanceof Error ? err.message : String(err), audio, mode: 'edit' })
-    finish('error', 3000)
+    end('error', 3000)
     return
   }
-  if (cancelled) return
+  if (!current()) return // Esc: не копируем и не правим
   if (!instruction) {
-    finish('empty', 1600)
+    end('empty', 1600)
     return
   }
-  const proc = appAtStart?.proc ?? ''
+  const proc = app?.proc ?? ''
   if (CONSOLES.has(proc)) {
     logHistory({ at, raw: instruction, polished: null, error: 'Правка голосом в консоли выключена', audio, mode: 'edit' })
-    finish('edit-console', 3000)
+    end('edit-console', 3000)
     return
   }
   // Буфер не стираем: что скопировалось, видно по счётчику буфера в опросчике.
   const snap = snapClipboard()
   const copy = await hotkeyHook.sendCombo('COPY')
-  let selected = copy.ok && copy.changed ? clipboard.readText() : ''
+  // Что легло в буфер от нашего Ctrl+C — с ним сравниваем при возврате буфера.
+  const copied = copy.ok && copy.changed ? clipboard.readText() : ''
+  let selected = copied
   // Редактор кода скопировал строку целиком — значит, выделения не было.
   if (LINE_COPY_EDITORS.test(proc) && /^[^\n]*\n$/.test(selected)) selected = ''
   const back = (): void => {
-    if (copy.changed && clipboard.readText() === selected) restoreClipboard(snap)
+    if (copy.changed && clipboard.readText() === copied) restoreClipboard(snap)
   }
   if (!selected.trim()) {
     back()
     logHistory({ at, raw: instruction, polished: null, error: 'Ничего не выделено', audio, mode: 'edit' })
-    finish('noselection', 2500)
+    end('noselection', 2500)
     return
   }
   const core = selected.trim()
@@ -544,7 +595,7 @@ async function handleEdit(buf: Buffer, audio: string | undefined, liveText = '')
   } catch (err) {
     console.error('[dictation] edit', err)
   }
-  if (cancelled) {
+  if (!current()) {
     back()
     if (result) logHistory({ at, raw: instruction, polished: result, text: result, audio, mode: 'edit' })
     return
@@ -552,7 +603,7 @@ async function handleEdit(buf: Buffer, audio: string | undefined, liveText = '')
   if (!result) {
     back()
     logHistory({ at, raw: instruction, polished: null, error: 'ИИ не смог поправить текст', audio, mode: 'edit' })
-    finish('edit-error', 3000)
+    end('edit-error', 3000)
     return
   }
   // Пробелы и переводы строки по краям выделения — как были (ревью волны 6).
@@ -561,9 +612,9 @@ async function handleEdit(buf: Buffer, audio: string | undefined, liveText = '')
   result = lead + result + trail
   logHistory({ at, raw: instruction, polished: result, text: result, audio, mode: 'edit' })
   // Пока ИИ думал, человек мог скопировать своё — тогда после вставки останется оно.
-  const keep = clipboard.readText() === selected ? snap : undefined
+  const keep = clipboard.readText() === copied ? snap : undefined
   const pasted = await pasteIntoActiveWindow(result, { snap: keep, hwnd: copy.hwnd })
-  finish(pasted ? 'done' : 'edit-moved', pasted ? 1200 : 3500)
+  end(pasted ? 'done' : 'edit-moved', pasted ? 1200 : 3500)
 }
 
 export function initDictation(

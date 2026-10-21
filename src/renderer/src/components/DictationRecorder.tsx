@@ -50,6 +50,8 @@ async function openMic(micId: string): Promise<MediaStream> {
 }
 
 interface Session {
+  /** номер диктовки от main — возвращаем его вместе со звуком */
+  id?: number
   rec: MediaRecorder
   chunks: Blob[]
   peak: number
@@ -65,6 +67,7 @@ export default function DictationRecorder(): null {
   const soundsRef = useRef(true)
   const tailRef = useRef(300)
   const failedRef = useRef<string | null>(null)
+  const idRef = useRef<number | undefined>(undefined)
 
   useEffect(() => {
     return api.onDictRecord((cmd, opts) => {
@@ -74,6 +77,7 @@ export default function DictationRecorder(): null {
         tailRef.current = Math.max(0, Math.min(2000, opts?.tailMs ?? 300))
         failedRef.current = null
         openingRef.current = true
+        idRef.current = opts?.id
         void (async () => {
           try {
             const stream = await openMic(opts?.micId ?? '')
@@ -90,6 +94,7 @@ export default function DictationRecorder(): null {
             ctx.createMediaStreamSource(stream).connect(an)
             const buf = new Float32Array(an.fftSize)
             const s: Session = {
+              id: idRef.current,
               rec,
               chunks: [],
               peak: 0,
@@ -138,7 +143,9 @@ export default function DictationRecorder(): null {
         if (cmd === 'stop')
           void api.sendDictAudio(
             new ArrayBuffer(0),
-            opening && !failedRef.current ? { tooShort: true } : { error: failedRef.current ?? 'Запись не началась' }
+            opening && !failedRef.current
+              ? { tooShort: true, id: idRef.current }
+              : { error: failedRef.current ?? 'Запись не началась', id: idRef.current }
           )
         return
       }
@@ -154,7 +161,7 @@ export default function DictationRecorder(): null {
           if (soundsRef.current) chirp([587, 440])
           await s.liveQueue // последний кусок ушёл в поток раньше клипа
           const blob = new Blob(s.chunks, { type: 'audio/webm' })
-          await api.sendDictAudio(await blob.arrayBuffer(), { silent: s.peak < SILENCE_PEAK })
+          await api.sendDictAudio(await blob.arrayBuffer(), { silent: s.peak < SILENCE_PEAK, id: s.id })
         }
         rec.stop()
       }
