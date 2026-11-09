@@ -19,6 +19,7 @@ import { buildAnonOverlay } from '../../../shared/anon'
 import { rateForKey } from '../../../shared/playback'
 import { showToast, humanError } from '../toast'
 import AiMenu from '../components/AiMenu'
+import { useSectionHints } from '../tour/TourProvider'
 import Icon from '../components/Icon'
 
 function fmtTime(sec: number): string {
@@ -440,6 +441,8 @@ export default function Editor({
     rec.stop()
   }
 
+  useSectionHints('record', !!meta && (meta.turns?.length ?? 0) > 0 && !reproc)
+
   if (!meta) {
     return (
       <main className="empty">
@@ -542,7 +545,7 @@ export default function Editor({
   return (
     <main className="editor">
       {meta.demo && (
-        <div className="demo-banner">
+        <div className="demo-banner" data-tour="editor-banner">
           Это пример без звука. Нажмите «✨ Сделать из текста», чтобы получить результат. Два готовых
           результата по этой записи уже лежат в «Конспектах» на главном экране.
         </div>
@@ -561,6 +564,7 @@ export default function Editor({
               className="btn btn-icon"
               onClick={() => setSearchOpen(true)}
               title="Поиск по тексту (Ctrl+F)"
+              data-tour="editor-search"
             >
               <Icon name="search" size={16} />
             </button>
@@ -568,6 +572,7 @@ export default function Editor({
               className="btn btn-icon"
               onClick={() => setStatsOpen(true)}
               title="Статистика записи (баланс речи)"
+              data-tour="editor-stats"
             >
               <Icon name="chart" size={16} />
             </button>
@@ -580,16 +585,27 @@ export default function Editor({
                 {anonMode ? '🕶 Обезличено' : 'Обезличено'}
               </button>
             )}
-            <button className="btn" onClick={() => setNotesOpen(true)} title="Мои заметки к записи → конспект">
+            <button
+              className="btn"
+              onClick={() => setNotesOpen(true)}
+              title="Мои заметки к записи → конспект"
+              data-tour="editor-notes"
+            >
               Мои заметки{meta.myNotes?.trim() ? ' ✓' : ''}
             </button>
-            <button className="btn" onClick={() => setAskOpen(true)} title="Задать вопрос по записи">
+            <button
+              className="btn"
+              onClick={() => setAskOpen(true)}
+              title="Задать вопрос по записи"
+              data-tour="editor-ask"
+            >
               Спросить
             </button>
             <button
               className="btn btn-primary"
               onClick={() => setLibraryOpen(true)}
               title="Сделать из расшифровки саммари, заметку, протокол — любой результат"
+              data-tour="editor-make"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
               <Icon name="sparkles" size={15} /> Сделать из текста
@@ -704,7 +720,7 @@ export default function Editor({
         </div>
       )}
 
-      <div className="editor-body">
+      <div className="editor-body" data-tour="editor-text">
         {reproc ? (
           <TranscribePanel
             meta={meta}
@@ -754,7 +770,7 @@ export default function Editor({
         )}
       </div>
 
-      <div className="player">
+      <div className="player" data-tour="editor-player">
         <audio
           ref={audioRef}
           src={audioUrl ?? undefined}

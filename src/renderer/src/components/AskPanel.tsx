@@ -4,6 +4,7 @@ import { parseAnswer, clock } from '../../../shared/retrieval'
 import { api } from '../api'
 import { humanError } from '../toast'
 import { useEscClose } from '../useEscClose'
+import { useSectionHints } from '../tour/TourProvider'
 
 // «Спросить запись» / «Спросить записи»: вопрос — ответ ИИ со ссылками.
 // [3] — фрагмент найденной записи, [12:34] — место в этой записи; клик — перейти.
@@ -26,6 +27,7 @@ interface Item {
 
 export default function AskPanel(props: Props): React.JSX.Element {
   useEscClose(props.onClose)
+  useSectionHints('ask')
   const key = props.mode === 'one' ? 'one:' + props.slug : 'all:' + (props.folder ?? '')
   const [items, setItemsState] = useState<Item[]>(() => threads.get(key) ?? [])
   const setItems = (list: Item[]): void => {
@@ -44,7 +46,10 @@ export default function AskPanel(props: Props): React.JSX.Element {
   useEffect(() => api.onAiProgress((p) => setPhase(p.phase)), [])
 
   const folder = props.mode === 'all' ? props.folder : null
-  useEffect(() => endRef.current?.scrollIntoView({ block: 'end' }), [items, busy])
+  // Без return: в новом Chromium scrollIntoView возвращает Promise, а эффект должен вернуть функцию или ничего.
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: 'end' })
+  }, [items, busy])
 
   // thorough — «Искать внимательно»: заменяет последний ответ «ничего не нашлось».
   const ask = async (thorough = false): Promise<void> => {
@@ -108,7 +113,7 @@ export default function AskPanel(props: Props): React.JSX.Element {
         if (downOnOverlay.current && e.target === e.currentTarget) props.onClose()
       }}
     >
-      <div className="modal modal-wide ask-modal">
+      <div className="modal modal-wide ask-modal" data-tour="ask-panel">
         <div className="modal-head">
           <span className="modal-title">{title}</span>
           <button className="btn" onClick={props.onClose}>
@@ -209,7 +214,7 @@ export default function AskPanel(props: Props): React.JSX.Element {
         </div>
 
         {err && <div className="key-bad">{err}</div>}
-        <div className="ask-input">
+        <div className="ask-input" data-tour="ask-input">
           <textarea
             className="text-input"
             rows={2}

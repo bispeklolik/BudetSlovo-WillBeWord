@@ -34,7 +34,8 @@ function NavItem({
   collapsed,
   count,
   onClick,
-  testid
+  testid,
+  'data-tour': tour
 }: {
   icon: React.ReactNode
   label: string
@@ -43,6 +44,7 @@ function NavItem({
   count?: number
   onClick: () => void
   testid?: string
+  'data-tour'?: string
 }): React.JSX.Element {
   return (
     <Tip label={label} side="right" disabled={!collapsed}>
@@ -52,6 +54,7 @@ function NavItem({
         aria-label={collapsed ? label : undefined}
         onClick={onClick}
         data-testid={testid}
+        data-tour={tour}
       >
         <span className="nav-ico" aria-hidden="true">
           {icon}
@@ -129,7 +132,7 @@ export default function AppSidebar({
   const folderTitle = folder === '' ? '' : folder.split('/').pop()
 
   return (
-    <aside className={'app-sidebar' + (collapsed ? ' is-collapsed' : '')} aria-label="Меню">
+    <aside className={'app-sidebar' + (collapsed ? ' is-collapsed' : '')} aria-label="Меню" data-tour="sidebar">
       <div className="sb-head">
         <span className="sb-brand">
           <span className="app-logo" aria-hidden="true">
@@ -156,6 +159,7 @@ export default function AppSidebar({
             onClick={onRecordCall}
             aria-label="Записать звонок"
             data-testid="sidebar-call"
+            data-tour="sidebar-call"
           >
             <Phone size={16} aria-hidden="true" />
             <span className="sb-btn-label">Записать звонок</span>
@@ -174,6 +178,7 @@ export default function AppSidebar({
               aria-label="Добавить запись"
               disabled={importBusy !== null}
               data-testid="sidebar-add"
+              data-tour="sidebar-add"
             >
               <Plus size={16} aria-hidden="true" />
               <span className="sb-btn-label">{importBusy ?? 'Добавить запись'}</span>
@@ -190,6 +195,7 @@ export default function AppSidebar({
           collapsed={collapsed}
           onClick={() => onNavigate('home')}
           testid="nav-home"
+          data-tour="nav-home"
         />
         <NavItem
           icon={<FolderOpen size={18} />}
@@ -203,6 +209,7 @@ export default function AppSidebar({
             if (collapsed) onToggleCollapsed()
           }}
           testid="nav-library"
+          data-tour="nav-library"
         />
         {!collapsed && (
           <FolderTree
@@ -232,6 +239,7 @@ export default function AppSidebar({
           count={notesCount}
           onClick={() => onNavigate('notes')}
           testid="nav-notes"
+          data-tour="nav-notes"
         />
         <NavItem
           icon={<MessageCircleQuestion size={18} />}
@@ -239,6 +247,7 @@ export default function AppSidebar({
           collapsed={collapsed}
           onClick={onAsk}
           testid="nav-ask"
+          data-tour="nav-ask"
         />
 
         <div className="sb-group" role="presentation">
@@ -251,6 +260,7 @@ export default function AppSidebar({
           collapsed={collapsed}
           onClick={() => onNavigate('dictation')}
           testid="nav-dictation"
+          data-tour="nav-dictation"
         />
         <NavItem
           icon={<BookText size={18} />}
@@ -258,6 +268,7 @@ export default function AppSidebar({
           collapsed={collapsed}
           onClick={() => onVocab('words')}
           testid="nav-vocab"
+          data-tour="nav-vocab"
         />
         <NavItem
           icon={<SlidersHorizontal size={18} />}
@@ -265,6 +276,7 @@ export default function AppSidebar({
           collapsed={collapsed}
           onClick={() => onVocab('modes')}
           testid="nav-modes"
+          data-tour="nav-modes"
         />
       </nav>
 
@@ -285,6 +297,7 @@ export default function AppSidebar({
               }}
               aria-label={`Настройка: ${setupDone} из ${setupTotal}. Открыть главную`}
               data-testid="sidebar-setup"
+              data-tour="sidebar-setup"
             >
               <span className="sb-setup-text">
                 Настройка: {setupDone} из {setupTotal}
@@ -305,6 +318,7 @@ export default function AppSidebar({
           collapsed={collapsed}
           onClick={onSettings}
           testid="settings-btn"
+          data-tour="nav-settings"
         />
       </div>
 

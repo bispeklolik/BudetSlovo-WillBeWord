@@ -22,6 +22,9 @@ import PhoneModal from './components/PhoneModal'
 import LinkModal from './components/LinkModal'
 import WatchModal from './components/WatchModal'
 import { TipProvider } from './components/Tip'
+import { TourProvider } from './tour/TourProvider'
+import type { TourNav } from '../../shared/tourScenarios'
+import { DEMO_SLUG } from '../../shared/demo'
 
 type View =
   | { page: 'home' }
@@ -62,6 +65,8 @@ function MainApp(): React.JSX.Element {
   const [ask, setAsk] = useState<{ folder: string | null } | null>(null)
   const [vocab, setVocab] = useState<'words' | 'modes' | null>(null)
   const [collapsed, setCollapsed] = useState(readCollapsed)
+  // Мастер первого запуска только что закрыт: гайд предложит себя сразу.
+  const [justOnboarded, setJustOnboarded] = useState(false)
 
   const refresh = useLibrary((s) => s.refresh)
   const refreshSetup = useLibrary((s) => s.refreshSetup)
@@ -240,6 +245,16 @@ function MainApp(): React.JSX.Element {
   }
 
   const showWelcome = !!settings && (welcomeOpen || !settings.onboarded)
+
+  // Переходы для интерактивного гайда: страница и окна поверх неё. Без overlay окна закрываются.
+  const tourNav = (t: TourNav): void => {
+    setAsk(t.overlay === 'ask' ? { folder: null } : null)
+    setVocab(t.overlay === 'words' || t.overlay === 'modes' ? t.overlay : null)
+    setAddModal(null)
+    if (t.page === 'demo') openRecord(DEMO_SLUG)
+    else if (t.page === 'settings') openSettings(t.section)
+    else if (t.page) setView({ page: t.page })
+  }
   const navPage: NavPage = view.page === 'editor' ? view.from : view.page
   const goBack = (): void => {
     if (view.page === 'editor') setView({ page: view.from === 'settings' ? 'home' : view.from })
@@ -259,181 +274,185 @@ function MainApp(): React.JSX.Element {
 
   return (
     <TipProvider>
-      <div className="app shell">
-        <DictationRecorder />
-        {!showWelcome && (
-          <AppSidebar
-            page={navPage}
-            collapsed={collapsed}
-            onToggleCollapsed={toggleCollapsed}
-            onNavigate={(p) => (p === 'settings' ? openSettings() : setView({ page: p }))}
-            onRecordCall={() => setCallRec({})}
-            onImport={() => void doImport()}
-            importBusy={importBusy}
-            onAdd={setAddModal}
-            onAsk={() => setAsk({ folder: null })}
-            onVocab={setVocab}
-            onSettings={() => openSettings()}
-          />
-        )}
-        <div className="shell-main">
-          {callPrompt && !callRec && (
-            <div className="call-prompt">
-              <span>Похоже, идёт звонок в {callPrompt.name}. Записать разговор?</span>
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={() => {
-                  setCallRec({ app: callPrompt })
-                  setCallPrompt(null)
-                }}
-              >
-                Записать
-              </button>
-              <button
-                className="btn btn-sm"
-                onClick={() => {
-                  setCallPrompt(null)
-                  void api.callSnooze()
-                }}
-              >
-                Не сейчас
-              </button>
-            </div>
-          )}
-          {showWelcome ? (
-            <Welcome
-              onDone={async () => {
-                setSettings(await api.getSettings())
-                setWelcomeOpen(false)
-                setView({ page: 'home' })
-                void refresh()
-              }}
-              onOpenProject={async (slug) => {
-                setSettings(await api.getSettings())
-                setWelcomeOpen(false)
-                void refresh()
-                setView({ page: 'editor', slug, from: 'library' })
-              }}
-            />
-          ) : view.page === 'home' ? (
-            <Home
-              onOpen={(slug) => openRecord(slug)}
-              onOpenWelcome={() => setWelcomeOpen(true)}
-              onRecordCall={() => setCallRec({})}
-              onImport={() => void doImport()}
-              importBusy={importBusy}
-              onDictation={() => setView({ page: 'dictation' })}
-              onChecklist={(id) => {
-                if (id === 'stt' || id === 'ai') openSettings('engines')
-                else if (id === 'dictation') setView({ page: 'dictation' })
-                else if (id === 'record') void doImport()
-                else setVocab('words')
-              }}
-            />
-          ) : view.page === 'library' ? (
-            <Library
-              onOpen={openRecord}
-              onOpenWelcome={() => setWelcomeOpen(true)}
+      <TourProvider nav={tourNav} blocked={showWelcome} justOnboarded={justOnboarded}>
+        <div className="app shell">
+          <DictationRecorder />
+          {!showWelcome && (
+            <AppSidebar
+              page={navPage}
+              collapsed={collapsed}
+              onToggleCollapsed={toggleCollapsed}
+              onNavigate={(p) => (p === 'settings' ? openSettings() : setView({ page: p }))}
               onRecordCall={() => setCallRec({})}
               onImport={() => void doImport()}
               importBusy={importBusy}
               onAdd={setAddModal}
-              onAsk={(folder) => setAsk({ folder })}
-            />
-          ) : view.page === 'settings' ? (
-            <SettingsPage
-              key={view.rev}
-              theme={settings?.theme ?? 'light'}
-              initialSection={view.section}
-              onToggleTheme={toggleTheme}
-              onOpenWelcome={() => setWelcomeOpen(true)}
+              onAsk={() => setAsk({ folder: null })}
               onVocab={setVocab}
-              vocabOpen={vocab !== null}
-              onAdd={setAddModal}
-              onOpenDictation={() => setView({ page: 'dictation' })}
+              onSettings={() => openSettings()}
             />
-          ) : view.page === 'dictation' ? (
-            <DictationPage onOpenSettings={() => openSettings('dictation')} />
-          ) : view.page === 'notes' ? (
-            <main className="home">
-              <section className="records-pane">
-                <NotesPane onCountChange={refreshNotes} />
-              </section>
-            </main>
-          ) : (
-            <>
-              <nav className="crumbs" aria-label="Где вы">
-                <button className="btn btn-sm" onClick={goBack}>
-                  <ChevronLeft size={14} aria-hidden="true" /> Назад
-                </button>
-                <button className="crumb-link" onClick={goBack}>
-                  {view.from === 'notes' ? 'Конспекты' : view.from === 'home' ? 'Главная' : 'Записи'}
-                </button>
-                {view.from === 'library' && crumbFolder && (
-                  <>
-                    <span className="crumb-sep">/</span>
-                    <button
-                      className="crumb-link"
-                      onClick={() => {
-                        useLibrary.getState().setFolder(crumbFolder)
-                        setView({ page: 'library' })
-                      }}
-                    >
-                      {crumbFolder.split('/').join(' / ')}
-                    </button>
-                  </>
-                )}
-                {editorTitle && (
-                  <>
-                    <span className="crumb-sep">/</span>
-                    <span className="crumb-here">{editorTitle}</span>
-                  </>
-                )}
-              </nav>
-              <Editor
-                key={view.slug + ':' + (view.sec ?? '')}
-                slug={view.slug}
-                initialSearch={view.search}
-                initialSec={view.sec}
-                pauseMinSec={settings?.pauseMarkSec ?? 3}
-              />
-            </>
           )}
-        </div>
-        {(dragging || importing) && (
-          <div className="drop-overlay">
-            <div className="drop-overlay-box">
-              {importing ?? 'Отпустите файл, чтобы импортировать'}
-            </div>
+          <div className="shell-main">
+            {callPrompt && !callRec && (
+              <div className="call-prompt">
+                <span>Похоже, идёт звонок в {callPrompt.name}. Записать разговор?</span>
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={() => {
+                    setCallRec({ app: callPrompt })
+                    setCallPrompt(null)
+                  }}
+                >
+                  Записать
+                </button>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => {
+                    setCallPrompt(null)
+                    void api.callSnooze()
+                  }}
+                >
+                  Не сейчас
+                </button>
+              </div>
+            )}
+            {showWelcome ? (
+              <Welcome
+                onDone={async () => {
+                  if (settings && !settings.onboarded) setJustOnboarded(true)
+                  setSettings(await api.getSettings())
+                  setWelcomeOpen(false)
+                  setView({ page: 'home' })
+                  void refresh()
+                }}
+                onOpenProject={async (slug) => {
+                  if (settings && !settings.onboarded) setJustOnboarded(true)
+                  setSettings(await api.getSettings())
+                  setWelcomeOpen(false)
+                  void refresh()
+                  setView({ page: 'editor', slug, from: 'library' })
+                }}
+              />
+            ) : view.page === 'home' ? (
+              <Home
+                onOpen={(slug) => openRecord(slug)}
+                onOpenWelcome={() => setWelcomeOpen(true)}
+                onRecordCall={() => setCallRec({})}
+                onImport={() => void doImport()}
+                importBusy={importBusy}
+                onDictation={() => setView({ page: 'dictation' })}
+                onChecklist={(id) => {
+                  if (id === 'stt' || id === 'ai') openSettings('engines')
+                  else if (id === 'dictation') setView({ page: 'dictation' })
+                  else if (id === 'record') void doImport()
+                  else setVocab('words')
+                }}
+              />
+            ) : view.page === 'library' ? (
+              <Library
+                onOpen={openRecord}
+                onOpenWelcome={() => setWelcomeOpen(true)}
+                onRecordCall={() => setCallRec({})}
+                onImport={() => void doImport()}
+                importBusy={importBusy}
+                onAdd={setAddModal}
+                onAsk={(folder) => setAsk({ folder })}
+              />
+            ) : view.page === 'settings' ? (
+              <SettingsPage
+                key={view.rev}
+                theme={settings?.theme ?? 'light'}
+                initialSection={view.section}
+                onToggleTheme={toggleTheme}
+                onOpenWelcome={() => setWelcomeOpen(true)}
+                onVocab={setVocab}
+                vocabOpen={vocab !== null}
+                onAdd={setAddModal}
+                onOpenDictation={() => setView({ page: 'dictation' })}
+              />
+            ) : view.page === 'dictation' ? (
+              <DictationPage onOpenSettings={() => openSettings('dictation')} />
+            ) : view.page === 'notes' ? (
+              <main className="home">
+                <section className="records-pane">
+                  <NotesPane onCountChange={refreshNotes} />
+                </section>
+              </main>
+            ) : (
+              <>
+                <nav className="crumbs" aria-label="Где вы">
+                  <button className="btn btn-sm" onClick={goBack}>
+                    <ChevronLeft size={14} aria-hidden="true" /> Назад
+                  </button>
+                  <button className="crumb-link" onClick={goBack}>
+                    {view.from === 'notes' ? 'Конспекты' : view.from === 'home' ? 'Главная' : 'Записи'}
+                  </button>
+                  {view.from === 'library' && crumbFolder && (
+                    <>
+                      <span className="crumb-sep">/</span>
+                      <button
+                        className="crumb-link"
+                        onClick={() => {
+                          useLibrary.getState().setFolder(crumbFolder)
+                          setView({ page: 'library' })
+                        }}
+                      >
+                        {crumbFolder.split('/').join(' / ')}
+                      </button>
+                    </>
+                  )}
+                  {editorTitle && (
+                    <>
+                      <span className="crumb-sep">/</span>
+                      <span className="crumb-here">{editorTitle}</span>
+                    </>
+                  )}
+                </nav>
+                <Editor
+                  key={view.slug + ':' + (view.sec ?? '')}
+                  slug={view.slug}
+                  initialSearch={view.search}
+                  initialSec={view.sec}
+                  pauseMinSec={settings?.pauseMarkSec ?? 3}
+                />
+              </>
+            )}
           </div>
-        )}
-        {callRec && (
-          <CallRecorder
-            app={callRec.app}
-            onClose={() => setCallRec(null)}
-            onDone={(slug) => {
-              setCallRec(null)
-              void refresh()
-              openRecord(slug)
-            }}
-          />
-        )}
-        {addModal === 'phone' && <PhoneModal onOpen={openAdded} onClose={() => setAddModal(null)} />}
-        {addModal === 'link' && <LinkModal onOpen={openAdded} onClose={() => setAddModal(null)} />}
-        {addModal === 'watch' && <WatchModal onClose={() => setAddModal(null)} />}
-        {ask && (
-          <AskPanel
-            mode="all"
-            folder={ask.folder}
-            onOpen={(slug, sec) => {
-              setAsk(null)
-              openRecord(slug, undefined, sec)
-            }}
-            onClose={() => setAsk(null)}
-          />
-        )}
-        {vocab && <VocabHost tab={vocab} onClose={() => setVocab(null)} />}
-      </div>
+          {(dragging || importing) && (
+            <div className="drop-overlay">
+              <div className="drop-overlay-box">
+                {importing ?? 'Отпустите файл, чтобы импортировать'}
+              </div>
+            </div>
+          )}
+          {callRec && (
+            <CallRecorder
+              app={callRec.app}
+              onClose={() => setCallRec(null)}
+              onDone={(slug) => {
+                setCallRec(null)
+                void refresh()
+                openRecord(slug)
+              }}
+            />
+          )}
+          {addModal === 'phone' && <PhoneModal onOpen={openAdded} onClose={() => setAddModal(null)} />}
+          {addModal === 'link' && <LinkModal onOpen={openAdded} onClose={() => setAddModal(null)} />}
+          {addModal === 'watch' && <WatchModal onClose={() => setAddModal(null)} />}
+          {ask && (
+            <AskPanel
+              mode="all"
+              folder={ask.folder}
+              onOpen={(slug, sec) => {
+                setAsk(null)
+                openRecord(slug, undefined, sec)
+              }}
+              onClose={() => setAsk(null)}
+            />
+          )}
+          {vocab && <VocabHost key={vocab} tab={vocab} onClose={() => setVocab(null)} />}
+        </div>
+      </TourProvider>
     </TipProvider>
   )
 }

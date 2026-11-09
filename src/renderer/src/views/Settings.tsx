@@ -19,6 +19,7 @@ import { MicSelect } from '../components/DictationHistory'
 import ConsentModal from '../components/ConsentModal'
 import McpSection from '../components/McpSection'
 import { Row, SwitchRow, Block } from '../components/SettingsParts'
+import { useTour, useSectionHints } from '../tour/TourProvider'
 
 // Страница «Настройки»: слева шесть разделов, сверху поиск. Сохранение — сразу.
 // Основа — прежнее окно SettingsModal (одна длинная прокрутка): те же поля и те же
@@ -160,6 +161,8 @@ export default function SettingsPage({
   initialSection?: SettingsSection
 }): React.JSX.Element {
   const [section, setSection] = useState<SettingsSection>(initialSection ?? 'general')
+  const tour = useTour()
+  useSectionHints('settings')
   const [query, setQuery] = useState('')
   const [target, setTarget] = useState<string | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -298,6 +301,25 @@ export default function SettingsPage({
           </button>
         </Row>
       </Block>
+      <div data-tour="tour-block">
+        <Block id="tour" title="Обучение">
+          <Row label="Короткий тур" hint="2–3 минуты по главному.">
+            <button className="btn" onClick={() => tour.start('short')} data-testid="tour-start-short">
+              Пройти коротко
+            </button>
+          </Row>
+          <Row label="Подробный тур" hint="Все разделы и функции подряд.">
+            <button className="btn" onClick={() => tour.start('full')} data-testid="tour-start-full">
+              Пройти подробно
+            </button>
+          </Row>
+          <Row label="Подсказки в разделах" hint="Две-три подсказки при первом заходе в каждый раздел.">
+            <button className="btn" onClick={tour.resetHints} data-testid="tour-reset-hints">
+              Снова показывать подсказки в разделах
+            </button>
+          </Row>
+        </Block>
+      </div>
       <Block id="hotkeys" title="Горячие клавиши в записи">
         {HOTKEYS.map(([k, v]) => (
           <div className="settings-row" key={k}>
@@ -825,7 +847,7 @@ export default function SettingsPage({
     <main className="st-page" data-testid="settings-page">
       <header className="st-head">
         <h1 className="st-title">Настройки</h1>
-        <div className="st-search">
+        <div className="st-search" data-tour="settings-search">
           <Search size={15} aria-hidden="true" />
           <input
             className="text-input"
@@ -846,14 +868,14 @@ export default function SettingsPage({
         </div>
       </header>
       <Tabs.Root className="st-body" orientation="vertical" value={section} onValueChange={(v) => setSection(v as SettingsSection)}>
-        <Tabs.List className="st-menu" aria-label="Разделы настроек">
+        <Tabs.List className="st-menu" aria-label="Разделы настроек" data-tour="settings-tabs">
           {SETTINGS_SECTIONS.map((s) => (
             <Tabs.Trigger key={s.id} value={s.id} className="st-tab" data-testid={'st-tab-' + s.id} onClick={() => setQuery('')}>
               {s.label}
             </Tabs.Trigger>
           ))}
         </Tabs.List>
-        <div className="st-content" ref={contentRef} id={'settings-' + section}>
+        <div className="st-content" ref={contentRef} id={'settings-' + section} data-tour="settings-content">
           {query.trim() ? (
             <div className="st-results">
               {results.length === 0 ? (

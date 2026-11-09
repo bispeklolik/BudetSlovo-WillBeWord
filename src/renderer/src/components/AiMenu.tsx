@@ -49,7 +49,7 @@ export default function AiMenu(props: AiMenuProps): React.JSX.Element {
   }
 
   return (
-    <div className="export-wrap" ref={wrapRef}>
+    <div className="export-wrap" ref={wrapRef} data-tour="editor-ai">
       <button
         className="btn"
         disabled={!!busyLabel}

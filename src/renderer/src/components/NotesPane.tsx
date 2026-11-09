@@ -3,6 +3,7 @@ import type { Note } from '../../../shared/types'
 import { api } from '../api'
 import NoteViewer from './NoteViewer'
 import { onActivate } from '../activate'
+import { useSectionHints } from '../tour/TourProvider'
 
 const KIND_LABEL: Record<Note['kind'], string> = {
   summary: 'Саммари',
@@ -34,6 +35,7 @@ export default function NotesPane({
     })
   }
   useEffect(load, [])
+  useSectionHints('notes', notes.length > 0)
 
   const q = query.trim().toLowerCase()
   const shown = q
@@ -44,12 +46,13 @@ export default function NotesPane({
 
   return (
     <>
-      <div className="pane-head">
+      <div className="pane-head" data-tour="notes-pane">
         Конспекты <span className="pane-count">{notes.length}</span>
         {notes.length > 0 && (
           <input
             className="text-input notes-search"
             placeholder="Поиск по конспектам…"
+            data-tour="notes-search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -70,10 +73,11 @@ export default function NotesPane({
         </div>
       ) : (
         <div className="project-grid">
-          {shown.map((n) => (
+          {shown.map((n, i) => (
             <div
               key={n.id}
               className="note-card"
+              data-tour={i === 0 ? 'note-card' : undefined}
               role="button"
               tabIndex={0}
               onClick={() => setOpen(n)}

@@ -80,7 +80,7 @@ export default function ExportMenu({
   }
 
   return (
-    <div className="export-wrap" ref={wrapRef}>
+    <div className="export-wrap" ref={wrapRef} data-tour="editor-export">
       <button className="btn" onClick={() => setOpen((v) => !v)} data-testid="export-btn">
         Экспорт ▾
       </button>

@@ -12,6 +12,7 @@ import { doneCount, type ChecklistId } from '../../../shared/setupChecklist'
 import { hotkeyLabel } from '../dictKeys'
 import EngineStatus from '../components/EngineStatus'
 import QueueStrip from '../components/QueueStrip'
+import TourCard from '../tour/TourCard'
 import Tip from '../components/Tip'
 import { Skeleton } from '../components/Skeleton'
 
@@ -141,6 +142,7 @@ export default function Home({
         <div
           key={key}
           className="feed-row"
+          data-tour={it.demo ? 'demo-record' : undefined}
           role="button"
           tabIndex={0}
           onClick={() => onOpen(it.slug)}
@@ -200,9 +202,13 @@ export default function Home({
     <main className="start-page">
       <div className="start-inner">
         <h1 className="start-title">{greeting()}</h1>
-        <div className="start-status">{status}</div>
+        <div className="start-status" data-tour="home-status">
+          {status}
+        </div>
 
-        <div className="start-actions">
+        <TourCard />
+
+        <div className="start-actions" data-tour="home-actions">
           <button className="start-btn" onClick={onDictation}>
             <Mic size={20} aria-hidden="true" />
             <span>Диктовать</span>
@@ -221,7 +227,7 @@ export default function Home({
         <QueueStrip />
 
         {showStats && stats && (
-          <section className="home-summary" aria-label="Сводка за неделю" data-testid="home-summary">
+          <section className="home-summary" aria-label="Сводка за неделю" data-testid="home-summary" data-tour="home-summary">
             <div className="home-sum-item">
               <b>{stats.wordsWeek}</b>
               <span>слов за неделю</span>
@@ -238,7 +244,7 @@ export default function Home({
         )}
 
         {showList && checklist && (
-          <section className="home-check" aria-label="Настройка" data-testid="home-checklist">
+          <section className="home-check" aria-label="Настройка" data-testid="home-checklist" data-tour="home-checklist">
             <div className="home-check-head">
               <h2 className="feed-h">
                 Настройка: {doneCount(checklist)} из {checklist.length}
@@ -268,7 +274,7 @@ export default function Home({
         <Tabs.Root value={filter} onValueChange={(v) => setFilter(v as Filter)}>
           <div className="feed-head">
             <h2 className="feed-h">Недавнее</h2>
-            <Tabs.List className="seg" aria-label="Что показывать">
+            <Tabs.List className="seg" aria-label="Что показывать" data-tour="feed-filter">
               <Tabs.Trigger className="seg-btn" value="all">
                 Все
               </Tabs.Trigger>

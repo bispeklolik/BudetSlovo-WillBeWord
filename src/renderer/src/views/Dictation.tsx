@@ -8,6 +8,7 @@ import { useLibrary } from '../library'
 import { hotkeyLabel } from '../dictKeys'
 import DictationHistory, { MicSelect } from '../components/DictationHistory'
 import { Skeleton } from '../components/Skeleton'
+import { useSectionHints } from '../tour/TourProvider'
 
 // Страница «Диктовка»: включить, проверить микрофон, посмотреть статистику и
 // историю. История видна и при выключенной диктовке. Остальные настройки
@@ -74,7 +75,13 @@ function MicCheck({ micId }: { micId: string }): React.JSX.Element {
 
   return (
     <div className="dp-mic">
-      <button className="btn" onClick={() => void start()} disabled={state.kind === 'listening'} data-testid="mic-check">
+      <button
+        className="btn"
+        onClick={() => void start()}
+        disabled={state.kind === 'listening'}
+        data-testid="mic-check"
+        data-tour="mic-check"
+      >
         {state.kind === 'listening' ? 'Слушаю…' : 'Проверить'}
       </button>
       <div className="dp-meter" aria-hidden="true">
@@ -113,6 +120,7 @@ export default function Dictation({ onOpenSettings }: { onOpenSettings: () => vo
   const [dict, setDict] = useState<DictationSettings | null>(null)
   const stats = useLibrary((s) => s.setup?.stats)
   const refreshSetup = useLibrary((s) => s.refreshSetup)
+  useSectionHints('dictation')
 
   useEffect(() => {
     api.getSettings().then((s) => setDict({ ...defaultDictation, ...s.dictation }))
@@ -135,7 +143,7 @@ export default function Dictation({ onOpenSettings }: { onOpenSettings: () => vo
         <h1 className="start-title">Диктовка</h1>
         <p className="dp-lead">Зажмите клавишу и говорите — текст появится там, где стоит курсор.</p>
 
-        <section className="dp-card" aria-label="Состояние диктовки">
+        <section className="dp-card" aria-label="Состояние диктовки" data-tour="dict-state">
           {dict ? (
             <>
               <div className="dp-row">
@@ -155,11 +163,12 @@ export default function Dictation({ onOpenSettings }: { onOpenSettings: () => vo
                   checked={dict.enabled}
                   onCheckedChange={(v) => save({ enabled: v })}
                   data-testid="dict-switch"
+                  data-tour="dict-switch"
                 >
                   <Switch.Thumb className="sw-thumb" />
                 </Switch.Root>
               </div>
-              <div className="dp-row">
+              <div className="dp-row" data-tour="dict-key">
                 <Mic size={16} className="dp-ico" aria-hidden="true" />
                 <span className="dp-row-line">
                   Клавиша: <kbd className="dp-kbd">{hotkeyLabel(dict.hotkey)}</kbd>
@@ -181,7 +190,7 @@ export default function Dictation({ onOpenSettings }: { onOpenSettings: () => vo
           )}
         </section>
 
-        <section className="dp-card" aria-label="Статистика">
+        <section className="dp-card" aria-label="Статистика" data-tour="dict-stats">
           <div className="dp-stats">
             <Stat value={stats ? stats.wordsWeek : '—'} label="слов за 7 дней" />
             <Stat
@@ -193,8 +202,10 @@ export default function Dictation({ onOpenSettings }: { onOpenSettings: () => vo
           </div>
         </section>
 
-        <h2 className="feed-h dp-h">История</h2>
-        <DictationHistory />
+        <div data-tour="dict-history">
+          <h2 className="feed-h dp-h">История</h2>
+          <DictationHistory />
+        </div>
       </div>
     </main>
   )

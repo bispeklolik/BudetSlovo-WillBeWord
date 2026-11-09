@@ -4,6 +4,9 @@ import type { SpeakerInfo, Turn } from './types'
 // бессонница из-за тревоги о работе) и два готовых результата по ней.
 // Звука нет — пример показывает путь «разговор → результат» без настройки.
 
+/** Папка встроенного примера записи (main/demo.ts и интерактивный гайд). */
+export const DEMO_SLUG = 'primer-konsultacii'
+
 export const DEMO_TITLE = 'Пример: консультация (без звука)'
 
 const LINES: [string, string][] = [

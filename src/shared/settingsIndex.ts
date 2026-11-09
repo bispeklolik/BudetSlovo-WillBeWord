@@ -31,6 +31,7 @@ export const SETTING_ENTRIES: SettingEntry[] = [
   // Общие
   { id: 'theme', section: 'general', label: 'Тёмная тема', words: 'тема оформление светлая цвет' },
   { id: 'wizard', section: 'general', label: 'Пройти настройку заново', words: 'мастер с чего начать пример облако' },
+  { id: 'tour', section: 'general', label: 'Обучение: пройти тур, подсказки в разделах', words: 'гайд тур подсказки знакомство коротко подробно' },
   { id: 'hotkeys', section: 'general', label: 'Горячие клавиши в записи', words: 'пробел поиск отменить скорость' },
   { id: 'about', section: 'general', label: 'О программе', words: 'версия слово' },
   // Диктовка

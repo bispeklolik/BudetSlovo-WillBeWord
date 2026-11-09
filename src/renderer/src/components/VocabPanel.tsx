@@ -4,6 +4,7 @@ import { DICT_MODES, type CustomDictMode } from '../../../shared/dictModes'
 import { DEFAULT_APP_RULES, type AppModeRule } from '../../../shared/appModes'
 import { api } from '../api'
 import { useEscClose } from '../useEscClose'
+import { useSectionHints } from '../tour/TourProvider'
 
 // Словарь (волна 5): слова для распознавания, точные замены, сниппеты и свои
 // режимы диктовки. Сохраняется кнопкой — так проще править несколько строк.
@@ -49,6 +50,7 @@ export default function VocabPanel({
     onClose()
   }
   useEscClose(close)
+  useSectionHints('vocab')
   const touch = <T,>(set: (v: T) => void) => (v: T): void => {
     dirty.current = true
     set(v)
@@ -98,7 +100,7 @@ export default function VocabPanel({
             Закрыть
           </button>
         </div>
-        <div className="vocab-tabs">
+        <div className="vocab-tabs" data-tour="vocab-tabs">
           {TABS.map((t) => (
             <button key={t.id} className={'btn btn-sm' + (tab === t.id ? ' btn-primary' : '')} onClick={() => setTab(t.id)}>
               {t.name}
@@ -106,7 +108,7 @@ export default function VocabPanel({
           ))}
         </div>
 
-        <div className="vocab-body">
+        <div className="vocab-body" data-tour="vocab-body">
           {tab === 'words' && (
             <>
               <div className="panel-note">

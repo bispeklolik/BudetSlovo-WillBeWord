@@ -2,12 +2,12 @@ import { existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { projectDir, getProject, writeJsonAtomic } from './project/store'
 import { saveNote, listNotes } from './notes/store'
-import { DEMO_TITLE, DEMO_SPEAKERS, DEMO_RESULTS, demoTurns } from '../shared/demo'
+import { DEMO_SLUG, DEMO_TITLE, DEMO_SPEAKERS, DEMO_RESULTS, demoTurns } from '../shared/demo'
 import type { ProjectMeta } from '../shared/types'
 
 // Дверь «Посмотреть на примере»: готовая запись + два результата в «Конспектах».
 // Повторное нажатие не плодит копии — открывает тот же пример.
-const SLUG = 'primer-konsultacii'
+const SLUG = DEMO_SLUG
 
 export function createDemoProject(): ProjectMeta {
   const existing = getProject(SLUG)

@@ -101,7 +101,7 @@ export default function FolderTree(props: FolderTreeProps): React.JSX.Element {
   }
 
   return (
-    <div className="folder-tree">
+    <div className="folder-tree" data-tour="folder-tree">
       <button
         className={
           'tree-row root' +

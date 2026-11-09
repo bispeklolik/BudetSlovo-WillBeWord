@@ -13,6 +13,7 @@ import MoveModal from '../components/MoveModal'
 import NoteViewer from '../components/NoteViewer'
 import AddMenu from '../components/AddMenu'
 import { Skeleton } from '../components/Skeleton'
+import { useSectionHints } from '../tour/TourProvider'
 
 // Страница «Записи» (бывший Home): панель кнопок, поиск, очередь, карточки
 // выбранной папки. Дерево папок переехало в боковое меню (AppShell).
@@ -116,6 +117,8 @@ export default function Library({
     setModal(null)
   }
 
+  useSectionHints('library', !!projects && projects.length > 0)
+
   // Пока список не пришёл — скелетон, а не «Добро пожаловать» (мерцание первого кадра).
   if (projects === null) {
     return (
@@ -190,6 +193,7 @@ export default function Library({
           onClick={onImport}
           disabled={importBusy !== null}
           data-testid="import-btn"
+          data-tour="lib-import"
         >
           {importBusy ?? 'Импортировать запись'}
         </button>
@@ -203,12 +207,13 @@ export default function Library({
         />
         <button
           className="btn"
+          data-tour="lib-ask"
           onClick={() => onAsk(folder || null)}
           title="Вопрос по всем записям — ответ со ссылками"
         >
           Спросить записи
         </button>
-        <div className="global-search">
+        <div className="global-search" data-tour="lib-search">
           <Search size={16} aria-hidden="true" />
           <input
             className="global-search-input"
@@ -285,7 +290,7 @@ export default function Library({
                   <div>Перетащите сюда запись или переместите её кнопкой «папка» на карточке</div>
                 </div>
               ) : (
-                <div className="project-grid">
+                <div className="project-grid" data-tour="lib-cards">
                   {records.map((p) => (
                     <div
                       key={p.slug}
