@@ -1,19 +1,34 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Pause, Play } from 'lucide-react'
 import { api } from '../api'
 import { showToast, humanError } from '../toast'
 import type { DictationEntry } from '../../../shared/types'
 import { suggestFromEdit, type Suggestion } from '../../../shared/learn'
 import { cleanWords } from '../../../shared/vocab'
 
-// «Последние диктовки»: ни одна диктовка не теряется. Ошибка распознавания или
+// История диктовок (страница «Диктовка»): ни одна диктовка не теряется. Ошибка распознавания или
 // чистки → аудио лежит в папке данных, его можно распознать заново (идея —
 // History/Retry у OpenWhispr и Superwhisper).
 // «Исправить» (волна 6): правишь вставленный текст — «Слово» предлагает
 // запомнить замены и слова для словаря (словарь, который учится).
 
-function fmt(at: string): string {
+const PAGE = 20
+
+function fmtTime(at: string): string {
+  return new Date(at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+}
+
+/** Заголовок дня: «Сегодня», «Вчера», дальше «6 ноября, пятница». Даты и дни недели считает код. */
+export function dayTitle(at: string, now: Date = new Date()): string {
   const d = new Date(at)
-  return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  if (Number.isNaN(d.getTime())) return 'Раньше'
+  const start = (x: Date): number => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const diff = Math.round((start(now) - start(d)) / 86_400_000)
+  if (diff <= 0) return 'Сегодня'
+  if (diff === 1) return 'Вчера'
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', weekday: 'long' }
+  if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric'
+  return d.toLocaleDateString('ru-RU', opts)
 }
 
 export function MicSelect({ value, onChange }: { value: string; onChange: (id: string) => void }): React.JSX.Element {
@@ -38,7 +53,11 @@ export function MicSelect({ value, onChange }: { value: string; onChange: (id: s
 
 export default function DictationHistory(): React.JSX.Element {
   const [items, setItems] = useState<DictationEntry[]>([])
-  const [open, setOpen] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const [playing, setPlaying] = useState<string | null>(null)
+  const player = useRef<{ audio: HTMLAudioElement; url: string } | null>(null)
+  const count = useRef(0)
   const [busy, setBusy] = useState<string | null>(null)
   const [edit, setEdit] = useState<{ i: number; before: string; value: string } | null>(null)
   const [learn, setLearn] = useState<{ list: Suggestion[]; on: boolean[] } | null>(null)
@@ -74,12 +93,60 @@ export default function DictationHistory(): React.JSX.Element {
     showToast(`Запомнил: ${picked.length}. Исправленный текст в буфере обмена.`, 'info')
   }
 
-  const load = (): void => {
-    api.dictHistory().then(setItems)
-  }
+  // Обновить с начала (после «Повторить» и новой диктовки), не сбрасывая уже открытые страницы.
+  const load = useCallback((): void => {
+    api
+      .dictHistoryPage(Math.max(PAGE, count.current), 0)
+      .then((r) => {
+        count.current = r.items.length
+        setItems(r.items)
+        setHasMore(r.hasMore)
+        setLoaded(true)
+      })
+      .catch(() => setLoaded(true))
+  }, [])
   useEffect(() => {
-    if (open) load()
-  }, [open])
+    load()
+    return api.onDictLogged(load)
+  }, [load])
+
+  const more = (): void => {
+    api.dictHistoryPage(PAGE, count.current).then((r) => {
+      count.current += r.items.length
+      setItems((prev) => [...prev, ...r.items])
+      setHasMore(r.hasMore)
+    })
+  }
+
+  const stop = (): void => {
+    if (player.current) {
+      player.current.audio.pause()
+      URL.revokeObjectURL(player.current.url)
+      player.current = null
+    }
+    setPlaying(null)
+  }
+  useEffect(() => stop, [])
+
+  const listen = async (audio: string): Promise<void> => {
+    if (playing === audio) return stop()
+    stop()
+    const buf = await api.dictClip(audio)
+    if (!buf) {
+      showToast('Звук этой диктовки уже удалён.')
+      return
+    }
+    const url = URL.createObjectURL(new Blob([buf], { type: 'audio/webm' }))
+    const el = new Audio(url)
+    el.onended = stop
+    el.onerror = () => {
+      stop()
+      showToast('Не получилось проиграть звук.')
+    }
+    player.current = { audio: el, url }
+    setPlaying(audio)
+    void el.play().catch(() => stop())
+  }
 
   const retry = async (audio: string): Promise<void> => {
     setBusy(audio)
@@ -95,10 +162,7 @@ export default function DictationHistory(): React.JSX.Element {
   }
 
   return (
-    <div className="dict-history">
-      <button className="text-link" onClick={() => setOpen((v) => !v)}>
-        {open ? 'Скрыть последние диктовки' : 'Последние диктовки'}
-      </button>
+    <div className="dict-history" data-testid="dict-history">
       {learn && (
         <div className="dict-learn">
           <div className="settings-status">Запомнить, как надо писать? Дальше «Слово» будет исправлять это само.</div>
@@ -122,18 +186,21 @@ export default function DictationHistory(): React.JSX.Element {
           </span>
         </div>
       )}
-      {open &&
-        (items.length === 0 ? (
-          <div className="settings-status">Пока пусто.</div>
-        ) : (
-          items.map((e, i) => {
-            const text = e.text ?? e.polished ?? e.raw
-            return (
-              <div className="dict-item" key={e.at + i}>
+      {!loaded ? null : items.length === 0 ? (
+        <div className="settings-status">Пока пусто. Зажмите клавишу диктовки и скажите что-нибудь.</div>
+      ) : (
+        items.map((e, i) => {
+          const text = e.text ?? e.polished ?? e.raw
+          const day = dayTitle(e.at)
+          const head = i === 0 || dayTitle(items[i - 1].at) !== day
+          return (
+            <div key={e.at + i}>
+              {head && <h3 className="feed-day dict-day">{day}</h3>}
+              <div className="dict-item">
                 <div className="dict-item-head">
-                  <span className="settings-status">{fmt(e.at)}</span>
+                  <span className="settings-status">{fmtTime(e.at)}</span>
                   {e.error && <span className="key-bad">{e.error}</span>}
-                  <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                  <span className="dict-item-actions">
                     {text && (
                       <button
                         className="btn btn-sm"
@@ -143,6 +210,12 @@ export default function DictationHistory(): React.JSX.Element {
                         }}
                       >
                         Копировать
+                      </button>
+                    )}
+                    {e.audio && (
+                      <button className="btn btn-sm" onClick={() => void listen(e.audio!)}>
+                        {playing === e.audio ? <Pause size={13} aria-hidden="true" /> : <Play size={13} aria-hidden="true" />}
+                        {playing === e.audio ? 'Стоп' : 'Слушать'}
                       </button>
                     )}
                     {text && e.mode !== 'edit' && (
@@ -179,9 +252,15 @@ export default function DictationHistory(): React.JSX.Element {
                   text && <div className="dict-item-text">{text}</div>
                 )}
               </div>
-            )
-          })
-        ))}
+            </div>
+          )
+        })
+      )}
+      {hasMore && (
+        <button className="btn dict-more" onClick={more} data-testid="dict-more">
+          Показать ещё
+        </button>
+      )}
     </div>
   )
 }

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as Tabs from '@radix-ui/react-tabs'
-import { Copy, FileAudio, Mic, Phone, Plus, TriangleAlert } from 'lucide-react'
+import { Check, Circle, Copy, FileAudio, Mic, Phone, Plus, TriangleAlert } from 'lucide-react'
 import type { DictationEntry, DictationSettings } from '../../../shared/types'
 import { defaultDictation } from '../../../shared/types'
 import { buildFeed, groupFeed, type FeedItem } from '../../../shared/feed'
 import { api } from '../api'
 import { showToast } from '../toast'
 import { onActivate } from '../activate'
-import { useLibrary } from '../library'
+import { useLibrary, useChecklist } from '../library'
+import { doneCount, type ChecklistId } from '../../../shared/setupChecklist'
 import { hotkeyLabel } from '../dictKeys'
 import EngineStatus from '../components/EngineStatus'
 import QueueStrip from '../components/QueueStrip'
@@ -18,6 +19,23 @@ import { Skeleton } from '../components/Skeleton'
 // лента за дни — записи и диктовки вперемешку (фильтр Все / Записи / Диктовки).
 
 type Filter = 'all' | 'rec' | 'dict'
+
+const HIDE_KEY = 'slovo.checklistHidden'
+const CHECK_ACTION: Record<ChecklistId, string> = {
+  stt: 'Подключить',
+  dictation: 'Попробовать',
+  record: 'Добавить',
+  ai: 'Подключить',
+  vocab: 'Добавить'
+}
+
+function readHidden(): boolean {
+  try {
+    return localStorage.getItem(HIDE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 function greeting(h = new Date().getHours()): string {
   if (h < 5) return 'Доброй ночи'
@@ -48,15 +66,18 @@ export default function Home({
   onRecordCall,
   onImport,
   importBusy,
-  onDictation
+  onDictation,
+  onChecklist
 }: {
   onOpen: (slug: string) => void
   onOpenWelcome: () => void
   onRecordCall: () => void
   onImport: () => void
   importBusy: string | null
-  /** Открыть настройки на разделе диктовки. */
+  /** Открыть страницу «Диктовка». */
   onDictation: () => void
+  /** Пункт чек-листа: открыть то место, где это делается. */
+  onChecklist: (id: ChecklistId) => void
 }): React.JSX.Element {
   const projects = useLibrary((s) => s.projects)
   const error = useLibrary((s) => s.error)
@@ -64,15 +85,37 @@ export default function Home({
   const [dict, setDict] = useState<DictationSettings | null>(null)
   const [dicts, setDicts] = useState<DictationEntry[] | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
+  const [hidden, setHidden] = useState(readHidden)
+  const stats = useLibrary((s) => s.setup?.stats)
+  const checklist = useChecklist()
 
   useEffect(() => {
     void refresh()
-    api.getSettings().then((s) => setDict({ ...defaultDictation, ...s.dictation }))
-    api
-      .dictHistory()
-      .then(setDicts)
-      .catch(() => setDicts([]))
+    const loadDicts = (): void => {
+      api.getSettings().then((s) => setDict({ ...defaultDictation, ...s.dictation }))
+      api
+        .dictHistory()
+        .then(setDicts)
+        .catch(() => setDicts([]))
+    }
+    loadDicts()
+    return api.onDictLogged(loadDicts)
   }, [refresh])
+
+  const recsWeek = useMemo(() => {
+    const from = Date.now() - 7 * 86400_000
+    return (projects ?? []).filter((p) => !p.demo && new Date(p.createdAt).getTime() >= from).length
+  }, [projects])
+  const hide = (): void => {
+    setHidden(true)
+    try {
+      localStorage.setItem(HIDE_KEY, '1')
+    } catch {
+      /* без localStorage чек-лист вернётся при следующем запуске */
+    }
+  }
+  const showList = !!checklist && !hidden && doneCount(checklist) < checklist.length
+  const showStats = !!stats && stats.wordsWeek + stats.streak + recsWeek > 0
 
   const loading = projects === null || dicts === null
   const groups = useMemo(() => {
@@ -171,6 +214,51 @@ export default function Home({
 
         <EngineStatus onOpenWelcome={onOpenWelcome} />
         <QueueStrip />
+
+        {showStats && stats && (
+          <section className="home-summary" aria-label="Сводка за неделю" data-testid="home-summary">
+            <div className="home-sum-item">
+              <b>{stats.wordsWeek}</b>
+              <span>слов за неделю</span>
+            </div>
+            <div className="home-sum-item">
+              <b>{stats.streak}</b>
+              <span>дней подряд</span>
+            </div>
+            <div className="home-sum-item">
+              <b>{recsWeek}</b>
+              <span>записей за неделю</span>
+            </div>
+          </section>
+        )}
+
+        {showList && checklist && (
+          <section className="home-check" aria-label="Настройка" data-testid="home-checklist">
+            <div className="home-check-head">
+              <h2 className="feed-h">
+                Настройка: {doneCount(checklist)} из {checklist.length}
+              </h2>
+              <button className="text-link" onClick={hide} data-testid="checklist-hide">
+                Скрыть
+              </button>
+            </div>
+            <ul className="home-check-list">
+              {checklist.map((it) => (
+                <li key={it.id} className={'home-check-item' + (it.done ? ' is-done' : '')} aria-label={it.label + (it.done ? ': готово' : '')}>
+                  <span className="home-check-ico" aria-hidden="true">
+                    {it.done ? <Check size={14} /> : <Circle size={14} />}
+                  </span>
+                  <span className="home-check-label">{it.label}</span>
+                  {!it.done && (
+                    <button className="btn btn-sm" onClick={() => onChecklist(it.id)} data-testid={'check-' + it.id}>
+                      {CHECK_ACTION[it.id]}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <Tabs.Root value={filter} onValueChange={(v) => setFilter(v as Filter)}>
           <div className="feed-head">

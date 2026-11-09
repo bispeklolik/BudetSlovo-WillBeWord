@@ -18,6 +18,7 @@ import type {
   AskAnswer,
   AskTurn
 } from '../shared/types'
+import type { DictationStats } from '../shared/dictStats'
 
 const api = {
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('settings:get'),
@@ -96,6 +97,15 @@ const api = {
     return () => ipcRenderer.off('dict:live', h)
   },
   dictHistory: (): Promise<DictationEntry[]> => ipcRenderer.invoke('dict:history'),
+  dictHistoryPage: (limit: number, offset: number): Promise<{ items: DictationEntry[]; hasMore: boolean }> =>
+    ipcRenderer.invoke('dict:history-page', limit, offset),
+  dictStats: (): Promise<DictationStats> => ipcRenderer.invoke('dict:stats'),
+  dictClip: (audio: string): Promise<ArrayBuffer | null> => ipcRenderer.invoke('dict:clip', audio),
+  onDictLogged: (cb: () => void): (() => void) => {
+    const h = (): void => cb()
+    ipcRenderer.on('dict:logged', h)
+    return () => ipcRenderer.off('dict:logged', h)
+  },
   retryDict: (audio: string): Promise<string> => ipcRenderer.invoke('dict:retry', audio),
   onDictRecord: (
     cb: (cmd: 'start' | 'stop' | 'cancel', opts?: { sounds?: boolean; tailMs?: number; micId?: string; live?: boolean; id?: number }) => void
@@ -152,7 +162,7 @@ const api = {
     ipcRenderer.on('setup:progress', h)
     return () => ipcRenderer.off('setup:progress', h)
   },
-  ollamaStatus: (): Promise<OllamaStatus> => ipcRenderer.invoke('setup:ollama'),
+  ollamaStatus: (quiet?: boolean): Promise<OllamaStatus> => ipcRenderer.invoke('setup:ollama', quiet),
   pullOllama: (name: string): Promise<void> => ipcRenderer.invoke('setup:pullOllama', name),
   stopOllamaPull: (): Promise<void> => ipcRenderer.invoke('setup:stopOllama'),
   onOllamaProgress: (cb: (p: { status: string; done: number; total: number }) => void): (() => void) => {

@@ -14,7 +14,8 @@ import {
   Settings,
   SlidersHorizontal
 } from 'lucide-react'
-import { useLibrary, folderTree, folderCount, SLUG_TYPE } from '../library'
+import { useLibrary, useChecklist, folderTree, folderCount, SLUG_TYPE } from '../library'
+import { doneCount } from '../../../shared/setupChecklist'
 import AddMenu from './AddMenu'
 import FolderTree from './FolderTree'
 import InputModal from './InputModal'
@@ -24,7 +25,7 @@ import Tip from './Tip'
 // «Записи» (главная, записи с деревом папок, конспекты, спросить) и группа
 // «Диктовка». Внизу — настройки. 232 px, сворачивается в рейку 56 px.
 
-export type NavPage = 'home' | 'library' | 'notes' | 'settings'
+export type NavPage = 'home' | 'library' | 'notes' | 'dictation' | 'settings'
 
 function NavItem({
   icon,
@@ -72,7 +73,6 @@ export default function AppSidebar({
   importBusy,
   onAdd,
   onAsk,
-  onDictation,
   onVocab,
   onSettings
 }: {
@@ -85,7 +85,6 @@ export default function AppSidebar({
   importBusy: string | null
   onAdd: (kind: 'phone' | 'link' | 'watch') => void
   onAsk: () => void
-  onDictation: () => void
   onVocab: (tab: 'words' | 'modes') => void
   onSettings: () => void
 }): React.JSX.Element {
@@ -122,6 +121,10 @@ export default function AppSidebar({
       if (cur && (cur.folder ?? '') !== dest) void moveRecord(slug, dest)
     }
   }
+
+  const checklist = useChecklist()
+  const setupDone = checklist ? doneCount(checklist) : 0
+  const setupTotal = checklist?.length ?? 0
 
   const folderTitle = folder === '' ? '' : folder.split('/').pop()
 
@@ -244,8 +247,9 @@ export default function AppSidebar({
         <NavItem
           icon={<Mic size={18} />}
           label="Диктовка"
+          active={page === 'dictation'}
           collapsed={collapsed}
-          onClick={onDictation}
+          onClick={() => onNavigate('dictation')}
           testid="nav-dictation"
         />
         <NavItem
@@ -265,6 +269,26 @@ export default function AppSidebar({
       </nav>
 
       <div className="sb-foot">
+        {checklist && setupDone < setupTotal && (
+          <Tip label={`Настройка: ${setupDone} из ${setupTotal}`} side="right" disabled={!collapsed}>
+            <button
+              className="sb-setup"
+              onClick={() => onNavigate('home')}
+              aria-label={`Настройка: ${setupDone} из ${setupTotal}. Открыть главную`}
+              data-testid="sidebar-setup"
+            >
+              <span className="sb-setup-text">
+                Настройка: {setupDone} из {setupTotal}
+              </span>
+              <span className="sb-setup-count" aria-hidden="true">
+                {setupDone}/{setupTotal}
+              </span>
+              <span className="sb-setup-track" aria-hidden="true">
+                <span className="sb-setup-fill" style={{ width: `${(setupDone / setupTotal) * 100}%` }} />
+              </span>
+            </button>
+          </Tip>
+        )}
         <NavItem
           icon={<Settings size={18} />}
           label="Настройки"

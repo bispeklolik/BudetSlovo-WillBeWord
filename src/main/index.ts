@@ -48,7 +48,7 @@ import { downloadLink, installYtDlp, ytDlpInstalled, cancelLinkImport } from './
 import { claudeProvider, setClaudeConfig } from './ai/claude'
 import { openrouterProvider, setOpenrouterConfig } from './ai/openrouter'
 import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
-import { stopOllama, ensureOllama, ollamaStatus, pullOllamaModel } from './ai/ollamaServer'
+import { stopOllama, ensureOllama, ollamaStatus, ollamaQuickStatus, pullOllamaModel } from './ai/ollamaServer'
 import { LEGACY_DATA_DIR } from './pathsResolve'
 import { enginePaths } from './engine/location'
 import { detectGpu, freeBytes } from './engine/sysinfo'
@@ -74,6 +74,9 @@ import {
   onDictationAudio,
   onDictationChunk,
   dictationHistory,
+  dictationHistoryPage,
+  dictationStats,
+  dictationClip,
   retryDictation,
   type ClipMeta
 } from './dictation/manager'
@@ -319,6 +322,12 @@ function applyCallWatcher(): void {
   }
 }
 ipcMain.handle('dict:history', () => dictationHistory())
+ipcMain.handle('dict:history-page', (_e, limit?: number, offset?: number) => dictationHistoryPage(limit, offset))
+ipcMain.handle('dict:stats', () => dictationStats())
+ipcMain.handle('dict:clip', (_e, audio: string) => {
+  const b = dictationClip(String(audio))
+  return b ? b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) : null
+})
 ipcMain.handle('dict:retry', (_e, audio: string) => retryDictation(audio))
 
 // ---------- первый запуск («три двери»), движок, бэкап ----------
@@ -359,7 +368,7 @@ ipcMain.handle('setup:start', (_e, modelId: string) => {
   startSetup(modelId, (id) => patchSettings({ localModel: id }))
 })
 ipcMain.handle('setup:stop', () => stopSetup())
-ipcMain.handle('setup:ollama', () => ollamaStatus())
+ipcMain.handle('setup:ollama', (_e, quiet?: boolean) => (quiet ? ollamaQuickStatus() : ollamaStatus()))
 
 let ollamaPull: AbortController | null = null
 ipcMain.handle('setup:pullOllama', async (_e, name: string) => {

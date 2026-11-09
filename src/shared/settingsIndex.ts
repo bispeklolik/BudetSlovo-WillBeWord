@@ -53,7 +53,7 @@ export const SETTING_ENTRIES: SettingEntry[] = [
   { id: 'dict-punct', section: 'dictation', label: 'Пунктуация голосом', words: 'запятая с новой строки дополнительно' },
   { id: 'dict-fuzzy', section: 'dictation', label: 'Исправлять слова по словарю', words: 'похожие дополнительно' },
   { id: 'dict-dropcorr', section: 'dictation', label: 'Убирать оговорки', words: 'нет в среду дополнительно' },
-  { id: 'dict-history', section: 'dictation', label: 'Последние диктовки', words: 'история повторить исправить' },
+  { id: 'dict-history', section: 'dictation', label: 'История диктовок', words: 'последние повторить исправить слушать страница' },
   // Записи и звонки
   { id: 'pause-mark', section: 'records', label: 'Отмечать паузы в тексте', words: 'секунды' },
   { id: 'pause-export', section: 'records', label: 'Паузы в экспорте', words: 'word txt md' },

@@ -48,6 +48,10 @@ const stub: RendererApi = {
   sendDictChunk: () => {},
   onDictLive: () => () => {},
   dictHistory: async () => [],
+  dictHistoryPage: async () => ({ items: [], hasMore: false }),
+  dictClip: async () => null,
+  onDictLogged: () => () => {},
+  dictStats: async () => ({ wordsWeek: 0, streak: 0, total: 0, wpm: null }),
   retryDict: async () => {
     throw new Error('Доступно только в приложении (Electron)')
   },

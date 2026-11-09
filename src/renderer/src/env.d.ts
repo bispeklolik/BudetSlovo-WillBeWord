@@ -18,6 +18,7 @@ import type {
   AskAnswer,
   AskTurn
 } from '../../shared/types'
+import type { DictationStats } from '../../shared/dictStats'
 
 export interface RendererApi {
   getSettings: () => Promise<Settings>
@@ -64,6 +65,10 @@ export interface RendererApi {
   sendDictChunk: (data: ArrayBuffer) => void
   onDictLive: (cb: (text: string) => void) => () => void
   dictHistory: () => Promise<DictationEntry[]>
+  dictHistoryPage: (limit: number, offset: number) => Promise<{ items: DictationEntry[]; hasMore: boolean }>
+  dictStats: () => Promise<DictationStats>
+  dictClip: (audio: string) => Promise<ArrayBuffer | null>
+  onDictLogged: (cb: () => void) => () => void
   retryDict: (audio: string) => Promise<string>
   onDictRecord: (
     cb: (cmd: 'start' | 'stop' | 'cancel', opts?: { sounds?: boolean; tailMs?: number; micId?: string; live?: boolean; id?: number }) => void
@@ -83,7 +88,8 @@ export interface RendererApi {
   startSetup: (modelId: string) => Promise<void>
   stopSetup: () => Promise<void>
   onSetupProgress: (cb: (p: SetupProgress) => void) => () => void
-  ollamaStatus: () => Promise<OllamaStatus>
+  /** quiet: только посмотреть, ничего не запуская. */
+  ollamaStatus: (quiet?: boolean) => Promise<OllamaStatus>
   pullOllama: (name: string) => Promise<void>
   stopOllamaPull: () => Promise<void>
   onOllamaProgress: (cb: (p: { status: string; done: number; total: number }) => void) => () => void

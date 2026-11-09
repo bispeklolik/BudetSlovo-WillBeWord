@@ -73,6 +73,7 @@ export interface DictationEntry {
   audio?: string // имя файла клипа в папке dictation (если ещё хранится)
   text?: string // что вставлено: после чистки, замен и сниппетов
   mode?: string // режим, которым чистили
+  ms?: number // длительность записи, мс (для «слов в минуту»); у старых записей нет
 }
 
 export const defaultDictation: DictationSettings = {

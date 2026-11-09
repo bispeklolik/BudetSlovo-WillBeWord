@@ -1,5 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from 'child_process'
-import { dirname } from 'path'
+import { existsSync, readdirSync } from 'fs'
+import { homedir } from 'os'
+import { dirname, join } from 'path'
 import { OLLAMA_ADDR, ollamaExe, ollamaModelsOverride } from '../paths'
 
 // Управление локальным движком ИИ (Ollama) как подпроцессом — тот же паттерн,
@@ -82,6 +84,33 @@ export interface OllamaStatus {
   installed: boolean
   running: boolean
   models: string[]
+}
+
+/**
+ * Тихая проверка для чек-листа: сервер НЕ запускаем. Работает — спрашиваем модели;
+ * не работает — смотрим, лежат ли скачанные модели на диске.
+ */
+export async function ollamaQuickStatus(): Promise<OllamaStatus> {
+  const exe = ollamaExe()
+  if (await reachable()) {
+    try {
+      const r = await fetch(`${BASE}/api/tags`, { signal: AbortSignal.timeout(3000) })
+      const j = (await r.json()) as { models?: { name: string }[] }
+      return { installed: true, running: true, models: (j.models ?? []).map((m) => m.name) }
+    } catch {
+      return { installed: true, running: true, models: [] }
+    }
+  }
+  if (!exe) return { installed: false, running: false, models: [] }
+  const base = ollamaModelsOverride(exe) ?? process.env.OLLAMA_MODELS ?? join(homedir(), '.ollama', 'models')
+  const manifests = join(base, 'manifests')
+  let models: string[] = []
+  try {
+    if (existsSync(manifests)) models = readdirSync(manifests, { recursive: true }).map(String).slice(0, 1)
+  } catch {
+    /* нет доступа — считаем, что моделей нет */
+  }
+  return { installed: true, running: false, models }
 }
 
 /** Есть ли Ollama и какие модели уже скачаны (для двери «На этом компьютере»). */

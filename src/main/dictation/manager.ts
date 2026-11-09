@@ -16,6 +16,7 @@ import { finishDictation, type Vocab } from '../../shared/vocab'
 import { pauseMedia, resumeMedia } from './media'
 import type { DictationSettings, DictationEntry } from '../../shared/types'
 import { defaultDictation } from '../../shared/types'
+import { parseHistory, pageEntries, computeStats, emptyStats, type DictationStats } from '../../shared/dictStats'
 
 // Менеджер системной диктовки: жест → запись (в главном renderer) →
 // распознавание (движок из настроек расшифровки) → опциональная LLM-чистка →
@@ -57,6 +58,9 @@ let stuckTimer: NodeJS.Timeout | null = null
 let hideTimer: NodeJS.Timeout | null = null
 // Shift + клавиша диктовки, «проглоченная» для жеста правки (см. applyDictationSettings).
 let editAccel = ''
+// Когда началась запись и сколько она длилась (мс) — для «слов в минуту».
+let recStartAt = 0
+let recMs = 0
 
 function send(ch: string, ...args: unknown[]): void {
   mainWin?.webContents.send(ch, ...args)
@@ -239,6 +243,7 @@ function logHistory(e: DictationEntry): void {
   try {
     mkdirSync(DATA_DIR, { recursive: true })
     appendFileSync(HISTORY, JSON.stringify(e) + '\n', 'utf8')
+    if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('dict:logged')
   } catch {
     /* журнал не критичен */
   }
@@ -271,24 +276,45 @@ export function pruneDictationAudio(): void {
   }
 }
 
-/** Последние диктовки (новые сверху) — для списка в настройках. */
-export function dictationHistory(limit = 15): DictationEntry[] {
+function readHistory(): DictationEntry[] {
   try {
-    const lines = readFileSync(HISTORY, 'utf8').trim().split('\n').slice(-limit * 2)
-    return lines
-      .map((l) => {
-        try {
-          return JSON.parse(l) as DictationEntry
-        } catch {
-          return null
-        }
-      })
-      .filter((e): e is DictationEntry => !!e && (!!e.raw || !!e.error))
-      .map((e) => ({ ...e, audio: e.audio && existsSync(join(AUDIO_DIR, e.audio)) ? e.audio : undefined }))
-      .reverse()
-      .slice(0, limit)
+    return parseHistory(readFileSync(HISTORY, 'utf8'))
   } catch {
     return []
+  }
+}
+
+function withAudioFlag(e: DictationEntry): DictationEntry {
+  return { ...e, audio: e.audio && existsSync(join(AUDIO_DIR, e.audio)) ? e.audio : undefined }
+}
+
+/** Последние диктовки (новые сверху) — для ленты на «Главной». */
+export function dictationHistory(limit = 15): DictationEntry[] {
+  return pageEntries(readHistory(), limit, 0).items.map(withAudioFlag)
+}
+
+/** Страница журнала для страницы «Диктовка»: limit записей после offset, новые сверху. */
+export function dictationHistoryPage(limit = 30, offset = 0): { items: DictationEntry[]; hasMore: boolean } {
+  const r = pageEntries(readHistory(), Math.max(1, Math.min(200, limit)), Math.max(0, offset))
+  return { items: r.items.map(withAudioFlag), hasMore: r.hasMore }
+}
+
+/** Клип диктовки для кнопки «Слушать». Имя файла чистим от путей. */
+export function dictationClip(audio: string): Buffer | null {
+  try {
+    const file = join(AUDIO_DIR, audio.replace(/[\\/]/g, ''))
+    return existsSync(file) ? readFileSync(file) : null
+  } catch {
+    return null
+  }
+}
+
+/** Слов за неделю, дней подряд, диктовок всего. */
+export function dictationStats(): DictationStats {
+  try {
+    return computeStats(readHistory())
+  } catch {
+    return emptyStats
   }
 }
 
@@ -364,6 +390,8 @@ function startRecording(): void {
   console.log('[dictation] recording start')
   phase = 'recording'
   kind = 'dictate'
+  recStartAt = Date.now()
+  recMs = 0
   gen++
   appAtStart = hotkeyHook.lastApp
   showOverlay()
@@ -396,6 +424,7 @@ function stopRecording(): void {
   if (phase !== 'recording') return
   console.log('[dictation] recording stop → processing')
   phase = 'processing'
+  recMs = recStartAt ? Date.now() - recStartAt + (cfg.tailMs ?? 300) : 0
   // Esc остаётся: пока распознаём и правим, ещё можно передумать.
   overlayState(kind === 'edit' ? 'editing' : 'processing')
   send('dict:record-stop')
@@ -524,7 +553,8 @@ export async function onDictationAudio(data: ArrayBuffer, meta: ClipMeta = {}): 
       polished: result.polished,
       text: result.text,
       mode: result.mode,
-      audio
+      audio,
+      ...(recMs > 0 ? { ms: recMs } : {})
     })
     if (!current()) return // Esc: текст в «Последних диктовках», никуда не вставляем
     if (cfg.autoPaste) await pasteIntoActiveWindow(result.text)

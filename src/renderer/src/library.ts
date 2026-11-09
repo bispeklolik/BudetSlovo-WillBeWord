@@ -1,5 +1,8 @@
 import { create } from 'zustand'
-import type { ProjectMeta, JobInfo } from '../../shared/types'
+import { useMemo } from 'react'
+import type { ProjectMeta, JobInfo, Settings } from '../../shared/types'
+import type { DictationStats } from '../../shared/dictStats'
+import { buildChecklist, type ChecklistItem } from '../../shared/setupChecklist'
 import { buildFolderTree, ancestorPaths } from '../../shared/folders'
 import { api } from './api'
 import { showToast, humanError } from './toast'
@@ -7,7 +10,18 @@ import { showToast, humanError } from './toast'
 // Общее состояние библиотеки: им пользуются боковое меню (дерево папок),
 // страница «Записи» и «Главная». Раньше всё это жило внутри Home.tsx.
 
+/** Факты для чек-листа и сводки: настройки, статистика диктовки, что установлено. */
+export interface SetupFacts {
+  settings: Settings
+  stats: DictationStats
+  localSttInstalled: boolean
+  localAiInstalled: boolean
+}
+
 interface LibraryState {
+  /** null — ещё не загружено. Обновляется при смене страницы, после диктовки и закрытия настроек. */
+  setup: SetupFacts | null
+  refreshSetup: () => Promise<void>
   /** null — список ещё не пришёл (показываем скелетон, а не «Добро пожаловать»). */
   projects: ProjectMeta[] | null
   error: string | null
@@ -31,6 +45,21 @@ interface LibraryState {
 }
 
 export const useLibrary = create<LibraryState>((set, get) => ({
+  setup: null,
+  refreshSetup: async () => {
+    try {
+      const [settings, stats, info] = await Promise.all([api.getSettings(), api.dictStats(), api.setupInfo()])
+      // Локальный ИИ спрашиваем тихо (Ollama не запускаем) и только если ключей нет.
+      let localAiInstalled = false
+      if (!settings.anthropicKey?.trim() && !settings.openrouterKey?.trim()) {
+        const o = await api.ollamaStatus(true).catch(() => null)
+        localAiInstalled = !!o && o.installed && o.models.length > 0
+      }
+      set({ setup: { settings, stats, localSttInstalled: info.engine.installed, localAiInstalled } })
+    } catch {
+      /* прежние данные остаются */
+    }
+  },
   projects: null,
   error: null,
   folderList: [],
@@ -134,3 +163,19 @@ export function folderCount(projects: ProjectMeta[], path: string): number {
 
 /** Тип данных при перетаскивании карточки записи (на папку в боковом меню). */
 export const SLUG_TYPE = 'text/slovo-slug'
+
+/** Чек-лист «Настройка»: null, пока данные не пришли. */
+export function useChecklist(): ChecklistItem[] | null {
+  const setup = useLibrary((s) => s.setup)
+  const projects = useLibrary((s) => s.projects)
+  return useMemo(() => {
+    if (!setup || !projects) return null
+    return buildChecklist({
+      settings: setup.settings,
+      localSttInstalled: setup.localSttInstalled,
+      localAiInstalled: setup.localAiInstalled,
+      dictations: setup.stats.total,
+      ownRecords: projects.filter((p) => !p.demo).length
+    })
+  }, [setup, projects])
+}

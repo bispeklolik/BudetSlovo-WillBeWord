@@ -15,7 +15,7 @@ import {
 } from '../../../shared/settingsIndex'
 import { DICT_KEYS } from '../dictKeys'
 import { showToast, humanError } from '../toast'
-import DictationHistory, { MicSelect } from '../components/DictationHistory'
+import { MicSelect } from '../components/DictationHistory'
 import ConsentModal from '../components/ConsentModal'
 import McpSection from '../components/McpSection'
 import { Row, SwitchRow, Block } from '../components/SettingsParts'
@@ -144,6 +144,7 @@ export default function SettingsPage({
   onVocab,
   vocabOpen,
   onAdd,
+  onOpenDictation,
   initialSection
 }: {
   theme: Theme
@@ -153,6 +154,8 @@ export default function SettingsPage({
   /** Окно «Словарь / Режимы» открыто: после закрытия перечитываем настройки диктовки. */
   vocabOpen: boolean
   onAdd: (kind: 'phone' | 'link' | 'watch') => void
+  /** Открыть страницу «Диктовка» (там история). */
+  onOpenDictation: () => void
   /** Открыть сразу на разделе (боковое меню: «Диктовка»). */
   initialSection?: SettingsSection
 }): React.JSX.Element {
@@ -467,7 +470,12 @@ export default function SettingsPage({
         </div>
       </Block>
       <Block id="dict-history">
-        <DictationHistory />
+        <div className="settings-row">
+          <span>История диктовок — на странице «Диктовка».</span>
+          <button className="text-link" onClick={onOpenDictation} data-testid="open-dictation-page">
+            Открыть
+          </button>
+        </div>
       </Block>
     </>
   )

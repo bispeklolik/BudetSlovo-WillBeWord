@@ -9,6 +9,7 @@ import Library from './views/Library'
 import Editor from './views/Editor'
 import Welcome from './views/Welcome'
 import SettingsPage from './views/Settings'
+import DictationPage from './views/Dictation'
 import type { SettingsSection } from '../../shared/settingsIndex'
 import DictationRecorder from './components/DictationRecorder'
 import DictOverlay from './components/DictOverlay'
@@ -26,6 +27,7 @@ type View =
   | { page: 'home' }
   | { page: 'library' }
   | { page: 'notes' }
+  | { page: 'dictation' }
   | { page: 'settings'; section?: SettingsSection; rev: number }
   | { page: 'editor'; slug: string; search?: string; sec?: number; from: NavPage }
 
@@ -62,6 +64,7 @@ function MainApp(): React.JSX.Element {
   const [collapsed, setCollapsed] = useState(readCollapsed)
 
   const refresh = useLibrary((s) => s.refresh)
+  const refreshSetup = useLibrary((s) => s.refreshSetup)
   const refreshNotes = useLibrary((s) => s.refreshNotes)
   const loadFolders = useLibrary((s) => s.loadFolders)
   const watchJobs = useLibrary((s) => s.watchJobs)
@@ -84,7 +87,15 @@ function MainApp(): React.JSX.Element {
     refreshNotes()
     // Настройки могли поменять порог пауз и т.п. — подтянуть в редактор.
     void api.getSettings().then(setSettings)
-  }, [view.page, refreshNotes])
+    // Чек-лист и сводка: после закрытия настроек и при любой смене страницы.
+    void refreshSetup()
+  }, [view.page, refreshNotes, refreshSetup])
+
+  // После каждой диктовки (в журнал легла запись) и после закрытия словаря.
+  useEffect(() => api.onDictLogged(() => void refreshSetup()), [refreshSetup])
+  useEffect(() => {
+    if (vocab === null) void refreshSetup()
+  }, [vocab, refreshSetup])
 
   useEffect(
     () => api.onImportProgress((p) => setImportBusy(p.phase === 'done' ? null : p.message)),
@@ -261,7 +272,6 @@ function MainApp(): React.JSX.Element {
             importBusy={importBusy}
             onAdd={setAddModal}
             onAsk={() => setAsk({ folder: null })}
-            onDictation={() => openSettings('dictation')}
             onVocab={setVocab}
             onSettings={() => openSettings()}
           />
@@ -312,7 +322,13 @@ function MainApp(): React.JSX.Element {
               onRecordCall={() => setCallRec({})}
               onImport={() => void doImport()}
               importBusy={importBusy}
-              onDictation={() => openSettings('dictation')}
+              onDictation={() => setView({ page: 'dictation' })}
+              onChecklist={(id) => {
+                if (id === 'stt' || id === 'ai') openSettings('engines')
+                else if (id === 'dictation') setView({ page: 'dictation' })
+                else if (id === 'record') void doImport()
+                else setVocab('words')
+              }}
             />
           ) : view.page === 'library' ? (
             <Library
@@ -334,7 +350,10 @@ function MainApp(): React.JSX.Element {
               onVocab={setVocab}
               vocabOpen={vocab !== null}
               onAdd={setAddModal}
+              onOpenDictation={() => setView({ page: 'dictation' })}
             />
+          ) : view.page === 'dictation' ? (
+            <DictationPage onOpenSettings={() => openSettings('dictation')} />
           ) : view.page === 'notes' ? (
             <main className="home">
               <section className="records-pane">
