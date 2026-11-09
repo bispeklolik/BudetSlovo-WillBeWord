@@ -23,6 +23,14 @@ describe('parseHistory', () => {
     expect(r).toHaveLength(2)
     expect(r[1].error).toBe('Микрофон молчал')
   })
+  it('«Повторить» не удваивает: одна запись звука — одна диктовка (ревью шага 2)', () => {
+    const now = new Date('2026-11-09T15:00:00')
+    const first = e('2026-11-08T10:00:00', 'раз два три', { audio: 'a.webm' })
+    const retry = e('2026-11-09T14:00:00', 'раз два три', { audio: 'a.webm' })
+    const s = computeStats([first, retry], now)
+    expect(s.total).toBe(1)
+    expect(s.wordsWeek).toBe(3)
+  })
   it('пустой журнал', () => {
     expect(parseHistory('')).toEqual([])
   })

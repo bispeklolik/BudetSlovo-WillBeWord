@@ -319,19 +319,19 @@ export default function SettingsPage({
     <>
       <Block title="Диктовка в любое окно">
         <SwitchRow id="dict-enabled" label="Диктовка включена" checked={dict.enabled} onChange={(v) => saveDict({ enabled: v })} />
+        <Row id="dict-hotkey" label="Клавиша">
+          <select className="rate" value={dict.hotkey} onChange={(e) => saveDict({ hotkey: e.target.value })}>
+            {DICT_KEYS.map((k) => (
+              <option key={k.id} value={k.id}>
+                {k.label}
+              </option>
+            ))}
+          </select>
+        </Row>
+        <Row id="dict-mic" label="Микрофон">
+          <MicSelect value={dict.micId ?? ''} onChange={(id) => saveDict({ micId: id })} />
+        </Row>
         <fieldset className="st-fieldset" disabled={!dict.enabled}>
-          <Row id="dict-hotkey" label="Клавиша">
-            <select className="rate" value={dict.hotkey} onChange={(e) => saveDict({ hotkey: e.target.value })}>
-              {DICT_KEYS.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.label}
-                </option>
-              ))}
-            </select>
-          </Row>
-          <Row id="dict-mic" label="Микрофон">
-            <MicSelect value={dict.micId ?? ''} onChange={(id) => saveDict({ micId: id })} />
-          </Row>
           <SwitchRow
             id="dict-paste"
             label="Вставлять в активное окно"
@@ -383,85 +383,85 @@ export default function SettingsPage({
             checked={!!dict.polish}
             onChange={(v) => saveDict({ polish: v })}
           />
-          <Row id="dict-modes" label="Режимы — в разделе «Режимы», слова и замены — в «Словаре»">
-            <div className="st-btns">
-              <button className="btn btn-sm" onClick={() => onVocab('modes')}>
-                Режимы
-              </button>
-              <button className="btn btn-sm" onClick={() => onVocab('words')}>
-                Словарь
-              </button>
-            </div>
-          </Row>
-          <Disclosure open={dictMore} onToggle={() => setDictMore((v) => !v)}>
+        </fieldset>
+        <Row id="dict-modes" label="Режимы — в разделе «Режимы», слова и замены — в «Словаре»">
+          <div className="st-btns">
+            <button className="btn btn-sm" onClick={() => onVocab('modes')}>
+              Режимы
+            </button>
+            <button className="btn btn-sm" onClick={() => onVocab('words')}>
+              Словарь
+            </button>
+          </div>
+        </Row>
+        <Disclosure open={dictMore} onToggle={() => setDictMore((v) => !v)}>
+          <SwitchRow
+            id="dict-punct"
+            label="Пунктуация голосом: «запятая», «с новой строки»"
+            checked={dict.voicePunct !== false}
+            onChange={(v) => saveDict({ voicePunct: v })}
+          />
+          <SwitchRow
+            id="dict-fuzzy"
+            label="Исправлять слова, похожие на слова из словаря"
+            checked={dict.fuzzyVocab !== false}
+            onChange={(v) => saveDict({ fuzzyVocab: v })}
+          />
+          <fieldset className="st-fieldset" disabled={!dict.polish}>
             <SwitchRow
-              id="dict-punct"
-              label="Пунктуация голосом: «запятая», «с новой строки»"
-              checked={dict.voicePunct !== false}
-              onChange={(v) => saveDict({ voicePunct: v })}
+              id="dict-digits"
+              label="Числа и даты цифрами"
+              checked={dict.digits !== false}
+              onChange={(v) => saveDict({ digits: v })}
             />
             <SwitchRow
-              id="dict-fuzzy"
-              label="Исправлять слова, похожие на слова из словаря"
-              checked={dict.fuzzyVocab !== false}
-              onChange={(v) => saveDict({ fuzzyVocab: v })}
+              id="dict-dropcorr"
+              label="Убирать оговорки"
+              hint="«нет, в среду» → «в среду». Работает при включённой ИИ-чистке."
+              checked={dict.dropCorrections === true}
+              onChange={(v) => saveDict({ dropCorrections: v })}
             />
-            <fieldset className="st-fieldset" disabled={!dict.polish}>
-              <SwitchRow
-                id="dict-digits"
-                label="Числа и даты цифрами"
-                checked={dict.digits !== false}
-                onChange={(v) => saveDict({ digits: v })}
-              />
-              <SwitchRow
-                id="dict-dropcorr"
-                label="Убирать оговорки"
-                hint="«нет, в среду» → «в среду». Работает при включённой ИИ-чистке."
-                checked={dict.dropCorrections === true}
-                onChange={(v) => saveDict({ dropCorrections: v })}
-              />
-              <Row id="dict-mode" label="Режим по умолчанию">
-                <select className="rate" value={mode.id} onChange={(e) => saveDict({ mode: e.target.value })}>
-                  {DICT_MODES.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                  {(dict.customModes ?? []).map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
+            <Row id="dict-mode" label="Режим по умолчанию">
+              <select className="rate" value={mode.id} onChange={(e) => saveDict({ mode: e.target.value })}>
+                {DICT_MODES.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+                {(dict.customModes ?? []).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </Row>
+            {mode.hint && (
+              <div className="panel-note">
+                {mode.hint}
+                {mode.reformat &&
+                  ' Переписывать текст лучше умеет облачный ИИ; локальная модель иногда ошибается — тогда вставится просто очищенный текст.'}
+              </div>
+            )}
+            {mode.reformat && (
+              <Row id="dict-tone" label="Тон">
+                <select className="rate" value={dict.tone ?? 'neutral'} onChange={(e) => saveDict({ tone: e.target.value as DictTone })}>
+                  {(Object.keys(TONE_NAMES) as DictTone[]).map((t) => (
+                    <option key={t} value={t}>
+                      {TONE_NAMES[t]}
                     </option>
                   ))}
                 </select>
               </Row>
-              {mode.hint && (
-                <div className="panel-note">
-                  {mode.hint}
-                  {mode.reformat &&
-                    ' Переписывать текст лучше умеет облачный ИИ; локальная модель иногда ошибается — тогда вставится просто очищенный текст.'}
-                </div>
-              )}
-              {mode.reformat && (
-                <Row id="dict-tone" label="Тон">
-                  <select className="rate" value={dict.tone ?? 'neutral'} onChange={(e) => saveDict({ tone: e.target.value as DictTone })}>
-                    {(Object.keys(TONE_NAMES) as DictTone[]).map((t) => (
-                      <option key={t} value={t}>
-                        {TONE_NAMES[t]}
-                      </option>
-                    ))}
-                  </select>
-                </Row>
-              )}
-              <SwitchRow
-                id="dict-automode"
-                label="Режим по программе"
-                hint="Telegram → «Сообщение», почта → «Письмо». Правила — в «Режимах»."
-                checked={dict.autoMode !== false}
-                onChange={(v) => saveDict({ autoMode: v })}
-              />
-            </fieldset>
-          </Disclosure>
-        </fieldset>
+            )}
+            <SwitchRow
+              id="dict-automode"
+              label="Режим по программе"
+              hint="Telegram → «Сообщение», почта → «Письмо». Правила — в «Режимах»."
+              checked={dict.autoMode !== false}
+              onChange={(v) => saveDict({ autoMode: v })}
+            />
+          </fieldset>
+        </Disclosure>
         <div className="panel-note">
           Зажмите клавишу — говорите, отпустите — текст вставится туда, где курсор. Быстрое двойное нажатие — запись
           без рук до следующего нажатия. Esc — отмена. Выделите текст и зажмите Shift + клавишу — скажите, что с ним
@@ -814,6 +814,10 @@ export default function SettingsPage({
   const goTo = (id: string, sec: SettingsSection): void => {
     setQuery('')
     setSection(sec)
+    // Настройка может лежать в свёрнутом «Дополнительно» — раскрываем, иначе
+    // переход «молча не сработает» (ревью шага 3).
+    setDictMore(true)
+    setSttMore(true)
     setTarget(id)
   }
 

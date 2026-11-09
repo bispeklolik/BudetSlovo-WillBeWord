@@ -57,7 +57,16 @@ export function pageEntries(
 }
 
 export function computeStats(all: DictationEntry[], now: Date = new Date()): DictationStats {
-  const good = all.filter(isDictation)
+  // «Повторить» пишет в журнал ещё одну строку с тем же звуком и сегодняшней
+  // датой — считаем только первую удачную запись каждого звука (ревью шага 2).
+  const seenAudio = new Set<string>()
+  const good = all.filter((e) => {
+    if (!isDictation(e)) return false
+    if (!e.audio) return true
+    if (seenAudio.has(e.audio)) return false
+    seenAudio.add(e.audio)
+    return true
+  })
   const weekStart = now.getTime() - 7 * 86400_000
   let wordsWeek = 0
   let wordsMs = 0

@@ -273,7 +273,16 @@ export default function AppSidebar({
           <Tip label={`Настройка: ${setupDone} из ${setupTotal}`} side="right" disabled={!collapsed}>
             <button
               className="sb-setup"
-              onClick={() => onNavigate('home')}
+              onClick={() => {
+                // Чек-лист могли скрыть на Главной — карточка возвращает его (ревью шага 7).
+                try {
+                  localStorage.removeItem('slovo.checklistHidden')
+                } catch {
+                  /* без localStorage — просто на Главную */
+                }
+                window.dispatchEvent(new Event('slovo:checklist-show'))
+                onNavigate('home')
+              }}
               aria-label={`Настройка: ${setupDone} из ${setupTotal}. Открыть главную`}
               data-testid="sidebar-setup"
             >

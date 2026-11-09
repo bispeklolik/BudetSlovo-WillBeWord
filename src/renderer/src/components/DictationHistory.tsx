@@ -111,11 +111,14 @@ export default function DictationHistory(): React.JSX.Element {
   }, [load])
 
   const more = (): void => {
-    api.dictHistoryPage(PAGE, count.current).then((r) => {
-      count.current += r.items.length
-      setItems((prev) => [...prev, ...r.items])
-      setHasMore(r.hasMore)
-    })
+    api
+      .dictHistoryPage(PAGE, count.current)
+      .then((r) => {
+        count.current += r.items.length
+        setItems((prev) => [...prev, ...r.items])
+        setHasMore(r.hasMore)
+      })
+      .catch(() => showToast('Не удалось прочитать историю диктовок.'))
   }
 
   const stop = (): void => {

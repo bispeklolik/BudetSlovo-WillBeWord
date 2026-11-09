@@ -86,6 +86,11 @@ export default function Home({
   const [dicts, setDicts] = useState<DictationEntry[] | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [hidden, setHidden] = useState(readHidden)
+  useEffect(() => {
+    const show = (): void => setHidden(false)
+    window.addEventListener('slovo:checklist-show', show)
+    return () => window.removeEventListener('slovo:checklist-show', show)
+  }, [])
   const stats = useLibrary((s) => s.setup?.stats)
   const checklist = useChecklist()
 

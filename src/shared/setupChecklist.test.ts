@@ -20,6 +20,12 @@ describe('buildChecklist', () => {
     expect(done({ ...base, settings: { sttKeys: { deepgram: 'abc' } } }).stt).toBe(true)
     expect(done({ ...base, localSttInstalled: true }).stt).toBe(true)
   })
+  it('распознавание считается по выбранному движку (ревью шага 7)', () => {
+    expect(done({ ...base, settings: { sttEngine: 'deepgram', sttKeys: { groq: 'k' } } }).stt).toBe(false)
+    expect(done({ ...base, settings: { sttEngine: 'deepgram', sttKeys: { deepgram: 'k' } } }).stt).toBe(true)
+    expect(done({ ...base, settings: { sttEngine: 'local', sttKeys: { deepgram: 'k' } } }).stt).toBe(false)
+    expect(done({ ...base, settings: { sttEngine: 'local' }, localSttInstalled: true }).stt).toBe(true)
+  })
   it('ИИ: ключ Claude, OpenRouter или локальный', () => {
     expect(done({ ...base, settings: { anthropicKey: 'k' } }).ai).toBe(true)
     expect(done({ ...base, settings: { openrouterKey: 'k' } }).ai).toBe(true)
