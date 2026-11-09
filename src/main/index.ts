@@ -910,7 +910,8 @@ app.whenReady().then(() => {
   initDictation(win!, overlay, rendererUrl('overlay'), async (system, user) => {
     const provider = await prepareEngine()
     // Промт режима и проверка ответа — в shared/dictModes.ts и dictation/polish.ts.
-    return provider.generate(system, user)
+    // Диктовка ждёт ответа — берём быструю модель, если движок её умеет (Claude → Haiku).
+    return provider.generateFast ? provider.generateFast(system, user) : provider.generate(system, user)
   })
   applyDictationSettings(settings.dictation, settings.vocab)
 

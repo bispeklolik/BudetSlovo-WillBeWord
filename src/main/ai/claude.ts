@@ -1,3 +1,4 @@
+import Anthropic from '@anthropic-ai/sdk'
 import type {
   AiProvider,
   CleanupOptions,
@@ -6,6 +7,7 @@ import type {
   SummaryDomain
 } from './provider'
 import type { AnonRule } from '../../shared/types'
+import { DEFAULT_CLAUDE_MODEL, FAST_CLAUDE_MODEL, currentClaudeModel } from '../../shared/claudeModels'
 // Промты и парсеры общие с локальным провайдером — единый «контракт» задач.
 import {
   DEFAULT_SYSTEM,
@@ -19,15 +21,24 @@ import {
   parseHighlights
 } from './localLlama'
 
-// Облачный провайдер Claude (Anthropic API). Ключ задаёт пользователь в
-// настройках, хранится локально; обработка идёт на серверах Anthropic — только
-// для своего контента или ПОСЛЕ локального обезличивания.
-let apiKey = ''
-let model = 'claude-sonnet-4-6'
+// Облачный провайдер Claude (Anthropic API, официальная библиотека). Ключ задаёт
+// пользователь в настройках, хранится локально; обработка идёт на серверах Anthropic.
+//
+// Две «скорости» (решение 09.11.2026, волна 7):
+//  - быстрая — Claude Haiku 5.5 с effort low: чистка диктовки и правка голосом,
+//    где важна задержка (на простом тексте модель почти не думает);
+//  - умная — модель из настроек (Sonnet 5.5 по умолчанию, Opus 5.5 — «максимум»)
+//    с effort high: итоги, карточки, вопросы к записям, обезличивание.
+// У новых моделей мышление считается в max_tokens — поэтому лимиты с запасом,
+// а длинные ответы идут потоком (без таймаутов HTTP).
+
+let client: Anthropic | null = null
+let model = DEFAULT_CLAUDE_MODEL
 
 export function setClaudeConfig(key: string | undefined, mdl: string | undefined): void {
-  apiKey = (key ?? '').trim()
-  if (mdl) model = mdl
+  const apiKey = (key ?? '').trim()
+  client = apiKey ? new Anthropic({ apiKey, timeout: 300_000, maxRetries: 2 }) : null
+  model = currentClaudeModel(mdl)
 }
 
 // Claude иногда оборачивает JSON в ```-блок — достаём содержимое.
@@ -36,40 +47,59 @@ function jsonText(s: string): string {
   return (m ? m[1] : s).trim()
 }
 
-async function ask(system: string, user: string, maxTokens: number): Promise<string> {
-  if (!apiKey) throw new Error('AI_MODEL_MISSING')
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: 'user', content: user }]
-    }),
-    signal: AbortSignal.timeout(300_000)
-  })
-  if (!r.ok) {
-    const t = await r.text().catch(() => '')
-    if (r.status === 401) throw new Error('AI_KEY_INVALID')
-    throw new Error(`Claude HTTP ${r.status} ${t.slice(0, 200)}`)
-  }
-  const d = (await r.json()) as {
-    content?: { type: string; text?: string }[]
-    stop_reason?: string
-  }
-  let out = (d.content ?? [])
-    .filter((b) => b.type === 'text')
-    .map((b) => b.text ?? '')
+type Tier = 'fast' | 'smart'
+
+// Серверный запасной ход при отказе модели есть у Sonnet 5.5 и Opus 5.5 (у Haiku нет).
+const supportsFallback = (m: string): boolean => /^claude-(sonnet|opus)-5-5$/.test(m)
+
+function textOf(content: { type: string }[]): string {
+  return content
+    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+    .map((b) => b.text)
     .join('')
     .trim()
-  if (d.stop_reason === 'max_tokens')
-    out += '\n\n…[ответ обрезан по лимиту — попробуйте ещё раз]'
-  return out
+}
+
+function finish(stop: string | null | undefined, text: string): string {
+  // Отказ модели — не ошибка сети: говорим об этом прямо, текст не подменяем.
+  if (stop === 'refusal') throw new Error('AI_REFUSED')
+  if (stop === 'max_tokens') return text + '\n\n…[ответ обрезан по лимиту — попробуйте ещё раз]'
+  return text
+}
+
+async function ask(system: string, user: string, maxTokens: number, tier: Tier = 'smart'): Promise<string> {
+  if (!client) throw new Error('AI_MODEL_MISSING')
+  try {
+    if (tier === 'fast') {
+      const r = await client.messages.create({
+        model: FAST_CLAUDE_MODEL,
+        max_tokens: maxTokens,
+        output_config: { effort: 'low' },
+        system,
+        messages: [{ role: 'user', content: user }]
+      })
+      return finish(r.stop_reason, textOf(r.content))
+    }
+    const base = {
+      model,
+      max_tokens: maxTokens,
+      output_config: { effort: 'high' as const },
+      system,
+      messages: [{ role: 'user' as const, content: user }]
+    }
+    if (supportsFallback(model)) {
+      const r = await client.beta.messages
+        .stream({ ...base, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' })
+        .finalMessage()
+      return finish(r.stop_reason, textOf(r.content))
+    }
+    const r = await client.messages.stream(base).finalMessage()
+    return finish(r.stop_reason, textOf(r.content))
+  } catch (err) {
+    if (err instanceof Anthropic.AuthenticationError) throw new Error('AI_KEY_INVALID')
+    if (err instanceof Anthropic.APIError) throw new Error(`Claude HTTP ${err.status ?? ''} ${err.message.slice(0, 200)}`)
+    throw err
+  }
 }
 
 export const claudeProvider: AiProvider = {
@@ -78,27 +108,31 @@ export const claudeProvider: AiProvider = {
   isLocal: false,
 
   async isAvailable(): Promise<boolean> {
-    return !!apiKey
+    return !!client
   },
 
   async cleanupTurn(text: string, opts: CleanupOptions): Promise<CleanupResult> {
-    const raw = await ask(opts.systemPrompt || DEFAULT_SYSTEM, text, 1024)
+    const raw = await ask(opts.systemPrompt || DEFAULT_SYSTEM, text, 4096, 'fast')
     return parseResult(jsonText(raw), text)
   },
 
   async summarize(text: string, level: SummaryLevel, domain: SummaryDomain): Promise<string> {
-    return ask(SUMMARY_BASE + SUMMARY_DOMAIN[domain] + SUMMARY_LEVEL[level], text, 8000)
+    return ask(SUMMARY_BASE + SUMMARY_DOMAIN[domain] + SUMMARY_LEVEL[level], text, 32000)
   },
 
   async generate(system: string, text: string): Promise<string> {
-    return ask(system, text, 8000)
+    return ask(system, text, 32000)
+  },
+
+  async generateFast(system: string, text: string): Promise<string> {
+    return ask(system, text, 4096, 'fast')
   },
 
   async highlights(text: string): Promise<string[]> {
-    return parseHighlights(jsonText(await ask(HIGHLIGHTS_SYSTEM, text, 2000)))
+    return parseHighlights(jsonText(await ask(HIGHLIGHTS_SYSTEM, text, 16000)))
   },
 
   async anonymize(text: string): Promise<AnonRule[]> {
-    return parseAnon(jsonText(await ask(ANON_SYSTEM, text, 2000)))
+    return parseAnon(jsonText(await ask(ANON_SYSTEM, text, 16000)))
   }
 }

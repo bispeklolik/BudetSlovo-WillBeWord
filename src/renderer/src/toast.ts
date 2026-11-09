@@ -30,6 +30,7 @@ export function humanError(err: unknown): string {
   if (m.includes('AI_UNAVAILABLE')) return 'Не удалось запустить локальный ИИ (Ollama).'
   if (m.includes('AI_MODEL_MISSING')) return 'ИИ не настроен: проверьте модель или ключ в Настройках.'
   if (m.includes('AI_KEY_INVALID')) return 'Ключ не подошёл — проверьте его в Настройках.'
+  if (m.includes('AI_REFUSED')) return 'Модель отказалась обрабатывать этот текст. Попробуйте другую формулировку или другую модель.'
   if (m.includes('TimeoutError') || m.includes('не ответил вовремя'))
     return 'Сервис не ответил вовремя. Проверьте интернет и попробуйте ещё раз.'
   return m.replace(/^Error:\s*/, '')

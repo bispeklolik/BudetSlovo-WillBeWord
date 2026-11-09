@@ -10,6 +10,7 @@ import DictationHistory, { MicSelect } from './DictationHistory'
 import ConsentModal from './ConsentModal'
 import VocabPanel from './VocabPanel'
 import { DICT_KEYS } from '../dictKeys'
+import { currentClaudeModel } from '../../../shared/claudeModels'
 import McpSection from './McpSection'
 import { DICT_MODES, TONE_NAMES, findMode, type DictTone } from '../../../shared/dictModes'
 
@@ -28,8 +29,8 @@ const CALL_APP_NAMES: Record<string, string> = {
 
 const MODELS: { id: string; label: string }[] = [
   { id: 'claude-haiku-4-5', label: 'Haiku · дёшево' },
-  { id: 'claude-sonnet-4-6', label: 'Sonnet · баланс' },
-  { id: 'claude-opus-4-8', label: 'Opus · макс' }
+  { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5 · баланс' },
+  { id: 'claude-opus-5-5', label: 'Opus 5.5 · максимум' }
 ]
 
 export default function SettingsModal({
@@ -53,7 +54,7 @@ export default function SettingsModal({
   const [aiReady, setAiReady] = useState<boolean | null>(null)
   const [engine, setEngine] = useState<AiEngine>('local-llama')
   const [key, setKey] = useState('')
-  const [model, setModel] = useState('claude-sonnet-4-6')
+  const [model, setModel] = useState('claude-sonnet-5-5')
   const [orKey, setOrKey] = useState('')
   const [orModel, setOrModel] = useState('anthropic/claude-sonnet-5')
   const [stt, setStt] = useState<SttEngine>('local')
@@ -76,7 +77,8 @@ export default function SettingsModal({
     api.getSettings().then((s) => {
       setEngine(s.aiEngine ?? 'local-llama')
       setKey(s.anthropicKey ?? '')
-      setModel(s.claudeModel ?? 'claude-sonnet-4-6')
+      // Старые модели (4.x, 5) показываем как их замену 5.5 — так работает и main (claude.ts).
+      setModel(currentClaudeModel(s.claudeModel))
       setOrKey(s.openrouterKey ?? '')
       setOrModel(s.openrouterModel ?? 'anthropic/claude-sonnet-5')
       setStt(s.sttEngine ?? 'local')

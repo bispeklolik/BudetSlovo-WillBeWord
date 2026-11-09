@@ -72,11 +72,15 @@ export function acceptPolished(
   // Чистка убирает паразиты, но не половину смысла: сильно короче — модель
   // что-то выкинула; сильно длиннее — модель отвечала или сочиняла.
   const [minK, maxK, maxAdd, keep] = opts.reformat ? [0.25, 3, 300, 0.5] : [0.4, 1.6, 60, 0.75]
-  if (p.length < r.length * minK) return null
+  const want = contentWords(r)
+  // Проверка «сильно короче» — только для коротких надиктовок, где не по чему
+  // сверить смысл. Иначе смысл сверяем по значимым словам ниже: самоисправление
+  // («нет, не во вторник, а в среду, в среду в пять») законно сокращает фразу
+  // втрое, и облачная модель делает это правильно (живой прогон Haiku 5.5, 09.11.2026).
+  if (want.length < 3 && p.length < r.length * minK) return null
   if (p.length > r.length * maxK + maxAdd) return null
   // Большинство значимых слов надиктовки должно остаться (с поправкой на
   // самоисправления, которые законно убирают слово-другое).
-  const want = contentWords(r)
   if (want.length >= 3) {
     const have = new Set(contentWords(p))
     const kept = want.filter((w) => have.has(w) || [...have].some((h) => h.startsWith(w.slice(0, 5)))).length

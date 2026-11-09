@@ -24,6 +24,7 @@ function errText(err: unknown): string {
   if (m.includes('AI_UNAVAILABLE')) return 'Не удалось запустить локальный ИИ (Ollama).'
   if (m.includes('AI_MODEL_MISSING')) return 'ИИ-модель/ключ не готовы — проверьте настройки.'
   if (m.includes('AI_KEY_INVALID')) return 'Неверный ключ Claude — проверьте в настройках.'
+  if (m.includes('AI_REFUSED')) return 'Модель отказалась обрабатывать этот текст. Попробуйте другую формулировку или другую модель.'
   return 'Ошибка: ' + m
 }
 
