@@ -8,7 +8,8 @@ import Home from './views/Home'
 import Library from './views/Library'
 import Editor from './views/Editor'
 import Welcome from './views/Welcome'
-import SettingsModal from './components/SettingsModal'
+import SettingsPage from './views/Settings'
+import type { SettingsSection } from '../../shared/settingsIndex'
 import DictationRecorder from './components/DictationRecorder'
 import DictOverlay from './components/DictOverlay'
 import CallRecorder from './components/CallRecorder'
@@ -25,6 +26,7 @@ type View =
   | { page: 'home' }
   | { page: 'library' }
   | { page: 'notes' }
+  | { page: 'settings'; section?: SettingsSection; rev: number }
   | { page: 'editor'; slug: string; search?: string; sec?: number; from: NavPage }
 
 const COLLAPSED_KEY = 'slovo.sidebarCollapsed'
@@ -49,7 +51,6 @@ function MainApp(): React.JSX.Element {
   const [dragging, setDragging] = useState(false)
   const [importing, setImporting] = useState<string | null>(null) // перетаскивание файла
   const [importBusy, setImportBusy] = useState<string | null>(null) // диалог «Импорт»
-  const [settingsOpen, setSettingsOpen] = useState<{ section?: 'dictation' } | null>(null)
   // Мастер «С чего начнём?»: сам — при первом запуске, вручную — из настроек.
   const [welcomeOpen, setWelcomeOpen] = useState(false)
   // Запись звонка: окно записи и полоса-подсказка «похоже, идёт звонок».
@@ -64,8 +65,6 @@ function MainApp(): React.JSX.Element {
   const refreshNotes = useLibrary((s) => s.refreshNotes)
   const loadFolders = useLibrary((s) => s.loadFolders)
   const watchJobs = useLibrary((s) => s.watchJobs)
-  // Главная перечитывает настройки диктовки после закрытия окна настроек.
-  const [settingsRev, setSettingsRev] = useState(0)
   const projects = useLibrary((s) => s.projects)
 
   // Библиотека: первая загрузка и фоновые обновления (телефон, папка-наблюдатель, ссылки).
@@ -83,6 +82,8 @@ function MainApp(): React.JSX.Element {
   // освежаем при каждой смене страницы (ревью волны 7).
   useEffect(() => {
     refreshNotes()
+    // Настройки могли поменять порог пауз и т.п. — подтянуть в редактор.
+    void api.getSettings().then(setSettings)
   }, [view.page, refreshNotes])
 
   useEffect(
@@ -135,6 +136,9 @@ function MainApp(): React.JSX.Element {
       return !v
     })
   }
+
+  const openSettings = (section?: SettingsSection): void =>
+    setView((v) => ({ page: 'settings', section, rev: v.page === 'settings' ? v.rev + 1 : 0 }))
 
   const openRecord = (slug: string, search?: string, sec?: number): void =>
     setView((v) => ({
@@ -227,7 +231,7 @@ function MainApp(): React.JSX.Element {
   const showWelcome = !!settings && (welcomeOpen || !settings.onboarded)
   const navPage: NavPage = view.page === 'editor' ? view.from : view.page
   const goBack = (): void => {
-    if (view.page === 'editor') setView({ page: view.from })
+    if (view.page === 'editor') setView({ page: view.from === 'settings' ? 'home' : view.from })
   }
 
   // Окна «Добавить запись»: живут здесь, а не на странице — первая запись с телефона
@@ -251,15 +255,15 @@ function MainApp(): React.JSX.Element {
             page={navPage}
             collapsed={collapsed}
             onToggleCollapsed={toggleCollapsed}
-            onNavigate={(p) => setView({ page: p })}
+            onNavigate={(p) => (p === 'settings' ? openSettings() : setView({ page: p }))}
             onRecordCall={() => setCallRec({})}
             onImport={() => void doImport()}
             importBusy={importBusy}
             onAdd={setAddModal}
             onAsk={() => setAsk({ folder: null })}
-            onDictation={() => setSettingsOpen({ section: 'dictation' })}
+            onDictation={() => openSettings('dictation')}
             onVocab={setVocab}
-            onSettings={() => setSettingsOpen({})}
+            onSettings={() => openSettings()}
           />
         )}
         <div className="shell-main">
@@ -303,13 +307,12 @@ function MainApp(): React.JSX.Element {
             />
           ) : view.page === 'home' ? (
             <Home
-              key={'home-' + settingsRev}
               onOpen={(slug) => openRecord(slug)}
               onOpenWelcome={() => setWelcomeOpen(true)}
               onRecordCall={() => setCallRec({})}
               onImport={() => void doImport()}
               importBusy={importBusy}
-              onDictation={() => setSettingsOpen({ section: 'dictation' })}
+              onDictation={() => openSettings('dictation')}
             />
           ) : view.page === 'library' ? (
             <Library
@@ -320,6 +323,17 @@ function MainApp(): React.JSX.Element {
               importBusy={importBusy}
               onAdd={setAddModal}
               onAsk={(folder) => setAsk({ folder })}
+            />
+          ) : view.page === 'settings' ? (
+            <SettingsPage
+              key={view.rev}
+              theme={settings?.theme ?? 'light'}
+              initialSection={view.section}
+              onToggleTheme={toggleTheme}
+              onOpenWelcome={() => setWelcomeOpen(true)}
+              onVocab={setVocab}
+              vocabOpen={vocab !== null}
+              onAdd={setAddModal}
             />
           ) : view.page === 'notes' ? (
             <main className="home">
@@ -400,23 +414,6 @@ function MainApp(): React.JSX.Element {
           />
         )}
         {vocab && <VocabHost tab={vocab} onClose={() => setVocab(null)} />}
-        {settingsOpen && (
-          <SettingsModal
-            theme={settings?.theme ?? 'light'}
-            initialSection={settingsOpen.section}
-            onToggleTheme={toggleTheme}
-            onClose={() => {
-              setSettingsOpen(null)
-              setSettingsRev((r) => r + 1)
-              // Настройки могли поменять порог пауз и т.п. — подтянуть в редактор.
-              void api.getSettings().then(setSettings)
-            }}
-            onOpenWelcome={() => {
-              setSettingsOpen(null)
-              setWelcomeOpen(true)
-            }}
-          />
-        )}
       </div>
     </TipProvider>
   )

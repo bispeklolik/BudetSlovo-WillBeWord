@@ -24,7 +24,7 @@ import Tip from './Tip'
 // «Записи» (главная, записи с деревом папок, конспекты, спросить) и группа
 // «Диктовка». Внизу — настройки. 232 px, сворачивается в рейку 56 px.
 
-export type NavPage = 'home' | 'library' | 'notes'
+export type NavPage = 'home' | 'library' | 'notes' | 'settings'
 
 function NavItem({
   icon,
@@ -268,6 +268,7 @@ export default function AppSidebar({
         <NavItem
           icon={<Settings size={18} />}
           label="Настройки"
+          active={page === 'settings'}
           collapsed={collapsed}
           onClick={onSettings}
           testid="settings-btn"
