@@ -22,15 +22,18 @@ export default function VocabPanel({
   customModes,
   appRules,
   onSaveDict,
-  onClose
+  onClose,
+  initialTab
 }: {
   customModes: CustomDictMode[]
   appRules?: AppModeRule[]
   /** Одним вызовом: два подряд затирали друг друга (старое состояние в замыкании). */
   onSaveDict: (patch: { customModes: CustomDictMode[]; appRules: AppModeRule[] }) => void
   onClose: () => void
+  /** С какой вкладки открыть (боковое меню: «Словарь» / «Режимы»). */
+  initialTab?: 'words' | 'reps' | 'snippets' | 'modes' | 'apps'
 }): React.JSX.Element {
-  const [tab, setTab] = useState<Tab>('words')
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'words')
   const [words, setWords] = useState('')
   const [reps, setReps] = useState<Replacement[]>([])
   const [snips, setSnips] = useState<Snippet[]>([])

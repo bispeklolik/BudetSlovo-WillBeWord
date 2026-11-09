@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Note } from '../../../shared/types'
 import { api } from '../api'
 import NoteViewer from './NoteViewer'
+import { onActivate } from '../activate'
 
 const KIND_LABEL: Record<Note['kind'], string> = {
   summary: 'Саммари',
@@ -20,7 +21,7 @@ function fmtDate(iso: string): string {
 export default function NotesPane({
   onCountChange
 }: {
-  onCountChange: (n: number) => void
+  onCountChange?: (n: number) => void
 }): React.JSX.Element {
   const [notes, setNotes] = useState<Note[]>([])
   const [open, setOpen] = useState<Note | null>(null)
@@ -29,7 +30,7 @@ export default function NotesPane({
   const load = (): void => {
     api.listNotes().then((n) => {
       setNotes(n)
-      onCountChange(n.length)
+      onCountChange?.(n.length)
     })
   }
   useEffect(load, [])
@@ -58,7 +59,7 @@ export default function NotesPane({
         <div className="empty">
           <div className="empty-title">Здесь будут ваши конспекты</div>
           <div>
-            Откройте запись → «✨ ИИ» → «Сделать из текста…» → выберите карточку → «Сохранить в
+            Откройте запись → «ИИ» → «Сделать из текста…» → выберите карточку → «Сохранить в
             конспекты»
           </div>
         </div>
@@ -76,6 +77,7 @@ export default function NotesPane({
               role="button"
               tabIndex={0}
               onClick={() => setOpen(n)}
+              onKeyDown={onActivate(() => setOpen(n))}
             >
               <span className={'note-badge note-' + n.kind}>{KIND_LABEL[n.kind]}</span>
               <div className="project-card-title">{n.title}</div>

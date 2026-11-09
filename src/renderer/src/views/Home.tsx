@@ -1,516 +1,230 @@
-import { useEffect, useState } from 'react'
-import type { ProjectMeta, JobInfo, Note } from '../../../shared/types'
-import { searchProjects } from '../../../shared/search'
-import { buildFolderTree, ancestorPaths } from '../../../shared/folders'
+import { useEffect, useMemo, useState } from 'react'
+import * as Tabs from '@radix-ui/react-tabs'
+import { Copy, FileAudio, Mic, Phone, Plus, TriangleAlert } from 'lucide-react'
+import type { DictationEntry, DictationSettings } from '../../../shared/types'
+import { defaultDictation } from '../../../shared/types'
+import { buildFeed, groupFeed, type FeedItem } from '../../../shared/feed'
 import { api } from '../api'
-import { showToast, humanError } from '../toast'
+import { showToast } from '../toast'
+import { onActivate } from '../activate'
+import { useLibrary } from '../library'
+import { hotkeyLabel } from '../dictKeys'
 import EngineStatus from '../components/EngineStatus'
-import Icon from '../components/Icon'
-import Sidebar, { NOTES_KEY } from '../components/Sidebar'
-import InputModal from '../components/InputModal'
-import MoveModal from '../components/MoveModal'
-import NotesPane from '../components/NotesPane'
-import AskPanel from '../components/AskPanel'
-import NoteViewer from '../components/NoteViewer'
-import AddMenu from '../components/AddMenu'
-import PhoneModal from '../components/PhoneModal'
-import LinkModal from '../components/LinkModal'
-import WatchModal from '../components/WatchModal'
+import Tip from '../components/Tip'
+import { Skeleton } from '../components/Skeleton'
 
-function fmtDuration(sec: number): string {
-  const t = Math.floor(sec)
-  const h = Math.floor(t / 3600)
-  const m = Math.floor((t % 3600) / 60)
-  const s = t % 60
-  return h > 0
-    ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-    : `${m}:${String(s).padStart(2, '0')}`
+// «Главная»: приветствие, одна строка про диктовку, три больших действия и
+// лента за дни — записи и диктовки вперемешку (фильтр Все / Записи / Диктовки).
+
+type Filter = 'all' | 'rec' | 'dict'
+
+function greeting(h = new Date().getHours()): string {
+  if (h < 5) return 'Доброй ночи'
+  if (h < 12) return 'Доброе утро'
+  if (h < 18) return 'Добрый день'
+  return 'Добрый вечер'
 }
 
-function fmtDate(iso: string): string {
+function fmtTime(iso: string): string {
   try {
-    return new Date(iso).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short' })
+    return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
   } catch {
-    return iso
+    return ''
   }
 }
 
-const SLUG_TYPE = 'text/slovo-slug'
-
-type Modal =
-  | { kind: 'createFolder' }
-  | { kind: 'renameFolder'; path: string }
-  | { kind: 'renameRecord'; p: ProjectMeta }
-  | { kind: 'moveRecord'; p: ProjectMeta }
-  | null
+function fmtDur(sec: number): string {
+  const t = Math.round(sec)
+  if (t < 60) return `${t} с`
+  const m = Math.round(t / 60)
+  if (m < 60) return `${m} мин`
+  return `${Math.floor(m / 60)} ч ${m % 60} мин`
+}
 
 export default function Home({
   onOpen,
   onOpenWelcome,
-  onRecordCall
+  onRecordCall,
+  onImport,
+  importBusy,
+  onDictation
 }: {
-  onOpen: (slug: string, search?: string, sec?: number) => void
+  onOpen: (slug: string) => void
   onOpenWelcome: () => void
   onRecordCall: () => void
+  onImport: () => void
+  importBusy: string | null
+  /** Открыть настройки на разделе диктовки. */
+  onDictation: () => void
 }): React.JSX.Element {
-  const [projects, setProjects] = useState<ProjectMeta[]>([])
-  const [folderList, setFolderList] = useState<string[]>([])
-  const [notesCount, setNotesCount] = useState(0)
-  const [busy, setBusy] = useState<string | null>(null)
-  const [folder, setFolder] = useState('') // '' = корень, '@notes' = конспекты, иначе путь
-  const [gq, setGq] = useState('') // глобальный поиск
-  const [dropKey, setDropKey] = useState<string | null>(null)
-  const [modal, setModal] = useState<Modal>(null)
-  const [jobs, setJobs] = useState<JobInfo[]>([])
-  const [askOpen, setAskOpen] = useState(false)
-  const [dyn, setDyn] = useState<{ phase: string } | null>(null)
-  const [resultNote, setResultNote] = useState<Note | null>(null)
-  const [addModal, setAddModal] = useState<'phone' | 'link' | 'watch' | null>(null)
+  const projects = useLibrary((s) => s.projects)
+  const error = useLibrary((s) => s.error)
+  const refresh = useLibrary((s) => s.refresh)
+  const [dict, setDict] = useState<DictationSettings | null>(null)
+  const [dicts, setDicts] = useState<DictationEntry[] | null>(null)
+  const [filter, setFilter] = useState<Filter>('all')
 
-  const refresh = (): void => {
-    api.listProjects().then(setProjects)
-  }
-  const refreshNotes = (): void => {
-    api.listNotes().then((n) => setNotesCount(n.length))
-  }
-  useEffect(refresh, [])
-  // Записи с телефона, из папки-наблюдателя и по ссылке появляются сами.
-  useEffect(() => api.onProjectsChanged(refresh), [])
-  useEffect(refreshNotes, [])
   useEffect(() => {
-    api.getSettings().then((s) => setFolderList(s.folders ?? []))
-  }, [])
-  useEffect(() => api.onImportProgress((p) => setBusy(p.phase === 'done' ? null : p.message)), [])
+    void refresh()
+    api.getSettings().then((s) => setDict({ ...defaultDictation, ...s.dictation }))
+    api
+      .dictHistory()
+      .then(setDicts)
+      .catch(() => setDicts([]))
+  }, [refresh])
 
-  // Очередь расшифровок видна с главного экрана (важно при пакетном импорте).
-  useEffect(() => {
-    api.listJobs().then(setJobs)
-    return api.onJobUpdate((j) => {
-      setJobs((prev) => {
-        const i = prev.findIndex((x) => x.id === j.id)
-        const next = i >= 0 ? [...prev.slice(0, i), { ...j }, ...prev.slice(i + 1)] : [...prev, { ...j }]
-        return next
-      })
-      if (j.status === 'done') refresh()
-    })
-  }, [])
-
-  const activeJobs = jobs.filter((j) => j.status === 'queued' || j.status === 'running')
-  const jobTitle = (slug: string): string => projects.find((p) => p.slug === slug)?.title ?? slug
-
-  const persistFolders = async (next: string[]): Promise<void> => {
-    setFolderList(next)
-    await api.setSettings({ folders: next })
-  }
-
-  const doImport = async (): Promise<void> => {
-    setBusy('Открываю диалог…')
-    try {
-      const metas = await api.importAudio()
-      if (metas && metas.length === 1) {
-        refresh()
-        onOpen(metas[0].slug)
-      } else if (metas && metas.length > 1) {
-        refresh()
-        showToast(
-          `Импортировано записей: ${metas.length}. Расшифровка запущена — записи будут готовы по очереди.`,
-          'info'
-        )
-      }
-    } catch (err) {
-      showToast('Не удалось импортировать: ' + humanError(err))
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  // --- дерево папок: явные + выведенные из записей + все предки ---
-  const allPaths = new Set<string>(folderList)
-  for (const p of projects) if (p.folder) allPaths.add(p.folder)
-  const withAnc = [...ancestorPaths([...allPaths])]
-  const tree = buildFolderTree(withAnc)
-  const count = (path: string): number =>
-    projects.filter((p) => {
-      const f = p.folder ?? ''
-      return f === path || f.startsWith(path + '/')
-    }).length
-
-  const records = projects
-    .filter((p) => (p.folder ?? '') === folder)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  const hits = gq.trim() ? searchProjects(projects, gq) : null
-
-  // Динамика клиента: выжимка каждой сессии папки → что меняется от сессии к сессии.
-  const runDynamics = async (): Promise<void> => {
-    if (dyn) return
-    setDyn({ phase: 'Готовлю' })
-    const off = api.onAiProgress((p) => setDyn({ phase: p.phase }))
-    try {
-      const note = await api.clientDynamics(folder)
-      refreshNotes()
-      setResultNote(note)
-    } catch (e) {
-      showToast('Динамика не получилась: ' + humanError(e))
-    } finally {
-      off()
-      setDyn(null)
-    }
-  }
-
-  // --- действия с папками ---
-  const createFolder = (name: string): void => {
-    const base = folder && folder !== NOTES_KEY ? folder + '/' : ''
-    const np = base + name
-    if (!folderList.includes(np)) void persistFolders([...folderList, np])
-    setFolder(np)
-    setModal(null)
-  }
-  const renameFolder = async (oldPath: string, newName: string): Promise<void> => {
-    const parent = oldPath.includes('/') ? oldPath.slice(0, oldPath.lastIndexOf('/') + 1) : ''
-    const np = parent + newName
-    if (np === oldPath) {
-      setModal(null)
-      return
-    }
-    await api.renameFolder(oldPath, np) // переписывает префиксы у записей
-    const nl = folderList.map((f) =>
-      f === oldPath ? np : f.startsWith(oldPath + '/') ? np + f.slice(oldPath.length) : f
+  const loading = projects === null || dicts === null
+  const groups = useMemo(() => {
+    if (loading) return []
+    const feed = buildFeed(projects, dicts).filter((f) =>
+      filter === 'all' ? true : filter === 'rec' ? f.kind === 'rec' : f.kind === 'dict'
     )
-    await persistFolders(nl)
-    if (folder === oldPath || folder.startsWith(oldPath + '/')) setFolder(np + folder.slice(oldPath.length))
-    refresh()
-    setModal(null)
-  }
-  const deleteFolder = (path: string): void => {
-    if (count(path) > 0) {
-      showToast('В папке есть записи. Сначала переместите их в другую папку.', 'info')
-      return
-    }
-    void persistFolders(folderList.filter((f) => f !== path && !f.startsWith(path + '/')))
-    if (folder === path || folder.startsWith(path + '/')) setFolder('')
+    return groupFeed(feed)
+  }, [loading, projects, dicts, filter])
+
+  const copy = (text: string): void => {
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => showToast('Скопировано', 'info'))
+      .catch(() => showToast('Не удалось скопировать.'))
   }
 
-  // --- действия с записями ---
-  const renameRecord = async (slug: string, name: string): Promise<void> => {
-    await api.renameProject(slug, name)
-    refresh()
-    setModal(null)
-  }
-  const moveRecord = async (slug: string, dest: string): Promise<void> => {
-    await api.setFolder(slug, dest)
-    refresh()
-    setModal(null)
+  const row = (it: FeedItem, key: string): React.JSX.Element => {
+    if (it.kind === 'rec') {
+      return (
+        <div
+          key={key}
+          className="feed-row"
+          role="button"
+          tabIndex={0}
+          onClick={() => onOpen(it.slug)}
+          onKeyDown={onActivate(() => onOpen(it.slug))}
+        >
+          <span className="feed-ico" aria-hidden="true">
+            <FileAudio size={16} />
+          </span>
+          <span className="feed-time">{fmtTime(it.at)}</span>
+          <span className="feed-title">{it.title}</span>
+          <span className="feed-meta">{it.demo ? 'пример' : fmtDur(it.durationSec)}</span>
+        </div>
+      )
+    }
+    return (
+      <div key={key} className="feed-row feed-row-dict">
+        <span className="feed-ico feed-ico-dict" aria-hidden="true">
+          <Mic size={16} />
+        </span>
+        <span className="feed-time">{fmtTime(it.at)}</span>
+        <span className={'feed-title' + (it.failed ? ' feed-failed' : '')}>
+          {it.failed ? 'Диктовка не распозналась' : it.text || 'Пустая диктовка'}
+        </span>
+        {it.text && (
+          <Tip label="Копировать текст">
+            <button
+              className="btn-icon feed-copy"
+              aria-label="Копировать текст диктовки"
+              onClick={() => copy(it.text)}
+            >
+              <Copy size={15} />
+            </button>
+          </Tip>
+        )}
+      </div>
+    )
   }
 
-  // --- перетаскивание записи на папку дерева ---
-  const allowDrop = (e: React.DragEvent, key: string): void => {
-    if (e.dataTransfer.types.includes(SLUG_TYPE)) {
-      e.preventDefault()
-      if (dropKey !== key) setDropKey(key)
-    }
-  }
-  const dropRecord = (e: React.DragEvent, dest: string): void => {
-    e.preventDefault()
-    setDropKey(null)
-    const slug = e.dataTransfer.getData(SLUG_TYPE)
-    if (slug) {
-      const cur = projects.find((p) => p.slug === slug)
-      if (cur && (cur.folder ?? '') !== dest) void moveRecord(slug, dest)
-    }
-  }
-
-  // Окна «Ещё ▾» — вне веток пустого и обычного экрана: первая запись с телефона
-  // переключает ветку, и окно (с сервером приёма) не должно пересоздаваться
-  // (ревью волны 5: телефон терял файлы 2..N).
-  const openAdded = (slug: string): void => {
-    setAddModal(null)
-    onOpen(slug)
-  }
-  const withAdd = (body: React.JSX.Element): React.JSX.Element => (
+  const status = dict?.enabled ? (
     <>
-      {body}
-      {addModal === 'phone' && <PhoneModal onOpen={openAdded} onClose={() => setAddModal(null)} />}
-      {addModal === 'link' && <LinkModal onOpen={openAdded} onClose={() => setAddModal(null)} />}
-      {addModal === 'watch' && <WatchModal onClose={() => setAddModal(null)} />}
+      <span className="status-dot is-on" aria-hidden="true" />
+      Диктовка включена · {hotkeyLabel(dict.hotkey)}
     </>
+  ) : dict ? (
+    <>
+      <span className="status-dot" aria-hidden="true" />
+      Диктовка выключена
+      <button className="btn btn-sm" onClick={onDictation}>
+        Включить
+      </button>
+    </>
+  ) : (
+    <Skeleton width={220} height={18} />
   )
 
-  // Первый запуск: ни одной записи — приветствие.
-  if (projects.length === 0) {
-    return withAdd(
-      <main className="home">
-        <div className="empty welcome">
-          <div className="welcome-badge">
-            <Icon name="wave" size={32} />
-          </div>
-          <div className="empty-title">Добро пожаловать в «Слово»</div>
-          <div className="welcome-sub">
-            Превращаю запись разговора в текст и готовые результаты: конспект, заметку, письмо.
-          </div>
-          <EngineStatus onOpenWelcome={onOpenWelcome} />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              className="btn btn-primary"
-              onClick={doImport}
-              disabled={busy !== null}
-              data-testid="import-btn"
-            >
-              {busy ?? 'Импортировать запись'}
-            </button>
-            <button className="btn" onClick={onRecordCall}>
-              Записать звонок
-            </button>
-            <AddMenu onPhone={() => setAddModal('phone')} onLink={() => setAddModal('link')} onWatch={() => setAddModal('watch')} />
-          </div>
-          <div className="welcome-hint">или перетащите файл аудио/видео прямо в это окно</div>
+  return (
+    <main className="start-page">
+      <div className="start-inner">
+        <h1 className="start-title">{greeting()}</h1>
+        <div className="start-status">{status}</div>
+
+        <div className="start-actions">
+          <button className="start-btn" onClick={onDictation}>
+            <Mic size={20} aria-hidden="true" />
+            <span>Диктовать</span>
+          </button>
+          <button className="start-btn" onClick={onRecordCall}>
+            <Phone size={20} aria-hidden="true" />
+            <span>Записать звонок</span>
+          </button>
+          <button className="start-btn" onClick={onImport} disabled={importBusy !== null}>
+            <Plus size={20} aria-hidden="true" />
+            <span>{importBusy ?? 'Добавить запись'}</span>
+          </button>
         </div>
-      </main>
-    )
-  }
 
-  const folderTitle = folder === '' ? 'Все записи' : folder.split('/').pop()
+        <EngineStatus onOpenWelcome={onOpenWelcome} />
 
-  return withAdd(
-    <main className="home">
-      <div className="home-toolbar">
-        <button
-          className="btn btn-primary"
-          onClick={doImport}
-          disabled={busy !== null}
-          data-testid="import-btn"
-        >
-          {busy ?? 'Импортировать запись'}
-        </button>
-        <button className="btn" onClick={onRecordCall}>
-          Записать звонок
-        </button>
-        <AddMenu onPhone={() => setAddModal('phone')} onLink={() => setAddModal('link')} onWatch={() => setAddModal('watch')} />
-        <button className="btn" onClick={() => setAskOpen(true)} title="Вопрос по всем записям — ответ со ссылками">
-          Спросить записи
-        </button>
-        <div className="global-search">
-          <Icon name="search" size={16} />
-          <input
-            className="global-search-input"
-            placeholder="Поиск по всем записям…"
-            value={gq}
-            onChange={(e) => setGq(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setGq('')
-            }}
-          />
-          {gq && (
-            <button className="btn-icon" onClick={() => setGq('')} title="Очистить">
-              <Icon name="x" size={15} />
-            </button>
-          )}
-        </div>
-      </div>
+        <Tabs.Root value={filter} onValueChange={(v) => setFilter(v as Filter)}>
+          <div className="feed-head">
+            <h2 className="feed-h">Недавнее</h2>
+            <Tabs.List className="seg" aria-label="Что показывать">
+              <Tabs.Trigger className="seg-btn" value="all">
+                Все
+              </Tabs.Trigger>
+              <Tabs.Trigger className="seg-btn" value="rec">
+                Записи
+              </Tabs.Trigger>
+              <Tabs.Trigger className="seg-btn" value="dict">
+                Диктовки
+              </Tabs.Trigger>
+            </Tabs.List>
+          </div>
 
-      <EngineStatus onOpenWelcome={onOpenWelcome} />
-      {activeJobs.length > 0 && (
-        <div className="queue-strip">
-          {activeJobs.map((j) => (
-            <div className="queue-item" key={j.id}>
-              <span className="queue-dot" />
-              <span className="queue-title">{jobTitle(j.slug)}</span>
-              <span className="queue-phase">
-                {j.status === 'queued' ? 'в очереди' : j.phase}
-                {j.percent !== null && j.status === 'running' ? ` · ${j.percent}%` : ''}
-              </span>
-              <button className="btn-icon" title="Отменить" onClick={() => api.cancelJob(j.id)}>
-                <Icon name="x" size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="home-body">
-        <Sidebar
-          tree={tree}
-          selected={folder}
-          totalCount={projects.length}
-          notesCount={notesCount}
-          count={count}
-          dropKey={dropKey}
-          onSelect={setFolder}
-          onCreateFolder={() => setModal({ kind: 'createFolder' })}
-          onRenameFolder={(path) => setModal({ kind: 'renameFolder', path })}
-          onDeleteFolder={deleteFolder}
-          onAllowDrop={allowDrop}
-          onDragLeave={() => setDropKey(null)}
-          onDropRecord={dropRecord}
-        />
-
-        <section className="records-pane">
-          {hits ? (
-            <>
-              <div className="pane-head">Найдено записей: {hits.length}</div>
-              {hits.length === 0 ? (
-                <div className="empty">
-                  <div className="empty-title">Ничего не найдено</div>
-                  <div>Попробуйте другое слово</div>
-                </div>
-              ) : (
-                <div className="result-list">
-                  {hits.map((h) => (
-                    <button
-                      key={h.slug}
-                      className="result-item"
-                      onClick={() => onOpen(h.slug, gq.trim())}
-                    >
-                      <div className="result-item-title">
-                        <span>{h.title}</span>
-                        <span className="result-count">{h.count}</span>
-                      </div>
-                      <div className="result-snippet">{h.snippet}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : folder === NOTES_KEY ? (
-            <NotesPane onCountChange={setNotesCount} />
-          ) : (
-            <>
-              <div className="pane-head">
-                {folderTitle} <span className="pane-count">{records.length}</span>
-                {folder !== '' && (
-                  <button
-                    className="btn btn-sm"
-                    style={{ marginLeft: 'auto' }}
-                    onClick={() => void runDynamics()}
-                    disabled={!!dyn || count(folder) < 2}
-                    title={
-                      count(folder) < 2
-                        ? 'Нужны хотя бы две записи в папке'
-                        : 'Что меняется у клиента от сессии к сессии — по всем записям папки'
-                    }
-                  >
-                    {dyn ? dyn.phase + '…' : 'Динамика клиента'}
-                  </button>
-                )}
+          <Tabs.Content value={filter} forceMount>
+            {error && projects === null ? (
+              <div className="feed-empty">
+                <TriangleAlert size={22} aria-hidden="true" />
+                <div>Не удалось загрузить записи. {error}</div>
+                <button className="btn btn-sm" onClick={() => void refresh()}>
+                  Повторить
+                </button>
               </div>
-              {records.length === 0 ? (
-                <div className="empty">
-                  <div className="empty-title">В этой папке пока нет записей</div>
-                  <div>Перетащите сюда запись или переместите её кнопкой «папка» на карточке</div>
+            ) : loading ? (
+              <div className="feed-skel" aria-label="Загружаю ленту" aria-busy="true">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <Skeleton key={i} height={44} radius={10} />
+                ))}
+              </div>
+            ) : groups.length === 0 ? (
+              <div className="feed-empty">
+                <div>
+                  {filter === 'dict'
+                    ? 'Диктовок пока нет. Включите диктовку и зажмите клавишу.'
+                    : filter === 'rec'
+                      ? 'Записей пока нет. Нажмите «Добавить запись» или «Записать звонок».'
+                      : 'Пока пусто. Продиктуйте что-нибудь или добавьте запись.'}
                 </div>
-              ) : (
-                <div className="project-grid">
-                  {records.map((p) => (
-                    <div
-                      key={p.slug}
-                      className="project-card"
-                      role="button"
-                      tabIndex={0}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData(SLUG_TYPE, p.slug)
-                        e.dataTransfer.effectAllowed = 'move'
-                      }}
-                      onDragEnd={() => setDropKey(null)}
-                      onClick={() => onOpen(p.slug)}
-                    >
-                      <div className="project-card-title">{p.title}</div>
-                      <div className="project-card-meta">
-                        {fmtDuration(p.audio.durationSec)} · {fmtDate(p.createdAt)}
-                      </div>
-                      <div className="card-actions">
-                        <button
-                          title="Переименовать"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setModal({ kind: 'renameRecord', p })
-                          }}
-                        >
-                          <Icon name="edit" />
-                        </button>
-                        <button
-                          title="Переместить в папку"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setModal({ kind: 'moveRecord', p })
-                          }}
-                        >
-                          <Icon name="folder" />
-                        </button>
-                        <button
-                          title="Удалить запись"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (
-                              window.confirm(
-                                `Удалить запись «${p.title}»? Она переедет в Корзину — можно восстановить.`
-                              )
-                            ) {
-                              api.deleteProject(p.slug).then(refresh)
-                            }
-                          }}
-                        >
-                          <Icon name="x" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </section>
+              </div>
+            ) : (
+              groups.map((g) => (
+                <section key={g.group} className="feed-group">
+                  <h3 className="feed-day">{g.label}</h3>
+                  {g.items.map((it, i) => row(it, g.group + i + it.at))}
+                </section>
+              ))
+            )}
+          </Tabs.Content>
+        </Tabs.Root>
       </div>
-
-      {askOpen && (
-        <AskPanel
-          mode="all"
-          folder={folder && folder !== NOTES_KEY ? folder : null}
-          onOpen={(slug, sec) => {
-            setAskOpen(false)
-            onOpen(slug, undefined, sec)
-          }}
-          onClose={() => setAskOpen(false)}
-        />
-      )}
-      {resultNote && (
-        <NoteViewer note={resultNote} onClose={() => setResultNote(null)} onChanged={refreshNotes} />
-      )}
-      {modal?.kind === 'createFolder' && (
-        <InputModal
-          title="Новая папка"
-          label={folder && folder !== NOTES_KEY ? `Внутри «${folderTitle}»` : 'В корне'}
-          placeholder="Название папки"
-          submitLabel="Создать"
-          onSubmit={createFolder}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {modal?.kind === 'renameFolder' && (
-        <InputModal
-          title="Переименовать папку"
-          initial={modal.path.split('/').pop()}
-          submitLabel="Сохранить"
-          onSubmit={(n) => void renameFolder(modal.path, n)}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {modal?.kind === 'renameRecord' && (
-        <InputModal
-          title="Переименовать запись"
-          initial={modal.p.title}
-          submitLabel="Сохранить"
-          onSubmit={(n) => void renameRecord(modal.p.slug, n)}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {modal?.kind === 'moveRecord' && (
-        <MoveModal
-          folders={withAnc}
-          current={modal.p.folder}
-          onPick={(d) => void moveRecord(modal.p.slug, d)}
-          onClose={() => setModal(null)}
-        />
-      )}
     </main>
   )
 }

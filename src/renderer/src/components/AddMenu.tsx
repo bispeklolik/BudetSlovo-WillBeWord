@@ -1,50 +1,55 @@
-import { useEffect, useRef, useState } from 'react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { ChevronDown, FileAudio, FolderSync, Link2, Smartphone } from 'lucide-react'
 
-// Главный экран → «Ещё ▾»: другие способы добавить запись (волна 5).
+// «Добавить запись»: меню способов (Radix DropdownMenu — стрелки, Esc, фокус сами).
+// Используется в боковом меню (кнопка «+ Добавить запись», с пунктом «Файл…»)
+// и на странице «Записи» (кнопка «Ещё», без пункта «Файл» — он там отдельной кнопкой).
 
 export default function AddMenu({
+  onFile,
   onPhone,
   onLink,
-  onWatch
+  onWatch,
+  trigger,
+  side = 'bottom',
+  align = 'start'
 }: {
+  onFile?: () => void
   onPhone: () => void
   onLink: () => void
   onWatch: () => void
+  /** Своя кнопка-триггер (иначе «Ещё»). */
+  trigger?: React.ReactNode
+  side?: 'bottom' | 'right'
+  align?: 'start' | 'end'
 }): React.JSX.Element {
-  const [open, setOpen] = useState(false)
-  const wrapRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const onDoc = (e: MouseEvent): void => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [])
-
-  const pick = (fn: () => void): void => {
-    setOpen(false)
-    fn()
-  }
-
   return (
-    <div className="export-wrap" ref={wrapRef}>
-      <button className="btn" onClick={() => setOpen((v) => !v)}>
-        Ещё ▾
-      </button>
-      {open && (
-        <div className="export-menu">
-          <button className="export-item" onClick={() => pick(onPhone)}>
-            С телефона (QR-код)
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        {trigger ?? (
+          <button className="btn">
+            Ещё <ChevronDown size={14} aria-hidden="true" />
           </button>
-          <button className="export-item" onClick={() => pick(onLink)}>
-            По ссылке (YouTube, VK, RuTube…)
-          </button>
-          <button className="export-item" onClick={() => pick(onWatch)}>
-            Папка-наблюдатель…
-          </button>
-        </div>
-      )}
-    </div>
+        )}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content className="dd-content" side={side} align={align} sideOffset={6}>
+          {onFile && (
+            <DropdownMenu.Item className="dd-item" onSelect={onFile}>
+              <FileAudio size={16} /> Файл с компьютера…
+            </DropdownMenu.Item>
+          )}
+          <DropdownMenu.Item className="dd-item" onSelect={onPhone}>
+            <Smartphone size={16} /> С телефона (QR-код)
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className="dd-item" onSelect={onLink}>
+            <Link2 size={16} /> По ссылке (YouTube, VK, RuTube…)
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className="dd-item" onSelect={onWatch}>
+            <FolderSync size={16} /> Папка-наблюдатель…
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   )
 }

@@ -1,12 +1,17 @@
 import { useState } from 'react'
+import { ChevronDown, ChevronRight, Folder, FolderPlus, Pencil, X } from 'lucide-react'
 import type { FolderNode } from '../../../shared/folders'
-import Icon from './Icon'
+import { onActivate } from '../activate'
 
-interface SidebarProps {
+// Дерево папок в боковом меню под пунктом «Записи» (раньше — отдельная колонка
+// главной страницы). Перетаскивание карточки на папку, переименование,
+// удаление и создание папки работают как раньше.
+
+interface FolderTreeProps {
   tree: FolderNode[]
-  selected: string // '' = «Все записи», '@notes' = Конспекты
+  selected: string // '' = «Все записи»
+  active: boolean // открыта ли сейчас страница «Записи»
   totalCount: number
-  notesCount: number
   count: (path: string) => number
   dropKey: string | null
   onSelect: (path: string) => void
@@ -18,10 +23,8 @@ interface SidebarProps {
   onDropRecord: (e: React.DragEvent, path: string) => void
 }
 
-export const NOTES_KEY = '@notes'
-
-export default function Sidebar(props: SidebarProps): React.JSX.Element {
-  const { tree, selected, dropKey } = props
+export default function FolderTree(props: FolderTreeProps): React.JSX.Element {
+  const { tree, selected, active, dropKey } = props
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const toggle = (path: string): void =>
     setCollapsed((prev) => {
@@ -39,13 +42,14 @@ export default function Sidebar(props: SidebarProps): React.JSX.Element {
         <div
           className={
             'tree-row' +
-            (selected === node.path ? ' is-selected' : '') +
+            (active && selected === node.path ? ' is-selected' : '') +
             (dropKey === node.path ? ' drop-hover' : '')
           }
           style={{ paddingLeft: 8 + depth * 14 }}
           role="button"
           tabIndex={0}
           onClick={() => props.onSelect(node.path)}
+          onKeyDown={onActivate(() => props.onSelect(node.path))}
           onDragOver={(e) => props.onAllowDrop(e, node.path)}
           onDragLeave={props.onDragLeave}
           onDrop={(e) => props.onDropRecord(e, node.path)}
@@ -53,37 +57,41 @@ export default function Sidebar(props: SidebarProps): React.JSX.Element {
           {hasKids ? (
             <button
               className="tree-toggle"
+              aria-label={open ? 'Свернуть папку' : 'Развернуть папку'}
+              aria-expanded={open}
               onClick={(e) => {
                 e.stopPropagation()
                 toggle(node.path)
               }}
             >
-              {open ? '▾' : '▸'}
+              {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
           ) : (
             <span className="tree-toggle-spacer" />
           )}
-          <Icon name="folder" size={16} />
+          <Folder size={16} />
           <span className="tree-name">{node.name}</span>
           <span className="tree-count">{props.count(node.path)}</span>
           <span className="tree-actions">
             <button
               title="Переименовать папку"
+              aria-label="Переименовать папку"
               onClick={(e) => {
                 e.stopPropagation()
                 props.onRenameFolder(node.path)
               }}
             >
-              <Icon name="edit" size={14} />
+              <Pencil size={14} />
             </button>
             <button
               title="Удалить пустую папку"
+              aria-label="Удалить пустую папку"
               onClick={(e) => {
                 e.stopPropagation()
                 props.onDeleteFolder(node.path)
               }}
             >
-              <Icon name="x" size={14} />
+              <X size={14} />
             </button>
           </span>
         </div>
@@ -93,11 +101,11 @@ export default function Sidebar(props: SidebarProps): React.JSX.Element {
   }
 
   return (
-    <aside className="sidebar">
+    <div className="folder-tree">
       <button
         className={
           'tree-row root' +
-          (selected === '' ? ' is-selected' : '') +
+          (active && selected === '' ? ' is-selected' : '') +
           (dropKey === '' ? ' drop-hover' : '')
         }
         onClick={() => props.onSelect('')}
@@ -106,7 +114,7 @@ export default function Sidebar(props: SidebarProps): React.JSX.Element {
         onDrop={(e) => props.onDropRecord(e, '')}
       >
         <span className="tree-toggle-spacer" />
-        <Icon name="folder" size={16} />
+        <Folder size={16} />
         <span className="tree-name">Все записи</span>
         <span className="tree-count">{props.totalCount}</span>
       </button>
@@ -114,18 +122,8 @@ export default function Sidebar(props: SidebarProps): React.JSX.Element {
       <div className="tree-scroll">{tree.map((n) => renderNode(n, 0))}</div>
 
       <button className="sidebar-add" onClick={props.onCreateFolder}>
-        + Папка
+        <FolderPlus size={14} /> Новая папка
       </button>
-
-      <button
-        className={'tree-row notes' + (selected === NOTES_KEY ? ' is-selected' : '')}
-        onClick={() => props.onSelect(NOTES_KEY)}
-      >
-        <span className="tree-toggle-spacer" />
-        <Icon name="sparkles" size={16} />
-        <span className="tree-name">Конспекты</span>
-        <span className="tree-count">{props.notesCount}</span>
-      </button>
-    </aside>
+    </div>
   )
 }

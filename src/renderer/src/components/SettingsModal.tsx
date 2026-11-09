@@ -9,27 +9,9 @@ import { showToast, humanError } from '../toast'
 import DictationHistory, { MicSelect } from './DictationHistory'
 import ConsentModal from './ConsentModal'
 import VocabPanel from './VocabPanel'
+import { DICT_KEYS } from '../dictKeys'
 import McpSection from './McpSection'
 import { DICT_MODES, TONE_NAMES, findMode, type DictTone } from '../../../shared/dictModes'
-
-// Клавиши для диктовки: без левых модификаторов (они испортили бы Ctrl+V
-// вставку), одиночные и правые — то, что редко занято.
-const DICT_KEYS: { id: string; label: string }[] = [
-  { id: 'F9', label: 'F9' },
-  { id: 'F8', label: 'F8' },
-  { id: 'F6', label: 'F6' },
-  { id: 'F10', label: 'F10' },
-  { id: 'F12', label: 'F12' },
-  { id: 'ControlRight', label: 'Правый Ctrl' },
-  { id: 'AltRight', label: 'Правый Alt' },
-  { id: 'ShiftRight', label: 'Правый Shift' },
-  { id: 'CapsLock', label: 'CapsLock' },
-  { id: 'ScrollLock', label: 'ScrollLock' },
-  { id: 'Pause', label: 'Pause' },
-  { id: 'Insert', label: 'Insert' },
-  { id: 'NumpadAdd', label: 'Num +' },
-  { id: 'NumpadSubtract', label: 'Num −' }
-]
 
 // Подписи программ для списка «не предлагать запись» (id — из shared/callDetect).
 const CALL_APP_NAMES: Record<string, string> = {
@@ -54,14 +36,20 @@ export default function SettingsModal({
   theme,
   onToggleTheme,
   onClose,
-  onOpenWelcome
+  onOpenWelcome,
+  initialSection
 }: {
   theme: Theme
   onToggleTheme: () => void
   onClose: () => void
   onOpenWelcome: () => void
+  /** Прокрутить к разделу при открытии (боковое меню: «Диктовка»). */
+  initialSection?: 'dictation'
 }): React.JSX.Element {
   useEscClose(onClose)
+  useEffect(() => {
+    if (initialSection) document.getElementById('settings-' + initialSection)?.scrollIntoView()
+  }, [initialSection])
   const [aiReady, setAiReady] = useState<boolean | null>(null)
   const [engine, setEngine] = useState<AiEngine>('local-llama')
   const [key, setKey] = useState('')
@@ -406,7 +394,7 @@ export default function SettingsModal({
           )}
         </div>
 
-        <div className="settings-section">
+        <div className="settings-section" id="settings-dictation">
           <div className="settings-label">Диктовка в любое окно</div>
           <div className="settings-row">
             <span>Включена</span>
