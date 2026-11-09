@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ArrowLeft, Check, ChevronDown, Cloud, Eye, Monitor, X } from 'lucide-react'
 import { api } from '../api'
 import { showToast, humanError } from '../toast'
 import type { SetupInfo, SetupProgress, OllamaStatus, KeyVerdict, SttEngine, AiEngine } from '../../../shared/types'
@@ -14,9 +15,10 @@ import {
 
 // Первый запуск — «три двери» (образец — OpenWhispr: облако / свой ключ / на
 // устройстве; карточки моделей «точность/скорость» — Handy). У нас:
-//   1) посмотреть на примере — без настройки;
-//   2) облако по своему ключу — с кнопкой «Проверить ключ»;
-//   3) на этом компьютере — выбрать модель и скачать в фоне.
+//   1) облако по своему ключу — рекомендуем (точнее и быстрее), кнопка «Проверить»;
+//   2) посмотреть на примере — без настройки;
+//   3) на этом компьютере — запасной ход, под «Дополнительно»: выбрать модель и
+//      скачать в фоне (сама ничего не качается).
 
 type Door = 'doors' | 'cloud' | 'local'
 
@@ -94,7 +96,7 @@ function KeyField({
       <div className="key-meta">
         {verdict ? (
           <span className={verdict.ok ? 'key-ok' : 'key-bad'}>
-            {verdict.ok ? '✓ ' : '✗ '}
+            {verdict.ok ? <Check size={14} aria-hidden /> : <X size={14} aria-hidden />}{' '}
             {verdict.message}
           </span>
         ) : (
@@ -108,7 +110,7 @@ function KeyField({
 }
 
 function CloudDoor({ onBack, onDone }: { onBack: () => void; onDone: () => void }): React.JSX.Element {
-  const [stt, setStt] = useState<SttEngine>('elevenlabs')
+  const [stt, setStt] = useState<SttEngine>('deepgram')
   const [sttKeys, setSttKeys] = useState<Record<string, string>>({})
   const [ai, setAi] = useState<AiEngine>('claude')
   const [aiKey, setAiKey] = useState('')
@@ -147,8 +149,8 @@ function CloudDoor({ onBack, onDone }: { onBack: () => void; onDone: () => void 
     <div className="welcome-door">
       <h2 className="welcome-h2">Облако по своему ключу</h2>
       <p className="welcome-lead">
-        Быстро и точно на любом компьютере. Запись уходит в выбранный сервис. Ключи хранятся только на этом
-        компьютере. Час записи стоит около 20–30 ₽ по тарифам сервисов.
+        Быстро и точно на любом компьютере. Звук обрабатывает выбранный вами сервис по вашему ключу. Ключи
+        хранятся только на этом компьютере. Час записи стоит около 20–30 ₽ по тарифам сервисов.
       </p>
 
       <section className="welcome-section">
@@ -202,7 +204,7 @@ function CloudDoor({ onBack, onDone }: { onBack: () => void; onDone: () => void 
 
       <div className="welcome-actions">
         <button className="btn" onClick={onBack}>
-          ← Назад
+          <ArrowLeft size={14} aria-hidden /> Назад
         </button>
         <button className="btn btn-primary" onClick={finish}>
           Готово
@@ -311,8 +313,9 @@ function LocalDoor({ onBack, onDone }: { onBack: () => void; onDone: () => void 
     <div className="welcome-door">
       <h2 className="welcome-h2">На этом компьютере</h2>
       <p className="welcome-lead">
-        Полная приватность: запись не покидает компьютер. Один раз скачиваем движок и модель — дальше всё
-        работает без интернета. Загрузка идёт в фоне: можно закрыть это окно и работать.
+        Запасной вариант: запись не покидает компьютер, но расшифровка медленнее и менее точна, чем в облаке.
+        Один раз скачиваем движок и модель — дальше всё работает без интернета. Загрузка идёт в фоне: можно
+        закрыть это окно и работать.
       </p>
 
       <div className="sys-line">
@@ -323,7 +326,7 @@ function LocalDoor({ onBack, onDone }: { onBack: () => void; onDone: () => void 
         </span>
         <span>
           Свободно на диске: {info.freeBytes === null ? '—' : formatBytes(info.freeBytes)}
-          {info.engine.installed && ' · движок уже установлен ✓'}
+          {info.engine.installed && ' · движок уже установлен'}
         </span>
       </div>
 
@@ -359,7 +362,7 @@ function LocalDoor({ onBack, onDone }: { onBack: () => void; onDone: () => void 
         <SetupProgressBar p={prog} onStop={() => api.stopSetup()} onResume={start} />
       ) : pickInstalled && info.engine.installed ? (
         <div className="setup-ready">
-          ✓ Всё готово: модель «{localModel(pick).label}» установлена.{' '}
+          <Check size={14} aria-hidden /> Всё готово: модель «{localModel(pick).label}» установлена.{' '}
           {info.localModel !== pick && (
             <button className="link-btn" onClick={() => api.setSettings({ localModel: pick, sttEngine: 'local' }).then(refresh)}>
               Сделать основной
@@ -397,7 +400,9 @@ function LocalDoor({ onBack, onDone }: { onBack: () => void; onDone: () => void 
             </div>
           </div>
         ) : hasAiModel ? (
-          <div className="setup-ready">✓ Ollama и модель ИИ на месте.</div>
+          <div className="setup-ready">
+            <Check size={14} aria-hidden /> Ollama и модель ИИ на месте.
+          </div>
         ) : pull ? (
           <SetupProgressBar
             p={{
@@ -422,7 +427,7 @@ function LocalDoor({ onBack, onDone }: { onBack: () => void; onDone: () => void 
 
       <div className="welcome-actions">
         <button className="btn" onClick={onBack}>
-          ← Назад
+          <ArrowLeft size={14} aria-hidden /> Назад
         </button>
         <button
           className="btn btn-primary"
@@ -446,6 +451,7 @@ export default function Welcome({
   onOpenProject: (slug: string) => void
 }): React.JSX.Element {
   const [door, setDoor] = useState<Door>('doors')
+  const [showMore, setShowMore] = useState(false)
 
   const openDemo = async (): Promise<void> => {
     try {
@@ -471,21 +477,14 @@ export default function Welcome({
             как работать. Потом это можно поменять в настройках.
           </p>
           <div className="door-grid">
-            <div className="door">
-              <div className="door-icon">👀</div>
-              <div className="door-title">Посмотреть на примере</div>
-              <div className="door-text">
-                Откроем готовую расшифровку консультации и результаты по ней. Ничего не нужно настраивать.
+            <div className="door door-main">
+              <span className="badge door-flag">Рекомендую</span>
+              <div className="door-icon">
+                <Cloud size={26} aria-hidden />
               </div>
-              <button className="btn btn-primary door-btn" onClick={openDemo}>
-                Открыть пример
-              </button>
-            </div>
-            <div className="door">
-              <div className="door-icon">☁️</div>
               <div className="door-title">Облако по своему ключу</div>
               <div className="door-text">
-                Быстро на любом компьютере. Запись уходит в выбранный сервис.
+                Быстро и точно на любом компьютере. Звук обрабатывает выбранный вами сервис по вашему ключу.
               </div>
               <ol className="door-steps">
                 <li>Выбрать сервис</li>
@@ -497,23 +496,45 @@ export default function Welcome({
               </button>
             </div>
             <div className="door">
-              <div className="door-icon">💻</div>
-              <div className="door-title">На этом компьютере</div>
-              <div className="door-text">
-                Полная приватность: запись не покидает компьютер. Лучше всего с видеокартой NVIDIA.
+              <div className="door-icon">
+                <Eye size={26} aria-hidden />
               </div>
-              <ol className="door-steps">
-                <li>Выбрать модель</li>
-                <li>Скачать 2–5 ГБ в фоне</li>
-                <li>Работать без интернета</li>
-              </ol>
-              <button className="btn btn-primary door-btn" onClick={() => setDoor('local')}>
-                Выбрать модель
+              <div className="door-title">Посмотреть на примере</div>
+              <div className="door-text">
+                Откроем готовую расшифровку консультации и результаты по ней. Ничего не нужно настраивать.
+              </div>
+              <button className="btn door-btn" onClick={openDemo}>
+                Открыть пример
               </button>
             </div>
           </div>
+          <div className="door-more">
+            <button
+              className="link-btn door-more-toggle"
+              aria-expanded={showMore}
+              onClick={() => setShowMore((v) => !v)}
+            >
+              Дополнительно
+              <ChevronDown size={14} aria-hidden className={showMore ? 'chev open' : 'chev'} />
+            </button>
+            {showMore && (
+              <div className="door-local">
+                <Monitor size={20} aria-hidden />
+                <div className="door-local-text">
+                  <div className="door-title">На этом компьютере</div>
+                  <div className="door-text">
+                    Запись не покидает компьютер, но расшифровка медленнее и менее точна. Лучше всего с видеокартой
+                    NVIDIA. Скачать 2–5 ГБ можно в фоне, сами мы ничего не качаем.
+                  </div>
+                </div>
+                <button className="btn" onClick={() => setDoor('local')}>
+                  Выбрать модель
+                </button>
+              </div>
+            )}
+          </div>
           <button className="link-btn welcome-skip" onClick={skip}>
-            Пропустить — настрою сам
+            Пропустить — подключу позже
           </button>
         </div>
       )}

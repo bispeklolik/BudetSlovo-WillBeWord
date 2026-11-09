@@ -8,10 +8,11 @@ import { deviceArgs, localModel } from '../../shared/localModels'
 import { loadSettings } from '../settings'
 import { CLOUD_RUN } from './index'
 import { glossaryPrompt } from '../../shared/vocab'
+import { sttMeta } from '../../shared/sttEngines'
 
 // Голосовая правка: короткий клип с микрофона (webm из MediaRecorder) → текст.
-// Облачный движок (если выбран и есть ключ) — быстро; иначе локальный Whisper
-// (медленнее: модель загружается на каждый клип). Возвращает плоский текст.
+// Облачный движок (если выбран) — быстро, без ключа — ошибка; локальный Whisper
+// только если выбран явно (медленнее: модель загружается на каждый клип). Возвращает плоский текст.
 
 async function localClipText(m4a: string, outDir: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -82,7 +83,10 @@ export async function transcribeAudioText(m4a: string, outDir: string): Promise<
   const settings = loadSettings()
   const engineId = settings.sttEngine ?? 'local'
   const key = (settings.sttKeys?.[engineId] ?? '').trim()
-  if (engineId !== 'local' && CLOUD_RUN[engineId] && key) {
+  if (engineId !== 'local' && CLOUD_RUN[engineId]) {
+    // Ключа нет — молча уйти на локальный движок нельзя: человек выбрал облако,
+    // а локальный мог быть не установлен. Говорим прямо.
+    if (!key) throw new Error(`Нет ключа «${sttMeta(engineId)?.label ?? engineId}». Подключите распознавание: «С чего начать» на главной.`)
     const result = await CLOUD_RUN[engineId](m4a, key, () => {}, undefined, { terms: settings.vocab?.words })
     return result.turns
       .flatMap((t) => t.words.map((w) => w.t))

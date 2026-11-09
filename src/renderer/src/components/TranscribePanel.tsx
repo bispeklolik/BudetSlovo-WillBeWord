@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { JobInfo, ProjectMeta, SttEngine } from '../../../shared/types'
 import { sttMeta, sttModeLabel } from '../../../shared/sttEngines'
 import { api } from '../api'
+import { defaultSettings } from '../../../shared/types'
 
 function isActive(j: JobInfo | null): boolean {
   return !!j && (j.status === 'queued' || j.status === 'running')
@@ -48,7 +49,7 @@ export default function TranscribePanel({
   const [numSpeakers, setNumSpeakers] = useState(meta.transcription?.numSpeakers ?? 2)
   const [enhance, setEnhance] = useState(meta.transcription?.enhance ?? true)
   const [now, setNow] = useState(Date.now())
-  const [engine, setEngine] = useState<SttEngine>('local')
+  const [engine, setEngine] = useState<SttEngine>(defaultSettings.sttEngine ?? 'deepgram')
   // Запись звонка: говорящие известны по дорожкам, диаризации нет.
   const isCall = !!meta.channels && !!(meta.channels.mic || meta.channels.sys)
   const [names, setNames] = useState<string[]>(
@@ -60,7 +61,7 @@ export default function TranscribePanel({
   const [to, setTo] = useState(fmtClock(meta.audio.durationSec || 0))
 
   useEffect(() => {
-    api.getSettings().then((s) => setEngine(s.sttEngine ?? 'local'))
+    api.getSettings().then((s) => setEngine(s.sttEngine ?? defaultSettings.sttEngine ?? 'deepgram'))
     api.listJobs().then((jobs) => {
       const mine = [...jobs].reverse().find((j) => j.slug === meta.slug)
       if (mine) setJob(mine)

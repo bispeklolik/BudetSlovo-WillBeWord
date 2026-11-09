@@ -90,10 +90,12 @@ export const defaultDictation: DictationSettings = {
 export const defaultSettings: Settings = {
   theme: 'light',
   folders: [],
-  aiEngine: 'local-llama',
+  // Для НОВЫХ людей — облачные движки (точнее; замер: Deepgram ~5 % ошибок против ~18 % у локального).
+  // Тем, у кого настройки уже сохранены, выбор не меняется — см. settingsMerge.ts.
+  aiEngine: 'claude',
   claudeModel: 'claude-sonnet-4-6',
   openrouterModel: 'anthropic/claude-sonnet-5',
-  sttEngine: 'local',
+  sttEngine: 'deepgram',
   pauseMarkSec: 3,
   pauseInExport: true,
   callPrompt: true,

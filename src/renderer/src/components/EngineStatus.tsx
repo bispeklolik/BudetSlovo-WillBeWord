@@ -56,16 +56,16 @@ export default function EngineStatus({ onOpenWelcome }: { onOpenWelcome: () => v
   const meta = sttMeta(stt)
   let problem: string | null = null
   if (stt === 'local' && !info.engine.installed)
-    problem = 'Чтобы расшифровывать свои записи, подключите движок: облачный по ключу или локальный.'
+    problem = 'Локальный движок не установлен. Подключите распознавание: облако по ключу или скачайте движок.'
   else if (meta?.cloud && !(settings.sttKeys?.[stt] ?? '').trim())
-    problem = `Выбран сервис ${meta.label}, но не указан ключ.`
+    problem = 'Подключите распознавание: чтобы расшифровывать записи, нужен ключ сервиса ' + meta.label + '.'
   if (!problem) return null
   return (
     <div className="queue-strip">
       <div className="queue-item">
         <span>{problem}</span>
         <button className="btn btn-sm btn-primary" style={{ marginLeft: 'auto' }} onClick={onOpenWelcome}>
-          С чего начать
+          Подключить
         </button>
       </div>
     </div>
