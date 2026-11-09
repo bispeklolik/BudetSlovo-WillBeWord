@@ -30,21 +30,27 @@ export function dayGroup(iso: string, now: Date = new Date()): DayGroup {
 export function buildFeed(
   projects: ProjectMeta[],
   dicts: DictationEntry[],
-  limit = 40
+  limit = 40,
+  only: 'all' | 'rec' | 'dict' = 'all'
 ): FeedItem[] {
+  // Фильтр — до обрезки: иначе диктовки занимали места записей в общих 40 (ревью волны 7).
   const items: FeedItem[] = []
-  for (const p of projects)
-    items.push({
-      kind: 'rec',
-      at: p.createdAt,
-      slug: p.slug,
-      title: p.title,
-      durationSec: p.audio.durationSec,
-      demo: p.demo
-    })
-  for (const d of dicts) {
-    const text = (d.text ?? d.polished ?? d.raw ?? '').trim()
-    items.push({ kind: 'dict', at: d.at, text, failed: !text && !!d.error })
+  if (only !== 'dict') {
+    for (const p of projects)
+      items.push({
+        kind: 'rec',
+        at: p.createdAt,
+        slug: p.slug,
+        title: p.title,
+        durationSec: p.audio.durationSec,
+        demo: p.demo
+      })
+  }
+  if (only !== 'rec') {
+    for (const d of dicts) {
+      const text = (d.text ?? d.polished ?? d.raw ?? '').trim()
+      items.push({ kind: 'dict', at: d.at, text, failed: !text && !!d.error })
+    }
   }
   items.sort((a, b) => b.at.localeCompare(a.at))
   return items.slice(0, limit)

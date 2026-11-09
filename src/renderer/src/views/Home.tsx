@@ -10,6 +10,7 @@ import { onActivate } from '../activate'
 import { useLibrary } from '../library'
 import { hotkeyLabel } from '../dictKeys'
 import EngineStatus from '../components/EngineStatus'
+import QueueStrip from '../components/QueueStrip'
 import Tip from '../components/Tip'
 import { Skeleton } from '../components/Skeleton'
 
@@ -76,10 +77,7 @@ export default function Home({
   const loading = projects === null || dicts === null
   const groups = useMemo(() => {
     if (loading) return []
-    const feed = buildFeed(projects, dicts).filter((f) =>
-      filter === 'all' ? true : filter === 'rec' ? f.kind === 'rec' : f.kind === 'dict'
-    )
-    return groupFeed(feed)
+    return groupFeed(buildFeed(projects, dicts, 40, filter))
   }, [loading, projects, dicts, filter])
 
   const copy = (text: string): void => {
@@ -172,6 +170,7 @@ export default function Home({
         </div>
 
         <EngineStatus onOpenWelcome={onOpenWelcome} />
+        <QueueStrip />
 
         <Tabs.Root value={filter} onValueChange={(v) => setFilter(v as Filter)}>
           <div className="feed-head">

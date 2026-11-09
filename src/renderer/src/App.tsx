@@ -63,6 +63,9 @@ function MainApp(): React.JSX.Element {
   const refresh = useLibrary((s) => s.refresh)
   const refreshNotes = useLibrary((s) => s.refreshNotes)
   const loadFolders = useLibrary((s) => s.loadFolders)
+  const watchJobs = useLibrary((s) => s.watchJobs)
+  // Главная перечитывает настройки диктовки после закрытия окна настроек.
+  const [settingsRev, setSettingsRev] = useState(0)
   const projects = useLibrary((s) => s.projects)
 
   // Библиотека: первая загрузка и фоновые обновления (телефон, папка-наблюдатель, ссылки).
@@ -72,6 +75,15 @@ function MainApp(): React.JSX.Element {
     loadFolders()
     return api.onProjectsChanged(() => void refresh())
   }, [refresh, refreshNotes, loadFolders])
+
+  // Очередь расшифровок — одна подписка на всё приложение.
+  useEffect(() => watchJobs(), [watchJobs])
+
+  // Конспекты сохраняют из записи, мастера, панели «Спросить» — счётчик в меню
+  // освежаем при каждой смене страницы (ревью волны 7).
+  useEffect(() => {
+    refreshNotes()
+  }, [view.page, refreshNotes])
 
   useEffect(
     () => api.onImportProgress((p) => setImportBusy(p.phase === 'done' ? null : p.message)),
@@ -291,6 +303,7 @@ function MainApp(): React.JSX.Element {
             />
           ) : view.page === 'home' ? (
             <Home
+              key={'home-' + settingsRev}
               onOpen={(slug) => openRecord(slug)}
               onOpenWelcome={() => setWelcomeOpen(true)}
               onRecordCall={() => setCallRec({})}
@@ -394,6 +407,7 @@ function MainApp(): React.JSX.Element {
             onToggleTheme={toggleTheme}
             onClose={() => {
               setSettingsOpen(null)
+              setSettingsRev((r) => r + 1)
               // Настройки могли поменять порог пауз и т.п. — подтянуть в редактор.
               void api.getSettings().then(setSettings)
             }}

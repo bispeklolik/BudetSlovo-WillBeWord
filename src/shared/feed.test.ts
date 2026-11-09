@@ -37,4 +37,12 @@ describe('feed', () => {
     const many = Array.from({ length: 10 }, (_, i) => proj('p' + i, at(9, i)))
     expect(buildFeed(many, [], 3)).toHaveLength(3)
   })
+
+  it('фильтр до обрезки: свежие диктовки не вытесняют записи (ревью волны 7)', () => {
+    const recs = Array.from({ length: 5 }, (_, i) => proj('p' + i, at(8, i)))
+    const dicts: DictationEntry[] = Array.from({ length: 5 }, (_, i) => ({ at: at(9, i), raw: 'д' + i, polished: null }))
+    const onlyRecs = buildFeed(recs, dicts, 5, 'rec')
+    expect(onlyRecs).toHaveLength(5)
+    expect(onlyRecs.every((f) => f.kind === 'rec')).toBe(true)
+  })
 })

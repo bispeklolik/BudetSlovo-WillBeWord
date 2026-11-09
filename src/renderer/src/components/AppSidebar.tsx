@@ -196,6 +196,8 @@ export default function AppSidebar({
           onClick={() => {
             setFolder('')
             onNavigate('library')
+            // В свёрнутом меню папок нет — разворачиваем, чтобы их было видно (ревью волны 7).
+            if (collapsed) onToggleCollapsed()
           }}
           testid="nav-library"
         />

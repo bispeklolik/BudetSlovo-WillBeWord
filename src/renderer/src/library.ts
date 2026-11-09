@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ProjectMeta } from '../../shared/types'
+import type { ProjectMeta, JobInfo } from '../../shared/types'
 import { buildFolderTree, ancestorPaths } from '../../shared/folders'
 import { api } from './api'
 import { showToast, humanError } from './toast'
@@ -15,6 +15,10 @@ interface LibraryState {
   /** Выбранная папка: '' — все записи, иначе путь. */
   folder: string
   notesCount: number
+  /** Очередь расшифровок — общая для всех страниц (ревью волны 7). */
+  jobs: JobInfo[]
+  /** Подписаться на очередь; вернуть отписку. Вызывается один раз в App. */
+  watchJobs: () => () => void
   refresh: () => Promise<void>
   refreshNotes: () => void
   loadFolders: () => void
@@ -32,6 +36,20 @@ export const useLibrary = create<LibraryState>((set, get) => ({
   folderList: [],
   folder: '',
   notesCount: 0,
+  jobs: [],
+
+  watchJobs: () => {
+    api
+      .listJobs()
+      .then((jobs) => set({ jobs }))
+      .catch(() => {})
+    return api.onJobUpdate((j) => {
+      const prev = get().jobs
+      const i = prev.findIndex((x) => x.id === j.id)
+      set({ jobs: i >= 0 ? [...prev.slice(0, i), { ...j }, ...prev.slice(i + 1)] : [...prev, { ...j }] })
+      if (j.status === 'done') void get().refresh()
+    })
+  },
 
   refresh: async () => {
     try {

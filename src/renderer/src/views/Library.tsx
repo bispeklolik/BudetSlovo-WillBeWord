@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AudioLines, Pencil, FolderInput, X, Search, TriangleAlert } from 'lucide-react'
-import type { ProjectMeta, JobInfo, Note } from '../../../shared/types'
+import type { ProjectMeta, Note } from '../../../shared/types'
 import { searchProjects } from '../../../shared/search'
 import { api } from '../api'
 import { showToast, humanError } from '../toast'
 import { onActivate } from '../activate'
 import { useLibrary, folderPaths, folderCount, SLUG_TYPE } from '../library'
 import EngineStatus from '../components/EngineStatus'
+import QueueStrip from '../components/QueueStrip'
 import InputModal from '../components/InputModal'
 import MoveModal from '../components/MoveModal'
 import NoteViewer from '../components/NoteViewer'
@@ -68,25 +69,18 @@ export default function Library({
 
   const [gq, setGq] = useState('') // глобальный поиск
   const [modal, setModal] = useState<Modal>(null)
-  const [jobs, setJobs] = useState<JobInfo[]>([])
   const [dyn, setDyn] = useState<{ phase: string } | null>(null)
   const [resultNote, setResultNote] = useState<Note | null>(null)
-
-  // Очередь расшифровок видна на странице «Записи» (важно при пакетном импорте).
+  // Ушли со страницы, пока ИИ считал динамику, — результат не теряем молча (ревью волны 7).
+  const mounted = useRef(true)
   useEffect(() => {
-    api.listJobs().then(setJobs)
-    return api.onJobUpdate((j) => {
-      setJobs((prev) => {
-        const i = prev.findIndex((x) => x.id === j.id)
-        return i >= 0 ? [...prev.slice(0, i), { ...j }, ...prev.slice(i + 1)] : [...prev, { ...j }]
-      })
-      if (j.status === 'done') void refresh()
-    })
-  }, [refresh])
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   const list = projects ?? []
-  const activeJobs = jobs.filter((j) => j.status === 'queued' || j.status === 'running')
-  const jobTitle = (slug: string): string => list.find((p) => p.slug === slug)?.title ?? slug
   const count = (path: string): number => folderCount(list, path)
 
   const records = list
@@ -102,7 +96,8 @@ export default function Library({
     try {
       const note = await api.clientDynamics(folder)
       refreshNotes()
-      setResultNote(note)
+      if (mounted.current) setResultNote(note)
+      else showToast('Динамика клиента готова — она в «Конспектах».', 'info')
     } catch (e) {
       showToast('Динамика не получилась: ' + humanError(e))
     } finally {
@@ -234,28 +229,7 @@ export default function Library({
       </div>
 
       <EngineStatus onOpenWelcome={onOpenWelcome} />
-      {activeJobs.length > 0 && (
-        <div className="queue-strip">
-          {activeJobs.map((j) => (
-            <div className="queue-item" key={j.id}>
-              <span className="queue-dot" />
-              <span className="queue-title">{jobTitle(j.slug)}</span>
-              <span className="queue-phase">
-                {j.status === 'queued' ? 'в очереди' : j.phase}
-                {j.percent !== null && j.status === 'running' ? ` · ${j.percent}%` : ''}
-              </span>
-              <button
-                className="btn-icon"
-                title="Отменить"
-                aria-label="Отменить"
-                onClick={() => api.cancelJob(j.id)}
-              >
-                <X size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <QueueStrip />
 
       <div className="home-body">
         <section className="records-pane">
