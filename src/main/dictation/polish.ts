@@ -13,9 +13,22 @@ import { buildPolishSystem } from '../../shared/dictModes'
 /** «Обычная чистка» без словаря — тот же текст, что прошёл живой прогон. */
 export const POLISH_SYSTEM = buildPolishSystem('clean', 'neutral', [], [])
 
+// Ответ — между <result> и </result>: всё, что модель пишет вокруг (пояснения,
+// «нет, исправлю: …» — живой прогон Haiku 5.5, 09.11.2026), в поле не попадает.
 export function wrapForPolish(raw: string, reformat = false): string {
-  return `<transcript>\n${raw}\n</transcript>\n\n${reformat ? 'Выведи только готовый текст.' : 'Выведи только очищенный текст надиктовки.'}`
+  return `<transcript>\n${raw}\n</transcript>\n\n${
+    reformat ? 'Выведи только готовый текст' : 'Выведи только очищенный текст надиктовки'
+  }, один раз, между <result> и </result>.`
 }
+
+/** Текст из последнего блока <result>…</result>; нет блока — весь ответ. */
+function resultText(s: string): string {
+  const all = [...s.matchAll(/<result>([\s\S]*?)<\/result>/gi)]
+  return all.length ? all[all.length - 1][1] : s.replace(/<\/?result>/gi, '')
+}
+
+// Модель «правит себя» вслух — признак сбоя, такой ответ не вставляем.
+const SELF_TALK = /(исправлю|исправляю|исправленн\p{L}* вариант|вот (очищенный|исправленный|готовый) текст|вот текст)/iu
 
 /** Метка, которую провайдеры дописывают к ответу, упёршемуся в лимит токенов. */
 const TRUNCATED = '[ответ обрезан'
@@ -67,13 +80,14 @@ export function acceptPolished(
   polished: string | null | undefined,
   opts: { reformat?: boolean } = {}
 ): string | null {
-  let p = (polished ?? '').trim().replace(/^<\/?transcript>|<\/?transcript>$/g, '').trim()
+  let p = resultText((polished ?? '').trim()).trim().replace(/^<\/?transcript>|<\/?transcript>$/g, '').trim()
   // Заготовки «[Ваше имя]» отдельной строкой — убрать, а не вставлять человеку.
   if (opts.reformat) p = p.split('\n').filter((l) => !/^\s*\[[^\]]{1,40}\]\s*$/.test(l)).join('\n').trim()
   if (!p) return null
   // Заготовка посреди текста («С уважением, [Ваше имя]») — режим не справился.
   if (opts.reformat && /\[[^\]\n]{1,40}\]/.test(p) && !/\[/.test(raw)) return null
   if (p.includes(TRUNCATED)) return null
+  if (SELF_TALK.test(p) && !SELF_TALK.test(raw)) return null
   if (foreignScript(raw, p)) return null
   const r = raw.trim()
   // Чистка убирает паразиты, но не половину смысла: сильно короче — модель

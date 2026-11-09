@@ -470,6 +470,12 @@ export default function SettingsModal({
                     </button>
                   </div>
                   <div className="settings-row">
+                    <span>Убирать оговорки («нет, в среду» → «в среду»)</span>
+                    <button className={'btn' + (dict.dropCorrections === true ? ' btn-primary' : '')} onClick={() => saveDict({ dropCorrections: dict.dropCorrections !== true })}>
+                      {dict.dropCorrections === true ? 'Вкл' : 'Выкл'}
+                    </button>
+                  </div>
+                  <div className="settings-row">
                     <span>Числа и даты цифрами</span>
                     <button className={'btn' + (dict.digits !== false ? ' btn-primary' : '')} onClick={() => saveDict({ digits: dict.digits === false })}>
                       {dict.digits !== false ? 'Вкл' : 'Выкл'}

@@ -311,13 +311,14 @@ async function recognize(
     modeId = mode.id
     const digits = cfg.digits !== false
     try {
-      const system = buildPolishSystem(mode.id, cfg.tone, vocab?.words, cfg.customModes, { digits })
+      const dropCorrections = cfg.dropCorrections === true
+      const system = buildPolishSystem(mode.id, cfg.tone, vocab?.words, cfg.customModes, { digits, dropCorrections })
       polished = acceptPolished(base, await polishFn(system, wrapForPolish(base, mode.reformat)), {
         reformat: mode.reformat
       })
       // Режим не справился (ответил на вопрос, выдумал) — хотя бы обычная чистка.
       if (polished === null && mode.reformat) {
-        const clean = buildPolishSystem('clean', 'neutral', vocab?.words, cfg.customModes, { digits })
+        const clean = buildPolishSystem('clean', 'neutral', vocab?.words, cfg.customModes, { digits, dropCorrections })
         polished = acceptPolished(base, await polishFn(clean, wrapForPolish(base)))
       }
     } catch {

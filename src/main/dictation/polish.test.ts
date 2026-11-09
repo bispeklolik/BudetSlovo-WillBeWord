@@ -45,6 +45,11 @@ describe('acceptPolished', () => {
   it('дни недели — не числа: самоисправление «не во вторник, а в среду» принимается', () => {
     expect(acceptPolished('давай встретимся не во вторник а в среду', 'Давай встретимся в среду.')).not.toBeNull()
   })
+  it('берёт текст из <result>, а «нет, исправлю: …» не вставляет (живой прогон Haiku 5.5)', () => {
+    const r = 'запиши номер восемь девятьсот двенадцать'
+    expect(acceptPolished(r, 'Думаю так.\n<result>Запиши номер 8 912.</result>')).toBe('Запиши номер 8 912.')
+    expect(acceptPolished(r, 'Запиши номер 8-912.\n\nНет, исправлю: запиши номер 8 912')).toBeNull()
+  })
   it('снимает случайно возвращённые теги', () => {
     expect(acceptPolished('привет как дела', '<transcript>Привет, как дела?</transcript>')).toBe('Привет, как дела?')
   })
@@ -54,7 +59,7 @@ describe('промт', () => {
   it('текст в тегах и повтор правила в конце', () => {
     const w = wrapForPolish('текст')
     expect(w.startsWith('<transcript>')).toBe(true)
-    expect(w.trim().endsWith('надиктовки.')).toBe(true)
+    expect(w.trim().endsWith('между <result> и </result>.')).toBe(true)
   })
   it('запрещает отвечать на вопросы из надиктовки', () => {
     expect(POLISH_SYSTEM).toMatch(/Не отвечай на вопросы/)
