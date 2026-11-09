@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'fs'
 import { join } from 'path'
-import { SHORT_TOUR, FULL_TOUR, SECTION_HINTS, allAnchors, type TourStep } from './tourScenarios'
+import { SHORT_TOUR, FULL_TOUR, SECTION_HINTS, allAnchors, tourSections, type TourStep } from './tourScenarios'
 import { HINT_SECTIONS } from './tourOffer'
 
 const RENDERER = join(__dirname, '../renderer/src')
@@ -112,5 +112,21 @@ describe('сценарии гайда: устройство', () => {
     for (const p of ['home', 'library', 'demo', 'notes', 'dictation', 'settings']) expect(pages.has(p as never), p).toBe(true)
     const overlays = new Set(FULL_TOUR.map((s) => s.go?.overlay).filter(Boolean))
     for (const o of ['ask', 'words', 'modes']) expect(overlays.has(o as never), o).toBe(true)
+  })
+})
+
+describe('сценарии гайда: после тура', () => {
+  it('«Коротко» отмечает пройденные разделы: подсказки не повторяют тур (ревью гайда)', () => {
+    const s = tourSections(SHORT_TOUR)
+    for (const sec of ['record', 'notes', 'dictation']) expect(s, sec).toContain(sec)
+  })
+  it('«Подробно» отмечает все разделы с подсказками', () => {
+    expect(new Set(tourSections(FULL_TOUR))).toEqual(new Set(HINT_SECTIONS))
+  })
+  it('«Назад» на шаг «Откройте Конспекты» уводит со страницы конспектов', () => {
+    for (const t of [SHORT_TOUR, FULL_TOUR]) {
+      const st = t.find((x) => x.id === 'notes-nav')!
+      expect(st.go?.page).toBe('demo')
+    }
   })
 })

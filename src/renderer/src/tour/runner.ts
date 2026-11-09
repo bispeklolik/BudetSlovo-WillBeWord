@@ -187,8 +187,13 @@ export function startRunner(steps: TourStep[], deps: RunnerDeps): Runner {
       cleanups.push(() => window.removeEventListener('click', onClick, true))
     }
     if (w.appears) {
+      // Ждём именно появления: если элемент уже на экране (человек вернулся «Назад»),
+      // сначала он должен исчезнуть. Иначе шаг сам листал бы вперёд.
+      let was = !!findAnchor(w.appears)
       const timer = window.setInterval(() => {
-        if (findAnchor(w.appears!)) advance(AFTER_ACTION_MS)
+        const now = !!findAnchor(w.appears!)
+        if (now && !was) advance(AFTER_ACTION_MS)
+        was = now
       }, 120)
       cleanups.push(() => window.clearInterval(timer))
     }

@@ -11,7 +11,14 @@ import { useSectionHints } from '../tour/TourProvider'
 
 type Props =
   | { mode: 'one'; slug: string; title: string; onSeek: (sec: number) => void; onClose: () => void }
-  | { mode: 'all'; folder: string | null; onOpen: (slug: string, sec: number) => void; onClose: () => void }
+  | {
+      mode: 'all'
+      folder: string | null
+      /** Окно открыл тур: свой пустой разговор, прошлые вопросы по записям не показываем. */
+      tour?: boolean
+      onOpen: (slug: string, sec: number) => void
+      onClose: () => void
+    }
 
 // Разговоры живут, пока открыто приложение: перешёл к источнику, вернулся —
 // вопросы и ответы на месте (ревью волны 4). Ключ — запись или папка.
@@ -28,7 +35,7 @@ interface Item {
 export default function AskPanel(props: Props): React.JSX.Element {
   useEscClose(props.onClose)
   useSectionHints('ask')
-  const key = props.mode === 'one' ? 'one:' + props.slug : 'all:' + (props.folder ?? '')
+  const key = props.mode === 'one' ? 'one:' + props.slug : props.tour ? 'tour:' : 'all:' + (props.folder ?? '')
   const [items, setItemsState] = useState<Item[]>(() => threads.get(key) ?? [])
   const setItems = (list: Item[]): void => {
     threads.set(key, list)

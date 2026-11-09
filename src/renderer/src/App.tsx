@@ -62,7 +62,7 @@ function MainApp(): React.JSX.Element {
   const [callRec, setCallRec] = useState<{ app?: { appId: string; name: string } } | null>(null)
   const [callPrompt, setCallPrompt] = useState<{ appId: string; name: string } | null>(null)
   const [addModal, setAddModal] = useState<'phone' | 'link' | 'watch' | null>(null)
-  const [ask, setAsk] = useState<{ folder: string | null } | null>(null)
+  const [ask, setAsk] = useState<{ folder: string | null; tour?: boolean } | null>(null)
   const [vocab, setVocab] = useState<'words' | 'modes' | null>(null)
   const [collapsed, setCollapsed] = useState(readCollapsed)
   // Мастер первого запуска только что закрыт: гайд предложит себя сразу.
@@ -248,7 +248,7 @@ function MainApp(): React.JSX.Element {
 
   // Переходы для интерактивного гайда: страница и окна поверх неё. Без overlay окна закрываются.
   const tourNav = (t: TourNav): void => {
-    setAsk(t.overlay === 'ask' ? { folder: null } : null)
+    setAsk(t.overlay === 'ask' ? { folder: null, tour: true } : null)
     setVocab(t.overlay === 'words' || t.overlay === 'modes' ? t.overlay : null)
     setAddModal(null)
     if (t.page === 'demo') openRecord(DEMO_SLUG)
@@ -443,6 +443,7 @@ function MainApp(): React.JSX.Element {
             <AskPanel
               mode="all"
               folder={ask.folder}
+              tour={ask.tour}
               onOpen={(slug, sec) => {
                 setAsk(null)
                 openRecord(slug, undefined, sec)

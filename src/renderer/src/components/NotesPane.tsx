@@ -3,7 +3,8 @@ import type { Note } from '../../../shared/types'
 import { api } from '../api'
 import NoteViewer from './NoteViewer'
 import { onActivate } from '../activate'
-import { useSectionHints } from '../tour/TourProvider'
+import { useSectionHints, useTour } from '../tour/TourProvider'
+import { DEMO_SLUG } from '../../../shared/demo'
 
 const KIND_LABEL: Record<Note['kind'], string> = {
   summary: 'Саммари',
@@ -44,6 +45,12 @@ export default function NotesPane({
       )
     : notes
 
+  // Метка для гайда. Тур показывает только конспект примера: данные клиентов
+  // на экране тура не появляются (ревью гайда). Подсказки раздела без тура —
+  // на первой карточке, человек сам открыл свои конспекты.
+  const { running: touring } = useTour()
+  const demoNoteId = shown.find((n) => n.sourceSlug === DEMO_SLUG)?.id ?? (touring ? undefined : shown[0]?.id)
+
   return (
     <>
       <div className="pane-head" data-tour="notes-pane">
@@ -73,11 +80,11 @@ export default function NotesPane({
         </div>
       ) : (
         <div className="project-grid">
-          {shown.map((n, i) => (
+          {shown.map((n) => (
             <div
               key={n.id}
               className="note-card"
-              data-tour={i === 0 ? 'note-card' : undefined}
+              data-tour={n.id === demoNoteId ? 'note-card' : undefined}
               role="button"
               tabIndex={0}
               onClick={() => setOpen(n)}

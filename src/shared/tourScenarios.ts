@@ -113,6 +113,7 @@ export const SHORT_TOUR: TourStep[] = [
     id: 'notes-nav',
     anchor: 'nav-notes',
     side: 'right',
+    go: DEMO,
     title: 'Откройте «Конспекты»',
     text: 'Тут лежат готовые результаты. Для примера они уже есть. Нажмите «Конспекты».',
     wait: { click: true, appears: 'notes-pane' }
@@ -436,6 +437,7 @@ export const FULL_TOUR: TourStep[] = [
     id: 'notes-nav',
     anchor: 'nav-notes',
     side: 'right',
+    go: DEMO,
     title: 'Откройте «Конспекты»',
     text: 'Для примера готовые результаты уже лежат здесь. Нажмите «Конспекты».',
     wait: { click: true, appears: 'notes-pane' }
@@ -589,6 +591,20 @@ export const FULL_TOUR: TourStep[] = [
 export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
   short: { title: 'Коротко', steps: SHORT_TOUR },
   full: { title: 'Подробно', steps: FULL_TOUR }
+}
+
+/** Разделы, по которым прошёл тур: их подсказки при первом заходе уже не нужны. */
+export function tourSections(steps: TourStep[]): HintSection[] {
+  const out = new Set<HintSection>()
+  for (const s of steps) {
+    const g = s.go
+    if (!g) continue
+    if (g.overlay === 'ask') out.add('ask')
+    else if (g.overlay === 'words' || g.overlay === 'modes') out.add('vocab')
+    else if (g.page === 'demo') out.add('record')
+    else if (g.page === 'library' || g.page === 'notes' || g.page === 'dictation' || g.page === 'settings') out.add(g.page)
+  }
+  return [...out]
 }
 
 // ---------------------------------------------- подсказки при первом заходе

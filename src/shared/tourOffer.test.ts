@@ -28,6 +28,10 @@ describe('tourOffer: когда показывать гайд', () => {
     expect(tourOffer({ ...base, ownRecords: 2 })).toBe('card')
     expect(tourOffer({ ...base, dictations: 1 })).toBe('card')
   })
+  it('настройки потеряны, записи целы: после мастера — карточка, а не экран выбора (ревью гайда)', () => {
+    expect(tourOffer({ ...base, onboarded: false, wizardJustDone: true, ownRecords: 4 })).toBe('card')
+    expect(tourOffer({ ...base, wizardJustDone: true, dictations: 2 })).toBe('card')
+  })
   it('предложение закрыто — больше не показываем, в любом случае', () => {
     const tours = { offered: true }
     expect(tourOffer({ ...base, tours })).toBeNull()

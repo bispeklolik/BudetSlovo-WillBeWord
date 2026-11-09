@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import 'driver.js/dist/driver.css'
 import type { TourId, ToursState } from '../../../shared/types'
 import { defaultDictation } from '../../../shared/types'
-import { SECTION_HINTS, TOURS, type TourNav } from '../../../shared/tourScenarios'
+import { SECTION_HINTS, TOURS, tourSections, type TourNav } from '../../../shared/tourScenarios'
 import {
   hintsDue,
   tourOffer,
@@ -161,7 +161,9 @@ export function TourProvider({
         navRef.current({ page: 'home' })
         launch(TOURS[id].steps, (reason) => {
           navRef.current({}) // закрыть окна «Спросить», «Словарь», «Режимы»
-          if (reason === 'done') void saveTours((t) => withDone(t, id))
+          if (reason !== 'done') return
+          const sections = tourSections(TOURS[id].steps)
+          void saveTours((t) => sections.reduce((acc, s) => withSectionSeen(acc, s), withDone(t, id)))
         })
       })()
     },

@@ -1,11 +1,9 @@
 import { Compass, ListChecks } from 'lucide-react'
 import type { TourId } from '../../../shared/types'
-import { useEscClose } from '../useEscClose'
 
 // Экран после мастера первого запуска: как познакомиться со «Словом».
 
 export default function TourChoice({ onChoose }: { onChoose: (c: TourId | 'later') => void }): React.JSX.Element {
-  useEscClose(() => onChoose('later'))
   return (
     <div className="modal-overlay tour-overlay" data-testid="tour-choice">
       <div className="modal modal-sm tour-choice" role="dialog" aria-modal="true" aria-labelledby="tour-choice-title">

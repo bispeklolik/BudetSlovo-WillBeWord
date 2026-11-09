@@ -25,10 +25,12 @@ export interface OfferFacts {
 
 export function tourOffer(f: OfferFacts): TourOffer {
   if (f.tours?.offered) return null // предложение уже закрыли — больше не показываем
-  if (f.wizardJustDone) return 'choice'
+  const uses = f.ownRecords > 0 || f.dictations > 0
+  // Уже пользуется (даже если мастер пришлось пройти заново после потери настроек):
+  // один раз спокойная карточка на Главной, а не экран поверх всего.
+  if (f.wizardJustDone) return uses ? 'card' : 'choice'
   if (!f.onboarded) return null // мастер ещё на экране
-  // Уже пользуется: один раз спокойная карточка на Главной, а не экран поверх всего.
-  if (f.ownRecords > 0 || f.dictations > 0) return 'card'
+  if (uses) return 'card'
   // Новый человек, который закрыл программу, не ответив на экран выбора.
   return 'choice'
 }
