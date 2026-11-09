@@ -28,7 +28,7 @@ const CALL_APP_NAMES: Record<string, string> = {
 }
 
 const MODELS: { id: string; label: string }[] = [
-  { id: 'claude-haiku-4-5', label: 'Haiku · дёшево' },
+  { id: 'claude-haiku-5-5', label: 'Haiku 5.5 · дёшево' },
   { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5 · баланс' },
   { id: 'claude-opus-5-5', label: 'Opus 5.5 · максимум' }
 ]

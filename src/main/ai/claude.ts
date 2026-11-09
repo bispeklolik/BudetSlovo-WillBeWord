@@ -97,7 +97,10 @@ async function ask(system: string, user: string, maxTokens: number, tier: Tier =
     return finish(r.stop_reason, textOf(r.content))
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) throw new Error('AI_KEY_INVALID')
-    if (err instanceof Anthropic.APIError) throw new Error(`Claude HTTP ${err.status ?? ''} ${err.message.slice(0, 200)}`)
+    // Тексты, которые узнаёт humanError (toast.ts): «не ответил вовремя» и т.п.
+    if (err instanceof Anthropic.APIConnectionTimeoutError) throw new Error('TimeoutError: Claude не ответил вовремя')
+    if (err instanceof Anthropic.APIConnectionError) throw new Error('Нет связи с Claude — проверьте интернет.')
+    if (err instanceof Anthropic.APIError) throw new Error(`Claude: ${err.message.slice(0, 300)}`)
     throw err
   }
 }

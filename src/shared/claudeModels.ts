@@ -12,7 +12,10 @@ const MIGRATE: Record<string, string> = {
   'claude-opus-4-6': 'claude-opus-5-5',
   'claude-opus-4-7': 'claude-opus-5-5',
   'claude-opus-4-8': 'claude-opus-5-5',
-  'claude-opus-5': 'claude-opus-5-5'
+  'claude-opus-5': 'claude-opus-5-5',
+  // Haiku 4.5 не знает effort — с ним умные задачи падали бы с 400 (ревью волны 7).
+  'claude-haiku-4-5': FAST_CLAUDE_MODEL,
+  'claude-haiku-4-5-20251001': FAST_CLAUDE_MODEL
 }
 
 /** Модель для умных задач: пусто — Sonnet 5.5, старая — её замена 5.5, остальное как есть. */

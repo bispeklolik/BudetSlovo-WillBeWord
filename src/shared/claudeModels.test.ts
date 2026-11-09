@@ -7,5 +7,6 @@ describe('модели Claude', () => {
     expect(currentClaudeModel('claude-sonnet-4-6')).toBe('claude-sonnet-5-5')
     expect(currentClaudeModel('claude-opus-4-8')).toBe('claude-opus-5-5')
     expect(currentClaudeModel('claude-opus-5-5')).toBe('claude-opus-5-5')
+    expect(currentClaudeModel('claude-haiku-4-5')).toBe('claude-haiku-5-5')
   })
 })
