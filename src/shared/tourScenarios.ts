@@ -376,6 +376,13 @@ export const FULL_TOUR: TourStep[] = [
       text: 'Реплики по собеседникам. Нажмите на слово — звук перейдёт к нему. Слово можно поправить.'
     },
     {
+      id: 'uncertain-word',
+      anchor: 'uncertain-word',
+      side: 'bottom',
+      title: 'Неуверенные слова',
+      text: 'Слова, в которых движок не уверен, подсвечены. Щёлкните по такому слову — появятся варианты. Правая кнопка открывает варианты для любого слова.'
+    },
+    {
       id: 'editor-search',
       anchor: 'editor-search',
       side: 'bottom',
@@ -643,18 +650,18 @@ export const SECTION_HINTS: Record<HintSection, TourStep[]> = {
       text: 'Нажмите на слово — звук перейдёт к нему. Слово можно поправить.'
     },
     {
+      id: 'uncertain-word',
+      anchor: 'uncertain-word',
+      side: 'bottom',
+      title: 'Неуверенные слова',
+      text: 'Слова, в которых движок не уверен, подсвечены. Щёлкните по такому слову — появятся варианты. Правая кнопка открывает варианты для любого слова.'
+    },
+    {
       id: 'editor-make',
       anchor: 'editor-make',
       side: 'bottom',
       title: 'Сделать из текста',
       text: 'Из текста выйдет саммари, заметка или протокол. Результат сохраняется в «Конспекты».'
-    },
-    {
-      id: 'editor-player',
-      anchor: 'editor-player',
-      side: 'top',
-      title: 'Проигрыватель',
-      text: 'Пробел — играть или пауза. Стрелки перематывают на 5 секунд.'
     }
   ],
   notes: [

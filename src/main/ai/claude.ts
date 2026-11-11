@@ -7,6 +7,7 @@ import type {
   SummaryDomain
 } from './provider'
 import type { AnonRule } from '../../shared/types'
+import { AI_SYSTEM, AI_SCHEMA, aiItemsText, parseAiReply, type AiItem, type AiRawItem } from '../../shared/wordVariantsAi'
 import { DEFAULT_CLAUDE_MODEL, FAST_CLAUDE_MODEL, currentClaudeModel } from '../../shared/claudeModels'
 // Промты и парсеры общие с локальным провайдером — единый «контракт» задач.
 import {
@@ -96,13 +97,24 @@ async function ask(system: string, user: string, maxTokens: number, tier: Tier =
     const r = await client.messages.stream(base).finalMessage()
     return finish(r.stop_reason, textOf(r.content))
   } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) throw new Error('AI_KEY_INVALID')
-    // Тексты, которые узнаёт humanError (toast.ts): «не ответил вовремя» и т.п.
-    if (err instanceof Anthropic.APIConnectionTimeoutError) throw new Error('TimeoutError: Claude не ответил вовремя')
-    if (err instanceof Anthropic.APIConnectionError) throw new Error('Нет связи с Claude — проверьте интернет.')
-    if (err instanceof Anthropic.APIError) throw new Error(`Claude: ${err.message.slice(0, 300)}`)
-    throw err
+    throw mapError(err)
   }
+}
+
+function mapError(err: unknown): unknown {
+  if (err instanceof Anthropic.AuthenticationError) return new Error('AI_KEY_INVALID')
+  // Тексты, которые узнаёт humanError (toast.ts): «не ответил вовремя» и т.п.
+  if (err instanceof Anthropic.APIConnectionTimeoutError) return new Error('TimeoutError: Claude не ответил вовремя')
+  if (err instanceof Anthropic.APIConnectionError) return new Error('Нет связи с Claude — проверьте интернет.')
+  if (err instanceof Anthropic.APIError) return new Error(`Claude: ${err.message.slice(0, 300)}`)
+  return err
+}
+
+// Расход токенов быстрых запросов вариантов слова (для замеров цены: живой прогон, scripts/).
+type Usage = { input: number; output: number }
+let usageSink: ((u: Usage) => void) | null = null
+export function onWordVariantsUsage(cb: ((u: Usage) => void) | null): void {
+  usageSink = cb
 }
 
 export const claudeProvider: AiProvider = {
@@ -129,6 +141,30 @@ export const claudeProvider: AiProvider = {
 
   async generateFast(system: string, text: string): Promise<string> {
     return ask(system, text, 4096, 'fast')
+  },
+
+  // Варианты неуверенных слов: быстрая модель, строгий JSON по схеме (maxItems схема не
+  // поддерживает — число вариантов обрезает код). Таймаут короткий: человек ждёт у окошка.
+  async wordVariants(items: AiItem[], opts?: { timeoutMs?: number }): Promise<AiRawItem[]> {
+    if (!client) throw new Error('AI_MODEL_MISSING')
+    if (!items.length) return []
+    try {
+      const r = await client.messages.create(
+        {
+          model: FAST_CLAUDE_MODEL,
+          max_tokens: 400 + items.length * 260,
+          output_config: { effort: 'low', format: { type: 'json_schema', schema: AI_SCHEMA as unknown as Record<string, unknown> } },
+          system: AI_SYSTEM,
+          messages: [{ role: 'user', content: aiItemsText(items) }]
+        },
+        { timeout: opts?.timeoutMs ?? 8000, maxRetries: 0 }
+      )
+      usageSink?.({ input: r.usage.input_tokens, output: r.usage.output_tokens })
+      if (r.stop_reason === 'refusal') throw new Error('AI_REFUSED')
+      return parseAiReply(textOf(r.content))
+    } catch (err) {
+      throw mapError(err)
+    }
   },
 
   async highlights(text: string): Promise<string[]> {

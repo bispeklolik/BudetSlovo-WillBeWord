@@ -1,4 +1,5 @@
 import type { ProjectMeta, Word } from './types'
+import { splitToken, shapeCore } from './wordVariants'
 
 // Правки — семантические патчи. Применяются одинаково в renderer
 // (оптимистично) и в main (единственный «писатель» на диск).
@@ -19,6 +20,12 @@ export type Patch =
       startSec: number
     }
   | { op: 'replaceAll'; find: string; replace: string }
+  // Замена слова ЦЕЛИКОМ во всей записи (не подстроки): сравнение без знаков и регистра,
+  // у каждого вхождения остаются его знаки по краям и заглавная буква.
+  // alsoWordId — слово, на которое нажали: меняется всегда, даже если его уже правили.
+  | { op: 'replaceWordAll'; from: string; to: string; alsoWordId?: number }
+  // «Слово верное»: убирает подсветку неуверенности (ok: true) или возвращает её (ok: false).
+  | { op: 'setWordOk'; turnId: string; wordId: number; ok: boolean }
 
 // Замена всех вхождений подстроки в одном слове, без учёта регистра.
 // Регистр незатронутых частей сохраняется; replace вставляется как есть.
@@ -120,6 +127,32 @@ export function applyPatch(meta: ProjectMeta, p: Patch): void {
           w.t = next
         }
       }
+      return
+    }
+    case 'replaceWordAll': {
+      const from = splitToken(p.from).core.toLowerCase()
+      const to = splitToken(p.to).core
+      if (!from || !to) return
+      for (const t of turns) {
+        for (const w of t.words) {
+          const sp = splitToken(w.t)
+          const hit = w.id === p.alsoWordId || (w.t0 === undefined && sp.core.toLowerCase() === from)
+          if (!hit) continue
+          const next = sp.lead + shapeCore(to, sp.core) + sp.trail
+          if (next === w.t) continue
+          if (w.t0 === undefined) w.t0 = w.t
+          w.t = next
+          delete w.ok
+        }
+      }
+      return
+    }
+    case 'setWordOk': {
+      const t = turns[turnIdx(p.turnId)]
+      const w = t?.words.find((w) => w.id === p.wordId)
+      if (!w) return
+      if (p.ok) w.ok = true
+      else delete w.ok
       return
     }
   }

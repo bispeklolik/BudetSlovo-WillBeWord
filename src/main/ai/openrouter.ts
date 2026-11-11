@@ -5,6 +5,7 @@ import type {
   SummaryLevel,
   SummaryDomain
 } from './provider'
+import { AI_SYSTEM, aiItemsText, parseAiReply, type AiItem, type AiRawItem } from '../../shared/wordVariantsAi'
 import type { AnonRule } from '../../shared/types'
 // Промты и парсеры общие с локальным провайдером — единый «контракт» задач.
 import {
@@ -89,6 +90,19 @@ export const openrouterProvider: AiProvider = {
 
   async generate(system: string, text: string): Promise<string> {
     return ask(system, text, 8000)
+  },
+
+  // Варианты неуверенных слов. Схему ответа в OpenRouter задаём словами: не все модели держат json_schema.
+  async wordVariants(items: AiItem[], opts?: { timeoutMs?: number }): Promise<AiRawItem[]> {
+    if (!items.length) return []
+    const system =
+      AI_SYSTEM +
+      ' Ответ — только JSON без пояснений: {"items":[{"id":1,"ok":false,"variants":[{"text":"слово","basis":"sound"}]}]}'
+    const call = ask(system, aiItemsText(items), 400 + items.length * 260)
+    const timeout = new Promise<never>((_, rej) =>
+      setTimeout(() => rej(new Error('TimeoutError: ИИ не ответил вовремя')), opts?.timeoutMs ?? 8000)
+    )
+    return parseAiReply(jsonText(await Promise.race([call, timeout])))
   },
 
   async highlights(text: string): Promise<string[]> {

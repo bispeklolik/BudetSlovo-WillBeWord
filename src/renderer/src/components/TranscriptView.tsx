@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import type { ProjectMeta, Turn, Word } from '../../../shared/types'
 import { computePauses, pauseMarker } from '../../../shared/pauses'
+import { confLevel, isUncertain, listUncertain } from '../../../shared/wordVariants'
 
 function fmtTime(sec: number): string {
   const t = Math.floor(sec)
@@ -14,11 +15,13 @@ function fmtTime(sec: number): string {
 }
 
 function confClass(w: Word): string {
-  if (w.t0 !== undefined || w.p === undefined) return ''
-  if (w.p < 0.5) return ' low'
-  if (w.p < 0.72) return ' mid'
-  return ''
+  const l = confLevel(w) // слова с t0 (правленые) и с ok («Слово верное») не подсвечиваются
+  return l ? ' ' + l : ''
 }
+
+// Одиночный щелчок по неуверенному слову открывает окошко вариантов не сразу, а через это время:
+// за него может прийти второй щелчок (двойной щелчок — правка слова, окошко не мелькает).
+const OPEN_DELAY_MS = 250
 
 interface Props {
   meta: ProjectMeta
@@ -41,6 +44,14 @@ interface Props {
   anonOverlay: Map<number, string>
   /** отмечать паузы от N секунд (0 — не отмечать) */
   pauseMinSec?: number
+  /** окошко вариантов: открыть для слова (щелчок по неуверенному — с задержкой, правая кнопка — сразу) */
+  onOpenVariants: (turnId: string, w: Word) => void
+  /** слово, для которого сейчас открыто окошко */
+  variantsWordId: number | null
+  /** прокрутить список к реплике (Tab к следующему неуверенному слову); n меняется на каждый запрос */
+  scrollRequest: { turnIndex: number; n: number } | null
+  /** открыть обычную правку слова («Написать своё…») */
+  editRequest: { wordId: number; n: number } | null
 }
 
 // memo: родитель (Editor) перерисовывается 60 раз/с во время воспроизведения
@@ -63,6 +74,10 @@ function TranscriptView(props: Props): React.JSX.Element {
 
   const [editId, setEditId] = useState<number | null>(null)
   const [draft, setDraft] = useState('')
+  const openTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  // Первое неуверенное слово записи — якорь подсказки гайда.
+  const firstUncertainId = useMemo(() => listUncertain(turns)[0]?.wordId ?? null, [turns])
+  useEffect(() => () => clearTimeout(openTimer.current), [])
   const [spkEdit, setSpkEdit] = useState<string | null>(null)
   const [spkDraft, setSpkDraft] = useState('')
 
@@ -83,10 +98,25 @@ function TranscriptView(props: Props): React.JSX.Element {
     }
   }, [props.searchTurnIndex, props.currentMatchId])
 
+  useEffect(() => {
+    if (props.scrollRequest && ref.current) {
+      ref.current.scrollToIndex({ index: props.scrollRequest.turnIndex, align: 'center', behavior: 'smooth' })
+    }
+  }, [props.scrollRequest])
+
   const startEdit = (w: Word): void => {
+    clearTimeout(openTimer.current)
     setEditId(w.id)
     setDraft(w.t)
   }
+
+  useEffect(() => {
+    const req = props.editRequest
+    if (!req) return
+    const w = turns.flatMap((t) => t.words).find((x) => x.id === req.wordId)
+    if (w) startEdit(w)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.editRequest])
   const commit = (turnId: string): void => {
     if (editId !== null) props.onCommitWord(turnId, editId, draft)
     setEditId(null)
@@ -223,18 +253,20 @@ function TranscriptView(props: Props): React.JSX.Element {
                   className={
                     'word' +
                     confClass(w) +
-                    (w.src ? ' ' + w.src : '') +
+                    (w.src && !(w.ok && w.src === 'suspect') ? ' ' + w.src : '') +
                     (w.hl ? ' hl' : '') +
                     (props.matchIds.has(w.id)
                       ? w.id === props.currentMatchId
                         ? ' match-current'
                         : ' match'
                       : '') +
-                    (w.id === activeWordId ? ' active' : '')
+                    (w.id === activeWordId ? ' active' : '') +
+                    (w.id === props.variantsWordId ? ' vopen' : '')
                   }
                   data-word={w.id}
+                  data-tour={w.id === firstUncertainId ? 'uncertain-word' : undefined}
                   title={
-                    w.src === 'suspect'
+                    w.src === 'suspect' && !w.ok
                       ? 'ИИ: возможно, ошибка распознавания — проверь'
                       : w.src === 'ai'
                         ? w.t0 !== undefined
@@ -242,10 +274,23 @@ function TranscriptView(props: Props): React.JSX.Element {
                           : 'вставлено ИИ'
                         : w.t0 !== undefined
                           ? 'исходно: ' + w.t0.trim()
-                          : undefined
+                          : isUncertain(w)
+                            ? 'Движок не уверен в слове. Нажмите — появятся варианты.'
+                            : undefined
                   }
-                  onClick={() => props.onWordClick(w)}
+                  onClick={() => {
+                    props.onWordClick(w)
+                    clearTimeout(openTimer.current)
+                    if (isUncertain(w)) openTimer.current = setTimeout(() => props.onOpenVariants(turn.id, w), OPEN_DELAY_MS)
+                  }}
                   onDoubleClick={() => startEdit(w)}
+                  onContextMenu={(e) => {
+                    // Правая кнопка — варианты для ЛЮБОГО слова.
+                    e.preventDefault()
+                    clearTimeout(openTimer.current)
+                    props.onWordClick(w)
+                    props.onOpenVariants(turn.id, w)
+                  }}
                 >
                   {w.t}
                   <button

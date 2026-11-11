@@ -160,6 +160,8 @@ export interface Word {
   src?: 'ai' | 'suspect'
   /** true — слово входит в «лучшую мысль», выделенную ИИ (для подсветки). */
   hl?: boolean
+  /** true — человек проверил слово («Слово верное»): подсветки неуверенности нет, Tab его пропускает. */
+  ok?: true
 }
 
 export interface Turn {

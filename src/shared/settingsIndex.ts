@@ -33,7 +33,7 @@ export const SETTING_ENTRIES: SettingEntry[] = [
   { id: 'wizard', section: 'general', label: 'Пройти настройку заново', words: 'мастер с чего начать пример облако' },
   { id: 'tour', section: 'general', label: 'Обучение: пройти тур, подсказки в разделах', words: 'гайд тур подсказки знакомство коротко подробно' },
   { id: 'hotkeys', section: 'general', label: 'Горячие клавиши в записи', words: 'пробел поиск отменить скорость' },
-  { id: 'about', section: 'general', label: 'О программе', words: 'версия слово' },
+  { id: 'about', section: 'general', label: 'О программе', words: 'версия слово лицензия список слов источник' },
   // Диктовка
   { id: 'dict-enabled', section: 'dictation', label: 'Диктовка в любое окно', words: 'включить выключить' },
   { id: 'dict-hotkey', section: 'dictation', label: 'Клавиша диктовки', words: 'горячая кнопка' },

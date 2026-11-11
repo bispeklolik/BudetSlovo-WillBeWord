@@ -1,4 +1,5 @@
 import type { AnonRule } from '../../shared/anon'
+import type { AiItem, AiRawItem } from '../../shared/wordVariantsAi'
 
 // Провайдер-агностичная точка расширения ИИ-слоя: локально (llama.cpp/Ollama)
 // сейчас, облако (Claude) — позже, выбор за пользователем. Сырой diff и наложение
@@ -49,6 +50,11 @@ export interface AiProvider {
   generate(system: string, text: string): Promise<string>
   /** То же, но быстро, для коротких задач, где важна задержка (чистка диктовки, правка голосом). Нет — generate. */
   generateFast?(system: string, text: string): Promise<string>
+  /**
+   * Варианты неуверенных слов (окошко «возможные варианты»): по каждому слову — до 5 похожих
+   * по звучанию русских слов или «слово верное». Нет метода — ИИ этого провайдера варианты не даёт.
+   */
+  wordVariants?(items: AiItem[], opts?: { timeoutMs?: number }): Promise<AiRawItem[]>
   /** Самые ценные мысли/моменты — дословные цитаты из текста (для подсветки). */
   highlights(text: string): Promise<string[]>
   /** Находит идентифицирующие данные (имена/места/организации) и предлагает замены. */

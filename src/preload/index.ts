@@ -19,6 +19,7 @@ import type {
   AskTurn
 } from '../shared/types'
 import type { DictationStats } from '../shared/dictStats'
+import type { WordSoundReply, PrepareInfo, PrepareDone, AiEntry } from '../shared/wordVariants'
 
 const api = {
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('settings:get'),
@@ -133,6 +134,18 @@ const api = {
     ipcRenderer.invoke('ai:anonymize', slug),
   setAnonRules: (slug: string, rules: AnonRule[]): Promise<ProjectMeta | null> =>
     ipcRenderer.invoke('ai:setAnon', slug, rules),
+  wordsSound: (slug: string, wordId: number): Promise<WordSoundReply | null> => ipcRenderer.invoke('words:sound', slug, wordId),
+  wordsAi: (slug: string, wordId: number): Promise<{ entry: AiEntry | null }> => ipcRenderer.invoke('words:ai', slug, wordId),
+  wordsPrepareInfo: (slug: string): Promise<PrepareInfo> => ipcRenderer.invoke('words:prepareInfo', slug),
+  wordsPrepare: (slug: string): Promise<PrepareDone> => ipcRenderer.invoke('words:prepare', slug),
+  wordsPrepareCancel: (): Promise<void> => ipcRenderer.invoke('words:prepareCancel'),
+  onWordsProgress: (cb: (p: { done: number; total: number }) => void): (() => void) => {
+    const handler = (_e: unknown, p: { done: number; total: number }): void => cb(p)
+    ipcRenderer.on('words:progress', handler)
+    return () => {
+      ipcRenderer.off('words:progress', handler)
+    }
+  },
   onAiProgress: (cb: (p: { done: number; total: number; phase: string }) => void): (() => void) => {
     const handler = (_e: unknown, p: { done: number; total: number; phase: string }): void => cb(p)
     ipcRenderer.on('ai:progress', handler)

@@ -39,10 +39,18 @@ export interface ElWord {
   end: number
   type?: string
   speaker_id?: string | null
+  /** Логарифм вероятности слова (≤ 0), если движок его отдал. */
+  logprob?: number
 }
 
 export interface ElResponse {
   words?: ElWord[]
+}
+
+/** Уверенность из логарифма вероятности: exp(logprob), 0..1. Нет числа — 1 (как раньше). */
+export function probFromLogprob(logprob: number | undefined): number {
+  if (typeof logprob !== 'number' || !Number.isFinite(logprob)) return 1
+  return Math.min(1, Math.max(0, Math.exp(logprob)))
 }
 
 export function elevenToTurns(data: ElResponse): MergeResult {
@@ -51,7 +59,7 @@ export function elevenToTurns(data: ElResponse): MergeResult {
     .map((w) => ({
       s: w.start,
       e: w.end,
-      p: 1,
+      p: probFromLogprob(w.logprob),
       t: w.text.trim(),
       label: w.speaker_id ?? 'speaker_0'
     }))

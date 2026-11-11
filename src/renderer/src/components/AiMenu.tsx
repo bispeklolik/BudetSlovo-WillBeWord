@@ -7,6 +7,8 @@ interface AiMenuProps {
   hasBackup: boolean // есть бэкап причёсывания → можно отменить
   hasHl: boolean // есть выделенные «лучшие мысли»
   hasAnon: boolean // есть правила обезличивания
+  hasUncertain: boolean // в записи есть неуверенные слова
+  onPrepareWords: () => void // подготовить варианты для неуверенных слов
   onCleanup: () => void
   onRevert: () => void
   onHighlights: () => void
@@ -90,6 +92,18 @@ export default function AiMenu(props: AiMenuProps): React.JSX.Element {
             <button className="export-item" onClick={() => pick(props.onClearHl)}>
               Убрать выделения
             </button>
+          )}
+          {props.hasUncertain && (
+            <>
+              <div className="menu-sep" />
+              <button
+                className="export-item"
+                onClick={() => pick(props.onPrepareWords)}
+                title="Спросить ИИ про все подсвеченные слова заранее: потом варианты откроются сразу"
+              >
+                Подготовить варианты для неуверенных слов
+              </button>
+            </>
           )}
           <div className="menu-sep" />
           <button className="export-item" onClick={() => pick(props.onAnonymize)}>

@@ -4377,3 +4377,185 @@ select:focus-visible {
   gap: var(--sp-2);
 }
 
+
+/* ---- окошко «возможные варианты» неуверенного слова ---- */
+.word.vopen {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+.wv {
+  position: fixed;
+  z-index: 70;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.wv-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wv-word {
+  font-weight: 600;
+  font-size: 15px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wv-listen {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.wv-x {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.wv-x:hover {
+  color: var(--text);
+}
+
+.wv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wv-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 8px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.wv-item.sel,
+.wv-item:hover {
+  background: var(--accent-soft);
+}
+
+.wv-num {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.wv-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.wv-basis {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.wv-note {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 4px 8px;
+}
+
+.wv-busy::after {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 8px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: wv-spin 0.8s linear infinite;
+}
+
+@keyframes wv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.wv-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 13px;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.wv-actions {
+  display: flex;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.wv-act {
+  flex: 1 1 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.wv-act:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.wv-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wv-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.wv-keys {
+  font-size: 11px;
+  color: var(--muted);
+}

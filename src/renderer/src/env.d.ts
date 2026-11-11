@@ -19,6 +19,7 @@ import type {
   AskTurn
 } from '../../shared/types'
 import type { DictationStats } from '../../shared/dictStats'
+import type { WordSoundReply, PrepareInfo, PrepareDone, AiEntry } from '../../shared/wordVariants'
 
 export interface RendererApi {
   getSettings: () => Promise<Settings>
@@ -78,6 +79,12 @@ export interface RendererApi {
   clearHighlightsAi: (slug: string) => Promise<ProjectMeta | null>
   anonymizeAi: (slug: string) => Promise<ProjectMeta | null>
   setAnonRules: (slug: string, rules: AnonRule[]) => Promise<ProjectMeta | null>
+  wordsSound: (slug: string, wordId: number) => Promise<WordSoundReply | null>
+  wordsAi: (slug: string, wordId: number) => Promise<{ entry: AiEntry | null }>
+  wordsPrepareInfo: (slug: string) => Promise<PrepareInfo>
+  wordsPrepare: (slug: string) => Promise<PrepareDone>
+  wordsPrepareCancel: () => Promise<void>
+  onWordsProgress: (cb: (p: { done: number; total: number }) => void) => () => void
   onAiProgress: (cb: (p: { done: number; total: number; phase: string }) => void) => () => void
   onImportProgress: (cb: (p: ImportProgress) => void) => () => void
   startTranscribe: (slug: string, opts: TranscribeOptions) => Promise<JobInfo>

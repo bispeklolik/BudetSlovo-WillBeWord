@@ -11,7 +11,16 @@ const SLUG = DEMO_SLUG
 
 export function createDemoProject(): ProjectMeta {
   const existing = getProject(SLUG)
-  if (existing?.demo) return existing
+  if (existing?.demo) {
+    // Пример из прежней версии без неуверенных слов (и без правок человека) — обновляем текст:
+    // иначе новую функцию «варианты слова» на нём не посмотреть.
+    const words = (existing.turns ?? []).flatMap((t) => t.words)
+    if (words.length && !words.some((w) => w.p !== undefined || w.t0 !== undefined)) {
+      existing.turns = demoTurns().turns
+      writeJsonAtomic(join(projectDir(SLUG), 'project.json'), existing)
+    }
+    return existing
+  }
   const dir = projectDir(SLUG)
   mkdirSync(dir, { recursive: true })
   const { turns, durationSec } = demoTurns()

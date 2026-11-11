@@ -2,6 +2,7 @@ import type { Settings, ProjectMeta, Note, DictationEntry } from '../../shared/t
 import { defaultSettings } from '../../shared/types'
 import { DEMO_SLUG, DEMO_TITLE, DEMO_SPEAKERS, DEMO_RESULTS, demoTurns } from '../../shared/demo'
 import type { RendererApi } from './env'
+import { listUncertain, normCore, type Variant } from '../../shared/wordVariants'
 
 // В Electron window.api приходит из preload. В обычном браузере (превью UI)
 // работаем на заглушке, чтобы интерфейс можно было открыть без Electron.
@@ -26,6 +27,26 @@ if (!window.api) {
     }
   }
 }
+
+// Варианты слова на заглушке: правдоподобные ответы для трёх неуверенных слов примера.
+// ?stub=ai — «ИИ подключён» (ответ через ~0,7 с), ?stub=aierr — ИИ отвечает ошибкой, без параметра — ИИ не настроен.
+const stubAi = location.search.includes('stub=ai')
+const stubAiErr = location.search.includes('stub=aierr')
+const STUB_SOUND: Record<string, string[]> = {
+  увалят: ['уволят', 'увозят', 'валять', 'уволит'],
+  сарвала: ['сорвала', 'порвала', 'вырвала', 'сорвал'],
+  продливали: ['продавали', 'проделали', 'уродливые']
+}
+const STUB_AI: Record<string, string[]> = {
+  увалят: ['уволят', 'увольнят'],
+  сарвала: ['сорвала'],
+  продливали: ['продлевали', 'продлили']
+}
+const stubWord = (id: number): string => {
+  const w = demoMeta?.turns?.flatMap((t) => t.words).find((x) => x.id === id)
+  return w ? normCore(w.t) : ''
+}
+const asVariants = (list: string[] | undefined, basis: Variant['basis']): Variant[] => (list ?? []).map((text) => ({ text, basis }))
 
 const stub: RendererApi = {
   getSettings: async () => memory,
@@ -85,6 +106,30 @@ const stub: RendererApi = {
   clearHighlightsAi: async () => null,
   anonymizeAi: async () => null,
   setAnonRules: async () => null,
+  wordsSound: async (_slug, wordId) => ({
+    pinned: [],
+    sound: asVariants(STUB_SOUND[stubWord(wordId)], 'sound'),
+    cached: null,
+    aiState: stubAi || stubAiErr ? 'ready' : 'off'
+  }),
+  wordsAi: async (_slug, wordId) => {
+    await new Promise((r) => setTimeout(r, 700))
+    if (stubAiErr) throw new Error('Нет связи с Claude — проверьте интернет.')
+    const w = demoMeta?.turns?.flatMap((t) => t.words).find((x) => x.id === wordId)
+    const list = STUB_AI[stubWord(wordId)]
+    return { entry: w ? { t: w.t, ok: false, variants: asVariants(list, 'meaning') } : null }
+  },
+  wordsPrepareInfo: async () => {
+    const n = listUncertain(demoMeta?.turns).length
+    return { total: n, todo: n, requests: Math.ceil(n / 12), aiReady: stubAi }
+  },
+  wordsPrepare: async () => {
+    await new Promise((r) => setTimeout(r, 400))
+    const n = listUncertain(demoMeta?.turns).length
+    return { asked: n, answered: n, cancelled: false }
+  },
+  wordsPrepareCancel: async () => {},
+  onWordsProgress: () => () => {},
   onAiProgress: () => () => {},
   onImportProgress: () => () => {},
   startTranscribe: async () => {

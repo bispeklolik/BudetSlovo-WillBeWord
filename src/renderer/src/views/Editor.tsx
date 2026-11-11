@@ -19,6 +19,9 @@ import { buildAnonOverlay } from '../../../shared/anon'
 import { rateForKey } from '../../../shared/playback'
 import { showToast, humanError } from '../toast'
 import AiMenu from '../components/AiMenu'
+import WordVariants, { type ApplyOptions } from '../components/WordVariants'
+import { isUncertain, normCore, sameWordCount, shapeLike, stepUncertain } from '../../../shared/wordVariants'
+import { cleanWords } from '../../../shared/vocab'
 import { useSectionHints } from '../tour/TourProvider'
 import Icon from '../components/Icon'
 
@@ -86,6 +89,14 @@ export default function Editor({
   const [askOpen, setAskOpen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
   const [resultNote, setResultNote] = useState<Note | null>(null)
+  // Окошко вариантов неуверенного слова.
+  const [variants, setVariants] = useState<{ turnId: string; wordId: number } | null>(null)
+  const [scrollReq, setScrollReq] = useState<{ turnIndex: number; n: number } | null>(null)
+  const [editReq, setEditReq] = useState<{ wordId: number; n: number } | null>(null)
+  const [wordsBusy, setWordsBusy] = useState<{ done: number; total: number } | null>(null)
+  const stopAtRef = useRef<number | null>(null) // «Прослушать место»: где поставить паузу
+  const tabRef = useRef<(dir: 1 | -1) => void>(() => {}) // Tab / Shift+Tab, когда окошко закрыто
+  const overlayRef = useRef(false) // открыта ли панель поверх записи (Tab тогда не трогаем)
   // Переход к месту записи до того, как аудио загрузилось, — применяем по готовности.
   const pendingSeek = useRef<number | null>(initialSec ?? null)
   // Голосовая правка: реплика, которую надиктовывают заново.
@@ -251,6 +262,10 @@ export default function Editor({
       const a = audioRef.current
       if (a) {
         setCur(a.currentTime)
+        if (stopAtRef.current !== null && !a.paused && a.currentTime >= stopAtRef.current) {
+          a.pause()
+          stopAtRef.current = null
+        }
         if (!a.paused) {
           const idx = indexRef.current
           if (idx.length) {
@@ -282,6 +297,7 @@ export default function Editor({
   const togglePlay = useCallback((): void => {
     const a = audioRef.current
     if (!a) return
+    stopAtRef.current = null
     if (a.paused) {
       setFollow(true)
       void a.play()
@@ -313,6 +329,12 @@ export default function Editor({
       } else if (e.code === 'Space') {
         e.preventDefault()
         togglePlay()
+      } else if (e.code === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        // Tab — к неуверенному слову (если окошко открыто, Tab перехватывает оно само).
+        // Кнопки и списки живут своей жизнью: на них Tab остаётся обычным.
+        if ((el && ['BUTTON', 'SELECT', 'A'].includes(el.tagName)) || overlayRef.current) return
+        e.preventDefault()
+        tabRef.current(e.shiftKey ? -1 : 1)
       } else if (e.code === 'ArrowLeft') {
         skip(-5)
       } else if (e.code === 'ArrowRight') {
@@ -344,6 +366,129 @@ export default function Editor({
     setFollow(true)
     seek(w.s + 0.01)
     setActiveWordId(w.id)
+  }
+
+  // -------- окошко вариантов неуверенного слова --------
+  const openVariants = (turnId: string, w: Word): void => {
+    if (anonMode) return // в обезличенном виде настоящие слова не показываем
+    setVariants({ turnId, wordId: w.id })
+  }
+  // Tab / Shift+Tab: следующее / предыдущее неуверенное слово; окошко и звук переходят туда.
+  const stepVariants = (dir: 1 | -1): void => {
+    const m = metaRef.current
+    if (!m || anonMode) return
+    const next = stepUncertain(m.turns, variants?.wordId ?? activeWordId, dir)
+    if (!next) {
+      showToast(dir === 1 ? 'Дальше неуверенных слов нет.' : 'Раньше неуверенных слов нет.', 'info')
+      return
+    }
+    const w = m.turns?.[next.turnIndex]?.words.find((x) => x.id === next.wordId)
+    if (!w) return
+    stopAtRef.current = null
+    onWordClick(w)
+    setScrollReq({ turnIndex: next.turnIndex, n: Date.now() })
+    setVariants({ turnId: next.turnId, wordId: next.wordId })
+  }
+  tabRef.current = stepVariants
+
+  const variantWord = (): Word | null => {
+    const m = metaRef.current
+    if (!variants || !m) return null
+    return m.turns?.find((t) => t.id === variants.turnId)?.words.find((x) => x.id === variants.wordId) ?? null
+  }
+  const addToDict = async (word: string): Promise<void> => {
+    try {
+      const s = await api.getSettings()
+      const v = s.vocab ?? { words: [], replacements: [], snippets: [] }
+      if (v.words.some((x) => x.toLowerCase() === word.toLowerCase())) {
+        showToast(`«${word}» уже есть в словаре.`, 'info')
+        return
+      }
+      await api.setSettings({ vocab: { ...v, words: cleanWords([...v.words, word]) } })
+      showToast(`«${word}» добавлено в словарь.`, 'info')
+    } catch (err) {
+      showToast('Не удалось добавить в словарь: ' + humanError(err))
+    }
+  }
+  const applyVariant = (text: string, opts: ApplyOptions): void => {
+    const w = variantWord()
+    const m = metaRef.current
+    if (!w || !m || !variants) return
+    const shaped = shapeLike(text, w.t)
+    if (opts.all && sameWordCount(m.turns, w.t, w.id) > 0) {
+      // Одно действие — один шаг отмены: слово целиком во всей записи.
+      edit({ op: 'replaceWordAll', from: w.t, to: text, alsoWordId: w.id })
+    } else if (shaped !== w.t) {
+      edit({ op: 'setWordText', turnId: variants.turnId, wordId: w.id, t: shaped, t0: shaped === w.t0 ? null : (w.t0 ?? w.t) })
+    }
+    if (opts.toDict) void addToDict(text)
+    setVariants(null)
+  }
+  const markWordOk = (opts: ApplyOptions): void => {
+    const w = variantWord()
+    if (!w || !variants) return
+    edit({ op: 'setWordOk', turnId: variants.turnId, wordId: w.id, ok: true })
+    if (opts.toDict) void addToDict(normCore(w.t))
+    setVariants(null)
+  }
+  const listenWord = (): void => {
+    const a = audioRef.current
+    const w = variantWord()
+    if (!a || !w || w.s === undefined) return
+    setFollow(true)
+    a.currentTime = Math.max(0, w.s - 1)
+    stopAtRef.current = (w.e ?? w.s) + 0.5
+    void a.play()
+  }
+  const writeOwn = (): void => {
+    if (!variants) return
+    setEditReq({ wordId: variants.wordId, n: Date.now() })
+    setVariants(null)
+  }
+
+  // «На всю запись»: спросить ИИ про все неуверенные слова заранее.
+  const prepareWords = async (): Promise<void> => {
+    try {
+      const info = await api.wordsPrepareInfo(slug)
+      if (!info.total) {
+        showToast('В записи нет неуверенных слов.', 'info')
+        return
+      }
+      if (!info.aiReady) {
+        showToast('ИИ не подключён. Подключить — в Настройках.', 'info')
+        return
+      }
+      if (!info.todo) {
+        showToast('Варианты для всех неуверенных слов уже готовы.', 'info')
+        return
+      }
+      const ready = info.total - info.todo
+      const ok = window.confirm(
+        `Неуверенных слов: ${info.total}` +
+          (ready ? ` (для ${ready} варианты уже готовы)` : '') +
+          `.
+Я спрошу ИИ про ${info.todo} ${plural(info.todo, 'слово', 'слова', 'слов')}. Это примерно ${info.requests} ${plural(info.requests, 'запрос', 'запроса', 'запросов')}.
+Подготовить варианты?`
+      )
+      if (!ok) return
+      setWordsBusy({ done: 0, total: info.todo })
+      const off = api.onWordsProgress((p) => setWordsBusy({ done: p.done, total: p.total }))
+      try {
+        const r = await api.wordsPrepare(slug)
+        showToast(
+          r.cancelled
+            ? `Остановлено. Готово вариантов: ${r.answered}.`
+            : `Варианты готовы: ${r.answered} из ${r.asked}. Теперь окошко по щелчку открывается сразу.`,
+          'info'
+        )
+      } finally {
+        off()
+      }
+    } catch (err) {
+      showToast('Не удалось подготовить варианты: ' + humanError(err))
+    } finally {
+      setWordsBusy(null)
+    }
   }
 
   // -------- колбэки правок для TranscriptView --------
@@ -442,6 +587,11 @@ export default function Editor({
   }
 
   useSectionHints('record', !!meta && (meta.turns?.length ?? 0) > 0 && !reproc)
+  // Обезличенный вид или перераспознавание — окошко вариантов закрываем.
+  useEffect(() => {
+    if (anonMode || reproc) setVariants(null)
+  }, [anonMode, reproc])
+  overlayRef.current = libraryOpen || hlPanelOpen || anonPanelOpen || statsOpen || askOpen || notesOpen || !!resultNote || searchOpen
 
   if (!meta) {
     return (
@@ -618,8 +768,12 @@ export default function Editor({
                     ? 'Ищу мысли…'
                     : anonBusy
                       ? 'Обезличиваю…'
-                      : null
+                      : wordsBusy
+                        ? `Готовлю варианты ${wordsBusy.done}/${wordsBusy.total}`
+                        : null
               }
+              hasUncertain={!anonMode && !!meta.turns?.some((t) => t.words.some(isUncertain))}
+              onPrepareWords={() => void prepareWords()}
               hasBackup={!!aiBackup}
               hasHl={hasHl}
               hasAnon={hasAnon}
@@ -759,6 +913,10 @@ export default function Editor({
               anonMode={anonMode}
               anonOverlay={anonOverlay}
               pauseMinSec={pauseMinSec}
+              onOpenVariants={openVariants}
+              variantsWordId={variants?.wordId ?? null}
+              scrollRequest={scrollReq}
+              editRequest={editReq}
             />
           </>
         ) : meta.engine?.completedAt ? (
@@ -894,6 +1052,33 @@ export default function Editor({
 
       {resultNote && (
         <NoteViewer note={resultNote} onClose={() => setResultNote(null)} onChanged={() => {}} />
+      )}
+
+      {variants && !anonMode && !reproc && variantWord() && (
+        <WordVariants
+          slug={slug}
+          meta={meta}
+          turnId={variants.turnId}
+          word={variantWord()!}
+          canListen={!!audioUrl && !meta.demo}
+          onClose={() => setVariants(null)}
+          onApply={applyVariant}
+          onOk={markWordOk}
+          onWriteOwn={writeOwn}
+          onListen={listenWord}
+          onStep={stepVariants}
+        />
+      )}
+
+      {wordsBusy && (
+        <div className="redict-bar">
+          <span>
+            Готовлю варианты для неуверенных слов: {wordsBusy.done} из {wordsBusy.total}
+          </span>
+          <button className="btn" onClick={() => void api.wordsPrepareCancel()}>
+            Остановить
+          </button>
+        </div>
       )}
 
       {redict && (

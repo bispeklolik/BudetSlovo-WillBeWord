@@ -333,6 +333,14 @@ export default function SettingsPage({
           <span>Слово — редактор расшифровок для тех, чья работа — разговоры.</span>
           {APP_VERSION && <span className="settings-status">Версия {APP_VERSION}</span>}
         </div>
+        <div className="settings-row">
+          <span>
+            Список русских слов для подбора вариантов: FrequencyWords (Hermit Dave), по субтитрам OpenSubtitles. Лицензия CC BY-SA 4.0.
+          </span>
+          <button className="link-btn" onClick={() => api.openExternal('https://github.com/hermitdave/FrequencyWords')}>
+            Источник и лицензия
+          </button>
+        </div>
       </Block>
     </>
   )

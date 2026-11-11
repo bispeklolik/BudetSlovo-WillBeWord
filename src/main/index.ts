@@ -48,6 +48,9 @@ import { downloadLink, installYtDlp, ytDlpInstalled, cancelLinkImport } from './
 import { claudeProvider, setClaudeConfig } from './ai/claude'
 import { openrouterProvider, setOpenrouterConfig } from './ai/openrouter'
 import { runCleanup, revertCleanup, hasAiBackup } from './ai/cleanupJob'
+import { soundLayers, aiReady } from './ai/wordVariants'
+import { loadCache, cachedFor, aiForWord, prepareCount, prepareAll, SINGLE_TIMEOUT_MS } from './ai/wordVariantsJob'
+import type { WordSoundReply, PrepareInfo, PrepareDone } from '../shared/wordVariants'
 import { stopOllama, ensureOllama, ollamaStatus, ollamaQuickStatus, pullOllamaModel } from './ai/ollamaServer'
 import { LEGACY_DATA_DIR } from './pathsResolve'
 import { enginePaths } from './engine/location'
@@ -395,7 +398,8 @@ const EXTERNAL_OK = [
   'https://platform.openai.com/',
   'https://console.groq.com/',
   'https://console.anthropic.com/',
-  'https://openrouter.ai/'
+  'https://openrouter.ai/',
+  'https://github.com/hermitdave/FrequencyWords'
 ]
 ipcMain.handle('app:openExternal', (_e, url: string) => {
   if (EXTERNAL_OK.some((p) => url.startsWith(p))) return shell.openExternal(url)
@@ -733,6 +737,52 @@ ipcMain.handle('ai:runPrompt', async (_e, slug: string, system: string) => {
   const provider = await prepareEngine()
   return generateSmart(provider, system, transcriptText(meta))
 })
+// ---------- варианты неуверенного слова (волна 7) ----------
+// Облачный ИИ — только если человек уже выбрал облачный движок: отдельного выбора нет.
+// Локальный используем, если Ollama уже запущена (на щелчок её не поднимаем).
+async function variantsProvider(): Promise<AiProvider | null> {
+  const p = getProvider(settings.aiEngine ?? 'local-llama')
+  return p && (await aiReady(p)) ? p : null
+}
+let prepareJob: { cancelled: boolean } | null = null
+
+// Быстрая часть: слова словаря, правки записи, похожие по звучанию + готовый ответ ИИ из кэша.
+ipcMain.handle('words:sound', async (_e, slug: string, wordId: number): Promise<WordSoundReply | null> => {
+  const meta = getProject(slug)
+  if (!meta) return null
+  const layers = soundLayers(meta, Number(wordId), settings.vocab)
+  if (!layers) return null
+  const word = meta.turns?.flatMap((t) => t.words).find((w) => w.id === Number(wordId))
+  const cached = word ? cachedFor(loadCache(slug), word) : null
+  return { ...layers, cached, aiState: (await variantsProvider()) ? 'ready' : 'off' }
+})
+// Медленная часть: запрос к ИИ по одному слову. Ошибка уходит в окошко («Не получилось подобрать варианты»).
+ipcMain.handle('words:ai', async (_e, slug: string, wordId: number) => {
+  const provider = await variantsProvider()
+  if (!provider) return { entry: null }
+  const r = await aiForWord(provider, slug, Number(wordId), settings.vocab, { timeoutMs: SINGLE_TIMEOUT_MS })
+  return { entry: r.entry }
+})
+ipcMain.handle('words:prepareInfo', async (_e, slug: string): Promise<PrepareInfo> => ({
+  ...prepareCount(slug),
+  aiReady: !!(await variantsProvider())
+}))
+ipcMain.handle('words:prepare', async (_e, slug: string): Promise<PrepareDone> => {
+  if (prepareJob) throw new Error('Подготовка вариантов уже идёт.')
+  const provider = await prepareEngine() // для локального поднимает Ollama; без ключа — честная ошибка
+  if (!provider.wordVariants) throw new Error('Этот ИИ не умеет подбирать варианты слов.')
+  const job = { cancelled: false }
+  prepareJob = job
+  try {
+    return await prepareAll(provider, slug, settings.vocab, (p) => win?.webContents.send('words:progress', p), job)
+  } finally {
+    prepareJob = null
+  }
+})
+ipcMain.handle('words:prepareCancel', () => {
+  if (prepareJob) prepareJob.cancelled = true
+})
+
 // ---------- MCP: Claude читает записи ----------
 // Готовая запись для claude_desktop_config.json: тот же exe «Слова» в режиме Node.
 ipcMain.handle('mcp:config', () => {

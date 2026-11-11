@@ -5,6 +5,7 @@ import type {
   SummaryLevel,
   SummaryDomain
 } from './provider'
+import { AI_SYSTEM, AI_SCHEMA, aiItemsText, parseAiReply, type AiItem, type AiRawItem } from '../../shared/wordVariantsAi'
 import type { AnonRule } from '../../shared/anon'
 
 // Локальный провайдер через Ollama (HTTP на 127.0.0.1:11434). Модель по
@@ -229,6 +230,29 @@ export const localLlamaProvider: AiProvider = {
     if (!r.ok) throw new Error(`Ollama HTTP ${r.status}`)
     const d = (await r.json()) as { message?: { content?: string } }
     return parseHighlights(d.message?.content || '{}')
+  },
+
+  // Варианты неуверенных слов: format со схемой (Ollama держит ответ в схеме), температура низкая.
+  async wordVariants(items: AiItem[], opts?: { timeoutMs?: number }): Promise<AiRawItem[]> {
+    if (!items.length) return []
+    const r = await fetch(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(opts?.timeoutMs ?? 30_000),
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: 'system', content: AI_SYSTEM },
+          { role: 'user', content: aiItemsText(items) }
+        ],
+        stream: false,
+        format: AI_SCHEMA,
+        options: { temperature: 0.1, num_ctx: 8192, num_predict: 300 + items.length * 220 }
+      })
+    })
+    if (!r.ok) throw new Error(`Ollama HTTP ${r.status}`)
+    const d = (await r.json()) as { message?: { content?: string } }
+    return parseAiReply(d.message?.content || '{}')
   },
 
   async anonymize(text: string): Promise<AnonRule[]> {
