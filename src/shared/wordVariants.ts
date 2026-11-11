@@ -25,8 +25,13 @@ export const BASIS_LABEL: Record<VariantBasis, string> = {
 
 export const MAX_VARIANTS = 5
 
-/** Слова реже этого порога слой «по звучанию» не предлагает: в списке из субтитров там опечатки. */
-export const MIN_SOUND_FREQ = 500
+/**
+ * Слова реже этого порога слой «по звучанию» не предлагает. В ru_50k самое редкое слово
+ * встречается 138 раз, так что сейчас порог ничего не отсекает: это защита на случай более
+ * длинного списка. Порог низкий, чтобы проходили слова из психологии («проекция» — 143,
+ * «агрессия» — 249). Опечатки субтитров вроде «здраствуйте» отсекает looksLikeTypo.
+ */
+export const MIN_SOUND_FREQ = 100
 
 /** Ключ для сравнения вариантов: «пришёл» и «пришел» — одно и то же слово. */
 export const yeKey = (s: string): string => s.toLowerCase().replace(/ё/g, 'е')
@@ -190,6 +195,44 @@ function keyTolerance(keyLen: number): number {
 
 const tail = (s: string, n = 2): string => s.slice(Math.max(0, s.length - n))
 
+const RU = 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
+const freqMaps = new WeakMap<WordIndex, Map<string, number>>()
+
+function freqMap(index: WordIndex): Map<string, number> {
+  let m = freqMaps.get(index)
+  if (!m) {
+    m = new Map()
+    for (let i = 0; i < index.words.length; i++) m.set(index.words[i], index.freq[i])
+    freqMaps.set(index, m)
+  }
+  return m
+}
+
+/**
+ * Опечатка из субтитров: длинное слово, которое без одной лишней буквы или с одной
+ * недостающей становится словом, встречающимся хотя бы в 20 раз чаще
+ * («здраствуйте» → «здравствуйте»). Окончание (2 последние буквы) не трогаем:
+ * «агрессия» и «агрессии» — формы, а не опечатки. Короткие слова не проверяем:
+ * там легко спутать настоящие слова («плот» и «пот»).
+ */
+export function looksLikeTypo(w: string, freq: number, index: WordIndex): boolean {
+  if (w.length < 6) return false
+  const m = freqMap(index)
+  const need = freq * 20
+  const stop = w.length - 2
+  for (let i = 0; i < stop; i++) {
+    const del = w.slice(0, i) + w.slice(i + 1)
+    if ((m.get(del) ?? 0) >= need) return true
+  }
+  for (let i = 0; i <= stop; i++) {
+    for (const ch of RU) {
+      const ins = w.slice(0, i) + ch + w.slice(i)
+      if ((m.get(ins) ?? 0) >= need) return true
+    }
+  }
+  return false
+}
+
 /**
  * Похожие по звучанию слова из списка. Порядок: тот же ключ, потом ближе по буквам,
  * потом та же форма окончания, потом чаще встречается. Само слово не возвращаем.
@@ -201,7 +244,7 @@ export function soundCandidates(token: string, index: WordIndex, limit = 8, minF
   if (!key) return []
   const tol = keyTolerance(key.length)
   const letterMax = Math.max(3, Math.ceil(word.length / 3))
-  const scored: { w: string; score: number }[] = []
+  const scored: { w: string; f: number; score: number }[] = []
   for (let i = 0; i < index.words.length; i++) {
     const w = index.words[i]
     if (w === word) continue
@@ -214,10 +257,16 @@ export function soundCandidates(token: string, index: WordIndex, limit = 8, minF
     if (dl > letterMax) continue
     const sameEnd = tail(w) === tail(word)
     const score = dk * 40 + dl * 12 + (sameEnd ? 0 : 10) - Math.log10(index.freq[i] + 1) * 3
-    scored.push({ w, score })
+    scored.push({ w, f: index.freq[i], score })
   }
   scored.sort((a, b) => a.score - b.score || a.w.localeCompare(b.w, 'ru'))
-  return scored.slice(0, limit).map((s) => ({ text: s.w, basis: 'sound' as const }))
+  const out: Variant[] = []
+  for (const s of scored) {
+    if (out.length >= limit) break
+    if (minFreq > 0 && looksLikeTypo(s.w, s.f, index)) continue
+    out.push({ text: s.w, basis: 'sound' })
+  }
+  return out
 }
 
 // ---------------------------------------------------------------- словарь и прошлые правки

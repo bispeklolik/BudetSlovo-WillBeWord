@@ -128,6 +128,25 @@ describe('«на всю запись»: сбой одной пачки', () => {
     const res = await job.prepareAll(flaky([1], 'AI_REFUSED'), 'f', undefined, () => {}, { cancelled: false }, { index })
     expect(res).toEqual({ asked: 30, answered: 18, failed: 1, cancelled: false })
   })
+  it('сбой, отказ, сбой — не «два сбоя подряд»: работа идёт дальше (перепроверка)', async () => {
+    makeProject('h', 48)
+    let n = 0
+    const seq = ['TimeoutError', 'AI_REFUSED', 'TimeoutError']
+    const p = {
+      id: 'claude',
+      name: 'тест',
+      isLocal: false,
+      isAvailable: async () => true,
+      wordVariants: async (items: AiItem[]) => {
+        const m = seq[n++]
+        if (m) throw new Error(m)
+        return items.map((it) => ({ id: it.id, ok: false, variants: [{ text: 'колит' }] }))
+      }
+    } as unknown as AiProvider
+    const res = await job.prepareAll(p, 'h', undefined, () => {}, { cancelled: false }, { index })
+    expect(res.failed).toBe(3)
+    expect(res.answered).toBeGreaterThan(0)
+  })
   it('неверный ключ останавливает сразу', async () => {
     makeProject('g', 30)
     await expect(job.prepareAll(flaky([0], 'AI_KEY_INVALID'), 'g', undefined, () => {}, { cancelled: false }, { index })).rejects.toThrow('AI_KEY_INVALID')

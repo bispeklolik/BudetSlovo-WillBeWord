@@ -95,7 +95,7 @@ export default function Editor({
   const [editReq, setEditReq] = useState<{ wordId: number; n: number } | null>(null)
   const [wordsBusy, setWordsBusy] = useState<{ done: number; total: number } | null>(null)
   const stopAtRef = useRef<number | null>(null) // «Прослушать место»: где поставить паузу
-  const tabRef = useRef<(dir: 1 | -1) => void>(() => {}) // Tab / Shift+Tab, когда окошко закрыто
+  const tabRef = useRef<(dir: 1 | -1, quiet?: boolean) => boolean>(() => false) // Tab / Shift+Tab, когда окошко закрыто
   const anonRef = useRef(false) // обезличенный вид: окошко вариантов там не открываем
   const overlayRef = useRef(false) // открыта ли панель поверх записи (Tab тогда не трогаем)
   // Переход к месту записи до того, как аудио загрузилось, — применяем по готовности.
@@ -336,8 +336,8 @@ export default function Editor({
         if ((el && ['BUTTON', 'SELECT', 'A'].includes(el.tagName)) || overlayRef.current) return
         // Нет неуверенных слов (или вид обезличен) — Tab остаётся обычным, фокус идёт по кнопкам.
         if (anonRef.current || !listUncertain(metaRef.current?.turns).length) return
-        e.preventDefault()
-        tabRef.current(e.shiftKey ? -1 : 1)
+        // Дальше (раньше) неуверенных слов нет — Tab тоже остаётся обычным.
+        if (tabRef.current(e.shiftKey ? -1 : 1, true)) e.preventDefault()
       } else if (e.code === 'ArrowLeft') {
         skip(-5)
       } else if (e.code === 'ArrowRight') {
@@ -377,20 +377,22 @@ export default function Editor({
     setVariants({ turnId, wordId: w.id })
   }
   // Tab / Shift+Tab: следующее / предыдущее неуверенное слово; окошко и звук переходят туда.
-  const stepVariants = (dir: 1 | -1): void => {
+  // quiet — вызов с закрытым окошком: если идти некуда, молчим и отдаём Tab браузеру.
+  const stepVariants = (dir: 1 | -1, quiet = false): boolean => {
     const m = metaRef.current
-    if (!m || anonMode) return
+    if (!m || anonMode) return false
     const next = stepUncertain(m.turns, variants?.wordId ?? activeWordId, dir)
     if (!next) {
-      showToast(dir === 1 ? 'Дальше неуверенных слов нет.' : 'Раньше неуверенных слов нет.', 'info')
-      return
+      if (!quiet) showToast(dir === 1 ? 'Дальше неуверенных слов нет.' : 'Раньше неуверенных слов нет.', 'info')
+      return false
     }
     const w = m.turns?.[next.turnIndex]?.words.find((x) => x.id === next.wordId)
-    if (!w) return
+    if (!w) return false
     stopAtRef.current = null
     onWordClick(w)
     setScrollReq({ turnIndex: next.turnIndex, n: Date.now() })
     setVariants({ turnId: next.turnId, wordId: next.wordId })
+    return true
   }
   tabRef.current = stepVariants
   anonRef.current = anonMode

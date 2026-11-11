@@ -148,7 +148,8 @@ export async function prepareAll(
       if (msg === 'AI_KEY_INVALID') throw err
       lastError = err
       failed++
-      if (msg !== 'AI_REFUSED' && ++streak >= 2) throw err
+      if (msg === 'AI_REFUSED') streak = 0
+      else if (++streak >= 2) throw err
       done += chunk.length
       onProgress({ done, total: ids.length })
       continue

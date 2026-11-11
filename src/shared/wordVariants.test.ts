@@ -15,7 +15,9 @@ import {
   historyCandidates,
   engineVariant,
   mergeVariants,
-  sameWordCount
+  sameWordCount,
+  looksLikeTypo,
+  MIN_SOUND_FREQ
 } from './wordVariants'
 import { applyPatch } from './patches'
 import type { ProjectMeta, Word, Turn } from './types'
@@ -207,11 +209,21 @@ describe('патч setWordOk: «Слово верное»', () => {
 })
 
 describe('исправления после проверки', () => {
-  it('слой «по звучанию» не предлагает редкие слова (опечатки субтитров)', () => {
-    const idx = buildIndex('здравствуйте 28754\nздраствуйте 318\nдравствуйте 191')
-    const all = soundCandidates('здравствуйте', idx).map((x) => x.text)
-    expect(all).toContain('здраствуйте')
-    expect(soundCandidates('здравствуйте', idx, 8, 500)).toEqual([])
+  it('слой «по звучанию» не предлагает опечатки субтитров (перепроверка)', () => {
+    const idx = buildIndex('здравствуйте 28754\nздраствуйте 318\nдравствуйте 191\nздравствуй 9000')
+    const all = soundCandidates('здраствуйте', idx).map((x) => x.text)
+    expect(all).toContain('дравствуйте') // без порога — как есть
+    const shown = soundCandidates('здраствуйте', idx, 8, MIN_SOUND_FREQ).map((x) => x.text)
+    expect(shown).toContain('здравствуйте')
+    expect(shown).not.toContain('дравствуйте')
+    expect(looksLikeTypo('здраствуйте', 318, idx)).toBe(true)
+  })
+  it('редкие настоящие слова психологии проходят порог, формы слова — не опечатки', () => {
+    const idx = buildIndex('проекция 143\nпроекции 900\nагрессия 249\nагрессии 6000\nагресия 12')
+    const shown = soundCandidates('проэкция', idx, 8, MIN_SOUND_FREQ).map((x) => x.text)
+    expect(shown).toContain('проекция')
+    expect(looksLikeTypo('агрессия', 249, idx)).toBe(false) // отличается от «агрессии» окончанием
+    expect(looksLikeTypo('плот', 100, buildIndex('пот 99999\nплот 100'))).toBe(false) // короткие не трогаем
   })
   it('«пришёл» и «пришел» в списке вариантов — один вариант', () => {
     const out = mergeVariants([[{ text: 'пришёл', basis: 'sound' }, { text: 'пришел', basis: 'sound' }]], 'пришол')
