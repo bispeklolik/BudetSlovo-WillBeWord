@@ -253,7 +253,7 @@ function TranscriptView(props: Props): React.JSX.Element {
                   className={
                     'word' +
                     confClass(w) +
-                    (w.src && !(w.ok && w.src === 'suspect') ? ' ' + w.src : '') +
+                    (w.src && !(w.src === 'suspect' && (w.ok || w.t0 !== undefined)) ? ' ' + w.src : '') +
                     (w.hl ? ' hl' : '') +
                     (props.matchIds.has(w.id)
                       ? w.id === props.currentMatchId
@@ -266,7 +266,7 @@ function TranscriptView(props: Props): React.JSX.Element {
                   data-word={w.id}
                   data-tour={w.id === firstUncertainId ? 'uncertain-word' : undefined}
                   title={
-                    w.src === 'suspect' && !w.ok
+                    w.src === 'suspect' && !w.ok && w.t0 === undefined
                       ? 'ИИ: возможно, ошибка распознавания — проверь'
                       : w.src === 'ai'
                         ? w.t0 !== undefined

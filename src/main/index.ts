@@ -763,17 +763,28 @@ ipcMain.handle('words:ai', async (_e, slug: string, wordId: number) => {
   const r = await aiForWord(provider, slug, Number(wordId), settings.vocab, { timeoutMs: SINGLE_TIMEOUT_MS })
   return { entry: r.entry }
 })
+// Для «на всю запись» локальный ИИ считаем готовым, если Ollama и модель стоят на диске:
+// сервер поднимет prepareEngine в words:prepare.
+async function prepareReady(): Promise<boolean> {
+  const p = getProvider(settings.aiEngine ?? 'local-llama')
+  if (!p?.wordVariants) return false
+  if (p.isLocal) {
+    const s = await ollamaQuickStatus()
+    return s.installed && s.models.length > 0
+  }
+  return aiReady(p)
+}
 ipcMain.handle('words:prepareInfo', async (_e, slug: string): Promise<PrepareInfo> => ({
   ...prepareCount(slug),
-  aiReady: !!(await variantsProvider())
+  aiReady: await prepareReady()
 }))
 ipcMain.handle('words:prepare', async (_e, slug: string): Promise<PrepareDone> => {
   if (prepareJob) throw new Error('Подготовка вариантов уже идёт.')
-  const provider = await prepareEngine() // для локального поднимает Ollama; без ключа — честная ошибка
-  if (!provider.wordVariants) throw new Error('Этот ИИ не умеет подбирать варианты слов.')
   const job = { cancelled: false }
-  prepareJob = job
+  prepareJob = job // занимаем место до первого await: второй вызов уже не пройдёт
   try {
+    const provider = await prepareEngine() // для локального поднимает Ollama; без ключа — честная ошибка
+    if (!provider.wordVariants) throw new Error('Этот ИИ не умеет подбирать варианты слов.')
     return await prepareAll(provider, slug, settings.vocab, (p) => win?.webContents.send('words:progress', p), job)
   } finally {
     prepareJob = null

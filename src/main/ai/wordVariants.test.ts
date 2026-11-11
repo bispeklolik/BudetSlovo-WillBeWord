@@ -5,7 +5,7 @@ import type { AiProvider } from './provider'
 import type { AiItem, AiRawItem } from '../../shared/wordVariantsAi'
 import type { ProjectMeta, Turn, Word } from '../../shared/types'
 
-const index = buildIndex('колет 143\nколит 90\nсорвала 500\nуволят 800')
+const index = buildIndex('колет 1430\nколит 900\nсорвала 500\nуволят 800')
 
 function words(texts: string[], p: Record<number, number> = {}): Word[] {
   return texts.map((t, i) => ({ id: i, t, s: i, e: i + 0.5, ...(p[i] !== undefined ? { p: p[i] } : {}) }))

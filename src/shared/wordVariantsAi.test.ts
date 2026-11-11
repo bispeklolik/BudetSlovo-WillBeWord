@@ -105,3 +105,10 @@ describe('запрос', () => {
     expect(closeDict('коблит', ['Шварцман'])).toEqual([])
   })
 })
+
+describe('ё и е', () => {
+  it('«пришёл» и «пришел» от ИИ — один вариант', () => {
+    const out = filterAiVariants('пришол', [{ text: 'пришёл' }, { text: 'пришел' }])
+    expect(out.map((v) => v.text)).toEqual(['пришёл'])
+  })
+})

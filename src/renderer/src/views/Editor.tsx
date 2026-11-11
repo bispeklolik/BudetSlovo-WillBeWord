@@ -20,7 +20,7 @@ import { rateForKey } from '../../../shared/playback'
 import { showToast, humanError } from '../toast'
 import AiMenu from '../components/AiMenu'
 import WordVariants, { type ApplyOptions } from '../components/WordVariants'
-import { isUncertain, normCore, sameWordCount, shapeLike, stepUncertain } from '../../../shared/wordVariants'
+import { isUncertain, coreOf, listUncertain, sameWordCount, shapeLike, stepUncertain } from '../../../shared/wordVariants'
 import { cleanWords } from '../../../shared/vocab'
 import { useSectionHints } from '../tour/TourProvider'
 import Icon from '../components/Icon'
@@ -96,6 +96,7 @@ export default function Editor({
   const [wordsBusy, setWordsBusy] = useState<{ done: number; total: number } | null>(null)
   const stopAtRef = useRef<number | null>(null) // «Прослушать место»: где поставить паузу
   const tabRef = useRef<(dir: 1 | -1) => void>(() => {}) // Tab / Shift+Tab, когда окошко закрыто
+  const anonRef = useRef(false) // обезличенный вид: окошко вариантов там не открываем
   const overlayRef = useRef(false) // открыта ли панель поверх записи (Tab тогда не трогаем)
   // Переход к месту записи до того, как аудио загрузилось, — применяем по готовности.
   const pendingSeek = useRef<number | null>(initialSec ?? null)
@@ -333,6 +334,8 @@ export default function Editor({
         // Tab — к неуверенному слову (если окошко открыто, Tab перехватывает оно само).
         // Кнопки и списки живут своей жизнью: на них Tab остаётся обычным.
         if ((el && ['BUTTON', 'SELECT', 'A'].includes(el.tagName)) || overlayRef.current) return
+        // Нет неуверенных слов (или вид обезличен) — Tab остаётся обычным, фокус идёт по кнопкам.
+        if (anonRef.current || !listUncertain(metaRef.current?.turns).length) return
         e.preventDefault()
         tabRef.current(e.shiftKey ? -1 : 1)
       } else if (e.code === 'ArrowLeft') {
@@ -390,6 +393,7 @@ export default function Editor({
     setVariants({ turnId: next.turnId, wordId: next.wordId })
   }
   tabRef.current = stepVariants
+  anonRef.current = anonMode
 
   const variantWord = (): Word | null => {
     const m = metaRef.current
@@ -428,7 +432,7 @@ export default function Editor({
     const w = variantWord()
     if (!w || !variants) return
     edit({ op: 'setWordOk', turnId: variants.turnId, wordId: w.id, ok: true })
-    if (opts.toDict) void addToDict(normCore(w.t))
+    if (opts.toDict) void addToDict(coreOf(w.t))
     setVariants(null)
   }
   const listenWord = (): void => {
@@ -478,7 +482,9 @@ export default function Editor({
         showToast(
           r.cancelled
             ? `Остановлено. Готово вариантов: ${r.answered}.`
-            : `Варианты готовы: ${r.answered} из ${r.asked}. Теперь окошко по щелчку открывается сразу.`,
+            : r.failed
+              ? `Варианты готовы: ${r.answered} из ${r.asked}. ИИ не ответил на ${r.failed} ${plural(r.failed, 'запрос', 'запроса', 'запросов')} — запустите ещё раз.`
+              : `Варианты готовы: ${r.answered} из ${r.asked}. Теперь окошко по щелчку открывается сразу.`,
           'info'
         )
       } finally {
@@ -1056,6 +1062,7 @@ export default function Editor({
 
       {variants && !anonMode && !reproc && variantWord() && (
         <WordVariants
+          key={variants.wordId}
           slug={slug}
           meta={meta}
           turnId={variants.turnId}

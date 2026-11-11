@@ -4,6 +4,7 @@ import type { ProjectMeta, Word } from '../../shared/types'
 import { toSubtitles } from './subtitles'
 import { buildAnonOverlay } from '../../shared/anon'
 import { computePauses, pauseMarker } from '../../shared/pauses'
+import { confLevel } from '../../shared/wordVariants'
 
 // Паузы «(пауза 4 с)»: ключ — id слова ПОСЛЕ паузы. Считаем по исходным
 // таймкодам до обезличивания (оно пересобирает заменённые слова без таймкодов).
@@ -52,11 +53,10 @@ function turnText(words: Word[], pauses: Pauses = NO_PAUSES): string {
 }
 
 // Подсветка только у «движковых» слов: правленые (t0) и вставленные (нет p) — без неё.
+// Слово с пометкой «Слово верное» (ok) тоже без подсветки: уровень считает общая confLevel.
 function confHighlight(w: Word): 'red' | 'yellow' | null {
-  if (w.t0 !== undefined || w.p === undefined) return null
-  if (w.p < 0.5) return 'red'
-  if (w.p < 0.72) return 'yellow'
-  return null
+  const l = confLevel(w)
+  return l === 'low' ? 'red' : l === 'mid' ? 'yellow' : null
 }
 
 async function buildDocx(meta: ProjectMeta, highlight: boolean, pauses: Pauses = NO_PAUSES): Promise<Buffer> {

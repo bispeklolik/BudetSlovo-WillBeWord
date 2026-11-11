@@ -205,3 +205,20 @@ describe('патч setWordOk: «Слово верное»', () => {
     expect(m.turns![0].words[0].ok).toBeUndefined()
   })
 })
+
+describe('исправления после проверки', () => {
+  it('слой «по звучанию» не предлагает редкие слова (опечатки субтитров)', () => {
+    const idx = buildIndex('здравствуйте 28754\nздраствуйте 318\nдравствуйте 191')
+    const all = soundCandidates('здравствуйте', idx).map((x) => x.text)
+    expect(all).toContain('здраствуйте')
+    expect(soundCandidates('здравствуйте', idx, 8, 500)).toEqual([])
+  })
+  it('«пришёл» и «пришел» в списке вариантов — один вариант', () => {
+    const out = mergeVariants([[{ text: 'пришёл', basis: 'sound' }, { text: 'пришел', basis: 'sound' }]], 'пришол')
+    expect(out.map((v) => v.text)).toEqual(['пришёл'])
+  })
+  it('слово с «Слово верное» не подсвечено', () => {
+    expect(confLevel(W(1, 'тест', 0.3))).toBe('low')
+    expect(confLevel(W(1, 'тест', 0.3, { ok: true }))).toBe('')
+  })
+})

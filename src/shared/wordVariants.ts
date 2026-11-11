@@ -25,6 +25,12 @@ export const BASIS_LABEL: Record<VariantBasis, string> = {
 
 export const MAX_VARIANTS = 5
 
+/** Слова реже этого порога слой «по звучанию» не предлагает: в списке из субтитров там опечатки. */
+export const MIN_SOUND_FREQ = 500
+
+/** Ключ для сравнения вариантов: «пришёл» и «пришел» — одно и то же слово. */
+export const yeKey = (s: string): string => s.toLowerCase().replace(/ё/g, 'е')
+
 /** Ответ ИИ про одно слово, как он лежит в кэше. */
 export interface AiEntry {
   /** Текст слова, для которого ответ получен: поменялся текст — ответ устарел. */
@@ -57,6 +63,8 @@ export interface PrepareInfo {
 export interface PrepareDone {
   asked: number
   answered: number
+  /** Пачки, на которые ИИ не ответил. */
+  failed: number
   cancelled: boolean
 }
 
@@ -130,8 +138,8 @@ export function listUncertain(turns: Turn[] | undefined): UncertainRef[] {
 
 /**
  * Следующее (dir 1) или предыдущее (dir -1) неуверенное слово от слова fromWordId.
- * Само fromWordId не считается, даже если оно неуверенное. Нет места — с начала записи
- * (для -1 — с конца). Ничего нет — null.
+ * Само fromWordId не считается, даже если оно неуверенное. Дальше слов нет (или раньше) — null:
+ * по кругу не ходим. Нет ни одного неуверенного слова — тоже null.
  */
 export function stepUncertain(turns: Turn[] | undefined, fromWordId: number | null, dir: 1 | -1): UncertainRef | null {
   const list = listUncertain(turns)
@@ -186,7 +194,7 @@ const tail = (s: string, n = 2): string => s.slice(Math.max(0, s.length - n))
  * Похожие по звучанию слова из списка. Порядок: тот же ключ, потом ближе по буквам,
  * потом та же форма окончания, потом чаще встречается. Само слово не возвращаем.
  */
-export function soundCandidates(token: string, index: WordIndex, limit = 8): Variant[] {
+export function soundCandidates(token: string, index: WordIndex, limit = 8, minFreq = 0): Variant[] {
   const word = normCore(token)
   if ([...word].length < 3 || !/^[а-яё-]+$/.test(word)) return []
   const key = phoneticKey(word)
@@ -197,6 +205,7 @@ export function soundCandidates(token: string, index: WordIndex, limit = 8): Var
   for (let i = 0; i < index.words.length; i++) {
     const w = index.words[i]
     if (w === word) continue
+    if (index.freq[i] < minFreq) continue // в списке из субтитров редкие «слова» — чаще всего опечатки
     const k = index.keys[i]
     if (Math.abs(k.length - key.length) > tol) continue
     const dk = k === key ? 0 : editDistance(k, key, tol)
@@ -289,13 +298,14 @@ export function engineVariant(w: Word): Variant[] {
 
 /** Слои по порядку важности → не больше limit вариантов, без повторов и без самого слова. */
 export function mergeVariants(layers: Variant[][], currentToken: string, limit = MAX_VARIANTS): Variant[] {
-  const seen = new Set<string>([normCore(currentToken)])
+  const cur = normCore(currentToken)
+  const seen = new Set<string>()
   const out: Variant[] = []
   for (const layer of layers) {
     for (const v of layer) {
       const n = v.text.trim().toLowerCase()
-      if (!n || seen.has(n)) continue
-      seen.add(n)
+      if (!n || n === cur || seen.has(yeKey(n))) continue
+      seen.add(yeKey(n))
       out.push({ text: v.text.trim(), basis: v.basis })
       if (out.length >= limit) return out
     }

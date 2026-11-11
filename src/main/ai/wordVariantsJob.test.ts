@@ -58,7 +58,7 @@ describe('«на всю запись»: пачки, кэш, отмена', () =>
     const res = await job.prepareAll(provider(calls), 'b', undefined, (p) => progress.push(p.done), { cancelled: false }, { index })
     expect(calls.map((c) => c.length)).toEqual([12, 12, 6])
     expect(progress).toEqual([0, 12, 24, 30])
-    expect(res).toEqual({ asked: 30, answered: 30, cancelled: false })
+    expect(res).toEqual({ asked: 30, answered: 30, failed: 0, cancelled: false })
     expect(existsSync(join(store.projectDir('b'), 'variants.json'))).toBe(true)
     // в проекте (патчах) ничего не появилось
     expect(readFileSync(join(store.projectDir('b'), 'project.json'), 'utf8')).not.toContain('колит')
@@ -106,5 +106,30 @@ describe('«на всю запись»: пачки, кэш, отмена', () =>
     const cache = job.loadCache('e')
     expect(job.cachedFor(cache, { id: 1, t: 'коблит' })).not.toBeNull()
     expect(job.cachedFor(cache, { id: 1, t: 'другое' })).toBeNull()
+  })
+})
+
+describe('«на всю запись»: сбой одной пачки', () => {
+  function flaky(failOn: number[], msg: string): AiProvider {
+    let n = 0
+    return {
+      id: 'claude',
+      name: 'тест',
+      isLocal: false,
+      isAvailable: async () => true,
+      wordVariants: async (items: AiItem[]) => {
+        if (failOn.includes(n++)) throw new Error(msg)
+        return items.map((it) => ({ id: it.id, ok: false, variants: [{ text: 'колит' }] }))
+      }
+    } as unknown as AiProvider
+  }
+  it('отказ модели на одной пачке не мешает остальным', async () => {
+    makeProject('f', 30)
+    const res = await job.prepareAll(flaky([1], 'AI_REFUSED'), 'f', undefined, () => {}, { cancelled: false }, { index })
+    expect(res).toEqual({ asked: 30, answered: 18, failed: 1, cancelled: false })
+  })
+  it('неверный ключ останавливает сразу', async () => {
+    makeProject('g', 30)
+    await expect(job.prepareAll(flaky([0], 'AI_KEY_INVALID'), 'g', undefined, () => {}, { cancelled: false }, { index })).rejects.toThrow('AI_KEY_INVALID')
   })
 })

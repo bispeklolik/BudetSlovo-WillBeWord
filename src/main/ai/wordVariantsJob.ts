@@ -103,6 +103,8 @@ export interface PrepareProgress {
 export interface PrepareResult {
   asked: number
   answered: number
+  /** Пачки, на которые ИИ не ответил (отказ, таймаут). Остальные пачки это не остановило. */
+  failed: number
   cancelled: boolean
 }
 
@@ -119,7 +121,7 @@ export async function prepareAll(
   opts: { index?: WordIndex } = {}
 ): Promise<PrepareResult> {
   const meta = getProject(slug)
-  if (!meta) return { asked: 0, answered: 0, cancelled: false }
+  if (!meta) return { asked: 0, answered: 0, failed: 0, cancelled: false }
   const cache = loadCache(slug)
   const ids: number[] = []
   for (const u of listUncertain(meta.turns)) {
@@ -128,11 +130,29 @@ export async function prepareAll(
   }
   let answered = 0
   let done = 0
+  let failed = 0
+  let streak = 0 // сбои подряд (не считая отказов модели)
+  let lastError: unknown = null
   onProgress({ done: 0, total: ids.length })
   for (let i = 0; i < ids.length; i += BATCH_SIZE) {
-    if (signal.cancelled) return { asked: done, answered, cancelled: true }
+    if (signal.cancelled) return { asked: done, answered, failed, cancelled: true }
     const chunk = ids.slice(i, i + BATCH_SIZE)
-    const res = await askAi(provider, meta, chunk, vocab, { timeoutMs: BATCH_TIMEOUT_MS, index: opts.index })
+    let res: Awaited<ReturnType<typeof askAi>>
+    try {
+      res = await askAi(provider, meta, chunk, vocab, { timeoutMs: BATCH_TIMEOUT_MS, index: opts.index })
+      streak = 0
+    } catch (err) {
+      // Одна пачка не ответила (отказ модели на тяжёлой фразе, таймаут) — идём к следующей.
+      // Неверный ключ и два сбоя подряд (нет сети) — останавливаемся.
+      const msg = err instanceof Error ? err.message : ''
+      if (msg === 'AI_KEY_INVALID') throw err
+      lastError = err
+      failed++
+      if (msg !== 'AI_REFUSED' && ++streak >= 2) throw err
+      done += chunk.length
+      onProgress({ done, total: ids.length })
+      continue
+    }
     const fresh = loadCache(slug)
     for (const [id, entry] of res) {
       fresh[String(id)] = entry
@@ -142,6 +162,7 @@ export async function prepareAll(
     done += chunk.length
     onProgress({ done, total: ids.length })
   }
-  return { asked: done, answered, cancelled: signal.cancelled }
+  if (failed > 0 && answered === 0 && lastError) throw lastError // ни одна пачка не ответила
+  return { asked: done, answered, failed, cancelled: signal.cancelled }
 }
 

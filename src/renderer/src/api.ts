@@ -126,7 +126,7 @@ const stub: RendererApi = {
   wordsPrepare: async () => {
     await new Promise((r) => setTimeout(r, 400))
     const n = listUncertain(demoMeta?.turns).length
-    return { asked: n, answered: n, cancelled: false }
+    return { asked: n, answered: n, failed: 0, cancelled: false }
   },
   wordsPrepareCancel: async () => {},
   onWordsProgress: () => () => {},

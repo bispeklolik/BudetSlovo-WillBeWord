@@ -5,6 +5,7 @@ import { buildAnonOverlay, anonPlain } from '../../shared/anon'
 import {
   engineVariant,
   historyCandidates,
+  MIN_SOUND_FREQ,
   soundCandidates,
   vocabCandidates,
   type AiEntry,
@@ -41,7 +42,7 @@ export function soundLayers(meta: ProjectMeta, wordId: number, vocab: Vocab | un
   if (!f) return null
   const { word } = f
   const pinned = [...vocabCandidates(word.t, vocab), ...engineVariant(word), ...historyCandidates(word.t, meta.turns)]
-  return { pinned, sound: soundCandidates(word.t, index, 8) }
+  return { pinned, sound: soundCandidates(word.t, index, 8, MIN_SOUND_FREQ) }
 }
 
 // ---------------------------------------------------------------- слой ИИ
@@ -93,7 +94,7 @@ export async function askAi(
       right: frag.right,
       conf: f.word.p === undefined ? undefined : Math.round(f.word.p * 100),
       dict: closeDict(f.word.t, safeVocab, 20),
-      hints: soundCandidates(f.word.t, index, 5).map((v) => v.text)
+      hints: soundCandidates(f.word.t, index, 5, MIN_SOUND_FREQ).map((v) => v.text)
     })
   }
   if (!items.length) return out

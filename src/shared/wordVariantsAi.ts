@@ -5,7 +5,7 @@
 import type { Turn } from './types'
 import { phoneticKey } from './phonetic'
 import { editDistance } from './learn'
-import { coreOf, normCore, isNear, type Variant, MAX_VARIANTS } from './wordVariants'
+import { coreOf, normCore, isNear, yeKey, type Variant, MAX_VARIANTS } from './wordVariants'
 
 /** Сколько слов фразы слева и справа от слова видит ИИ. */
 export const CONTEXT_WORDS = 12
@@ -139,13 +139,13 @@ export function filterAiVariants(token: string, raw: { text: string; basis?: str
   const word = normCore(token)
   const key = phoneticKey(word)
   const vocab = new Set(vocabWords.map((w) => w.trim().toLowerCase()))
-  const seen = new Set<string>([word])
+  const seen = new Set<string>()
   const out: Variant[] = []
   for (const r of raw) {
     const text = coreOf(String(r.text ?? '').trim())
     if (!text || /\s/.test(text) || !/^[а-яёА-ЯЁ]+(?:-[а-яёА-ЯЁ]+)*$/.test(text)) continue
     const n = text.toLowerCase()
-    if (seen.has(n)) continue
+    if (n === word || seen.has(yeKey(n))) continue
     const fromVocab = vocab.has(n)
     if (!fromVocab && key) {
       const k = phoneticKey(n)
@@ -153,7 +153,7 @@ export function filterAiVariants(token: string, raw: { text: string; basis?: str
       const lim = keyLimit(key.length)
       if (Math.abs(k.length - key.length) > lim || editDistance(k, key, lim) > lim) continue
     }
-    seen.add(n)
+    seen.add(yeKey(n))
     out.push({ text, basis: 'meaning' })
     if (out.length >= MAX_VARIANTS) break
   }

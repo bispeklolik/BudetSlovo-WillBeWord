@@ -82,7 +82,7 @@ export default function WordVariants(props: Props): React.JSX.Element | null {
         .then((r) => {
           if (cancelled) return
           setAi(r.entry)
-          setAiState('done')
+          setAiState(r.entry ? 'done' : 'error') // ответа по слову нет — можно спросить ещё раз
         })
         .catch(() => {
           if (!cancelled) setAiState('error')
@@ -106,8 +106,8 @@ export default function WordVariants(props: Props): React.JSX.Element | null {
   }
 
   // Клавиши. Захват на window: до обработчика редактора, чтобы цифры не меняли скорость.
-  const stateRef = useRef({ variants, sel, apply, props })
-  stateRef.current = { variants, sel, apply, props }
+  const stateRef = useRef({ variants, sel, apply, props, same })
+  stateRef.current = { variants, sel, apply, props, same }
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const el = e.target as HTMLElement | null
@@ -131,6 +131,10 @@ export default function WordVariants(props: Props): React.JSX.Element | null {
         if (el?.tagName === 'BUTTON') return // Enter на кнопке окошка нажимает её саму
         eat()
         s.apply(s.sel)
+      } else if (e.code === 'KeyA' || e.code === 'KeyD') {
+        eat()
+        if (e.code === 'KeyD') setToDict((v) => !v)
+        else if (s.same > 0) setAll((v) => !v)
       } else if (e.code === 'Escape') {
         eat()
         s.props.onClose()
@@ -263,7 +267,7 @@ export default function WordVariants(props: Props): React.JSX.Element | null {
         </label>
       </div>
 
-      <div className="wv-keys">1–5 выбрать · ↑↓ Enter · Tab следующее · Esc закрыть</div>
+      <div className="wv-keys">1–5 выбрать · ↑↓ Enter · Tab следующее · A во всей записи · D в словарь · Esc закрыть</div>
     </div>
   )
 }
