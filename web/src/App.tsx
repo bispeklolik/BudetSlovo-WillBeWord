@@ -86,9 +86,10 @@ const CATEGORY_ORDER: PromptCategory[] = [
 async function sttTranscribe(file: File, engine: SttId, key: string): Promise<MergeResult> {
   if (engine === 'deepgram') {
     const params = new URLSearchParams({
-      model: 'nova-2',
+      // Nova-3 — как в программе (с 11.11.2026; замер: точность как у nova-2, сомнений вдвое меньше).
+      model: 'nova-3',
       language: 'ru',
-      // diarize=true устарел (разделитель v1); diarize_model=v2 — новый, для Nova-2.
+      // diarize=true устарел (разделитель v1); diarize_model=v2 — новый, совместим с Nova-1/2/3.
       diarize_model: 'v2',
       punctuate: 'true',
       smart_format: 'true'

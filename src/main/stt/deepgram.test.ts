@@ -41,3 +41,25 @@ describe('deepgramToTurns', () => {
     expect(deepgramToTurns({}).speakers).toEqual([])
   })
 })
+
+describe('параметры запроса Deepgram (Nova-3, 11.11.2026)', () => {
+  it('Nova-3, русский, новая диаризация; словарь — через keyterm, а не keywords', async () => {
+    const { deepgramParams } = await import('./deepgram')
+    const p = deepgramParams({ terms: ['психотерапия', 'тревожность'] })
+    expect(p.get('model')).toBe('nova-3')
+    expect(p.get('language')).toBe('ru')
+    expect(p.get('diarize_model')).toBe('v2')
+    expect(p.has('diarize')).toBe(false) // оба параметра сразу Deepgram отклоняет
+    expect(p.getAll('keyterm')).toEqual(['психотерапия', 'тревожность'])
+    expect(p.has('keywords')).toBe(false) // с Nova-3 не работает
+    expect(deepgramParams({ terms: ['психотерапия'] }, false).has('keyterm')).toBe(false)
+  })
+  it('словарь укладывается в пределы Deepgram: не больше 50 терминов и ~600 знаков', async () => {
+    const { keyterms } = await import('./deepgram')
+    const many = Array.from({ length: 120 }, (_, i) => 'термин' + i)
+    expect(keyterms(many).length).toBeLessThanOrEqual(50)
+    const long = Array.from({ length: 40 }, (_, i) => 'оченьдлинныйтерминдляпроверки' + i)
+    expect(keyterms(long).join('').length).toBeLessThanOrEqual(600)
+    expect(keyterms(undefined)).toEqual([])
+  })
+})
