@@ -7,6 +7,9 @@ import type { AppModeRule } from './appModes'
 
 export type AiEngine = 'local-llama' | 'claude' | 'openrouter'
 
+// Задачи, для которых можно выбрать свой ИИ (см. shared/aiRouting.ts).
+export type AiTask = 'dictation' | 'cleanup' | 'notes' | 'ask' | 'highlights' | 'variants'
+
 // Движок расшифровки: локальный Whisper (приватно, на этом компьютере) или
 // один из облачных (быстрее, но аудио уходит на их серверы).
 export type SttEngine = 'local' | 'deepgram' | 'assemblyai' | 'elevenlabs' | 'openai' | 'groq'
@@ -15,6 +18,7 @@ export interface Settings {
   theme: Theme
   folders?: string[] // явный список папок (включая пустые), чтобы они не исчезали
   aiEngine?: AiEngine // чем обрабатывать: локально или облачный Claude
+  aiTasks?: Partial<Record<AiTask, AiEngine>> // свой ИИ для отдельных задач; нет значения — как aiEngine
   anthropicKey?: string // ключ Anthropic API (хранится локально), для движка Claude
   claudeModel?: string // модель Claude (по умолчанию sonnet)
   openrouterKey?: string // ключ OpenRouter (хранится локально)

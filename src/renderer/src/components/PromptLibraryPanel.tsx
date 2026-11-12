@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import { aiEngineLabel, resolveAiEngine } from '../../../shared/aiRouting'
 import { useEscClose } from '../useEscClose'
 import {
   BUILTIN_PROMPTS,
@@ -52,11 +53,9 @@ export default function PromptLibraryPanel({
   useEffect(() => {
     api.getSettings().then((s) => {
       setEngineLabel(
-        s.aiEngine === 'claude'
+        resolveAiEngine(s, 'notes') === 'claude'
           ? `Claude (${s.claudeModel ?? 'облако'})`
-          : s.aiEngine === 'openrouter'
-            ? `OpenRouter (${s.openrouterModel ?? 'облако'})`
-            : 'Локально'
+          : aiEngineLabel(s, 'notes')
       )
       setCustom(s.customPrompts ?? [])
     })

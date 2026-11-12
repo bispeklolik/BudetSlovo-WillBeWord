@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Tabs from '@radix-ui/react-tabs'
 import { ChevronDown, ChevronRight, Search, X } from 'lucide-react'
 import { api } from '../api'
-import type { Theme, AiEngine, SttEngine, Settings as SettingsData, DictationSettings, SetupInfo, KeyVerdict } from '../../../shared/types'
+import type { Theme, AiEngine, AiTask, SttEngine, Settings as SettingsData, DictationSettings, SetupInfo, KeyVerdict } from '../../../shared/types'
 import { defaultDictation } from '../../../shared/types'
 import { STT_ENGINES, sttMeta, sttModeLabel } from '../../../shared/sttEngines'
 import { LOCAL_MODELS, localModel, formatBytes } from '../../../shared/localModels'
+import { AI_TASKS, AI_ENGINE_LABELS, resolveAiEngine } from '../../../shared/aiRouting'
 import { currentClaudeModel } from '../../../shared/claudeModels'
 import { DICT_MODES, TONE_NAMES, findMode, type DictTone } from '../../../shared/dictModes'
 import {
@@ -191,6 +192,8 @@ export default function SettingsPage({
   const [loaded, setLoaded] = useState(false)
   const [sttMore, setSttMore] = useState(false)
   const [aiMore, setAiMore] = useState(false)
+  const [aiTasks, setAiTasks] = useState<Partial<Record<AiTask, AiEngine>>>({})
+  const [tasksMore, setTasksMore] = useState(false)
   const [dictMore, setDictMore] = useState(false)
 
   const applySettings = useCallback((s: SettingsData, first: boolean): void => {
@@ -213,6 +216,9 @@ export default function SettingsPage({
     // Локальный движок прячется под «Дополнительно» — но если выбран, показываем сразу.
     setSttMore(!STT_MAIN.some((m) => m.id === (s.sttEngine ?? 'local')))
     setAiMore((s.aiEngine ?? 'local-llama') === 'local-llama')
+    setAiTasks(s.aiTasks ?? {})
+    // Свёрнуто, если ни одна задача не переопределена.
+    setTasksMore(Object.keys(s.aiTasks ?? {}).length > 0)
     setLoaded(true)
   }, [])
 
@@ -232,6 +238,7 @@ export default function SettingsPage({
   // Переход из поиска: открыть раздел, проскроллить к настройке, подсветить.
   useEffect(() => {
     if (!target || !loaded) return
+    if (target === 'ai-tasks') setTasksMore(true)
     const t = window.setTimeout(() => {
       const el = document.getElementById('set-' + target)
       if (el) {
@@ -778,6 +785,59 @@ export default function SettingsPage({
           <div className="panel-note">Обработка на вашем компьютере — ничего не уходит наружу.</div>
         </>
       )}
+      <div id="set-ai-tasks" className="st-sub">
+        <Disclosure open={tasksMore} onToggle={() => setTasksMore((v) => !v)} label="Свой ИИ для отдельных задач">
+          <div className="panel-note">
+            Например, диктовку чистить на компьютере, а конспекты делать в облаке. Облако быстрее и точнее. На компьютере
+            бесплатно, и текст не уходит в интернет. Для варианта «На компьютере» нужен скачанный локальный ИИ.
+          </div>
+          {AI_TASKS.map((t) => {
+            const own = aiTasks[t.id]
+            const eff = resolveAiEngine({ aiEngine: engine, aiTasks }, t.id)
+            // Ключ общего движка видно выше; предупреждаем только о ключе, нужном для своего выбора.
+            const noKey = !!own && ((eff === 'claude' && !key.trim()) || (eff === 'openrouter' && !orKey.trim()))
+            return (
+              <div key={t.id} className="st-sub">
+                <div className="settings-row">
+                  <span title={t.hint}>{t.label}</span>
+                  <select
+                    className="rate"
+                    aria-label={t.label}
+                    value={own ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value as AiEngine | ''
+                      const next = { ...aiTasks }
+                      if (v) next[t.id] = v
+                      else delete next[t.id]
+                      setAiTasks(next)
+                      save({ aiTasks: next })
+                    }}
+                  >
+                    <option value="">Как везде ({AI_ENGINE_LABELS[engine]})</option>
+                    <option value="claude">{AI_ENGINE_LABELS.claude}</option>
+                    <option value="openrouter">{AI_ENGINE_LABELS.openrouter}</option>
+                    <option value="local-llama">{AI_ENGINE_LABELS['local-llama']}</option>
+                  </select>
+                </div>
+                {eff === 'local-llama' && aiReady === false && (
+                  <div className="settings-row">
+                    <span className="key-bad">Локальный ИИ ещё не скачан.</span>
+                    <button className="btn" onClick={onOpenWelcome}>
+                      Скачать
+                    </button>
+                  </div>
+                )}
+                {noKey && (
+                  <div className="panel-note key-bad">
+                    Нет ключа {eff === 'claude' ? 'Anthropic' : 'OpenRouter'}. Чтобы его вписать, на минуту выберите «{AI_ENGINE_LABELS[eff]}» в строке «Движок» выше.
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          <div className="panel-note">Обезличивание записи всегда идёт на компьютере. Модель Claude общая для всех задач.</div>
+        </Disclosure>
+      </div>
       {!aiMore && engine !== 'local-llama' && (
         <button className="text-link st-more-btn" onClick={() => setAiMore(true)}>
           <ChevronRight size={14} aria-hidden="true" /> Дополнительно: ИИ на этом компьютере

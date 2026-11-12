@@ -67,6 +67,7 @@ export const SETTING_ENTRIES: SettingEntry[] = [
   { id: 'stt-local', section: 'engines', label: 'Локальный движок: модель и устройство', words: 'видеокарта процессор cuda скачать дополнительно' },
   { id: 'ai-engine', section: 'engines', label: 'ИИ: движок', words: 'claude openrouter локально саммари' },
   { id: 'ai-key', section: 'engines', label: 'Ключ ИИ', words: 'anthropic openrouter api проверить' },
+  { id: 'ai-tasks', section: 'engines', label: 'Свой ИИ для отдельных задач', words: 'диктовка конспекты вопросы причёсывание мысли варианты разделить где какой ии облако локально компьютере' },
   { id: 'ai-model', section: 'engines', label: 'Модель ИИ', words: 'haiku sonnet opus' },
   // Подключения
   { id: 'mcp', section: 'connections', label: 'Claude читает записи (MCP)', words: 'claude desktop' },

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon'
 import { api } from '../api'
+import { aiEngineLabel } from '../../../shared/aiRouting'
+import type { AiTask } from '../../../shared/types'
 
 interface AiMenuProps {
   busyLabel: string | null // когда идёт долгая операция — текст на кнопке, меню закрыто
@@ -22,18 +24,21 @@ export default function AiMenu(props: AiMenuProps): React.JSX.Element {
   const { busyLabel, hasBackup, hasHl } = props
   const [open, setOpen] = useState(false)
   const [engineLabel, setEngineLabel] = useState('Локально')
+  // Подпись «своего» ИИ у пунктов, где он отличается от общего (настройка «Свой ИИ для отдельных задач»).
+  const [own, setOwn] = useState<Partial<Record<AiTask, string>>>({})
   const wrapRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (open)
       api.getSettings().then((s) => {
-        setEngineLabel(
-          s.aiEngine === 'claude'
-            ? 'Claude (облако)'
-            : s.aiEngine === 'openrouter'
-              ? `OpenRouter (${s.openrouterModel ?? 'облако'})`
-              : 'Локально'
-        )
+        const common = aiEngineLabel({ ...s, aiTasks: undefined }, 'notes')
+        setEngineLabel(common)
+        const diff: Partial<Record<AiTask, string>> = {}
+        for (const t of ['cleanup', 'highlights', 'variants'] as AiTask[]) {
+          const l = aiEngineLabel(s, t)
+          if (l !== common) diff[t] = l
+        }
+        setOwn(diff)
       })
   }, [open])
 
@@ -68,11 +73,11 @@ export default function AiMenu(props: AiMenuProps): React.JSX.Element {
       {open && (
         <div className="export-menu">
           <div className="export-note">
-            Движок: {engineLabel}
+            Общий движок: {engineLabel}
           </div>
           <div className="menu-sep" />
           <button className="export-item" onClick={() => pick(props.onCleanup)}>
-            Причесать текст
+            Причесать текст{own.cleanup ? ` · ${own.cleanup}` : ''}
           </button>
           {hasBackup && (
             <button className="export-item" onClick={() => pick(props.onRevert)}>
@@ -82,6 +87,7 @@ export default function AiMenu(props: AiMenuProps): React.JSX.Element {
           <div className="menu-sep" />
           <button className="export-item" onClick={() => pick(props.onHighlights)}>
             {hasHl ? 'Обновить «лучшие мысли»' : 'Найти «лучшие мысли»'}
+            {own.highlights ? ` · ${own.highlights}` : ''}
           </button>
           {hasHl && (
             <button className="export-item" onClick={() => pick(props.onShowList)}>
@@ -101,7 +107,7 @@ export default function AiMenu(props: AiMenuProps): React.JSX.Element {
                 onClick={() => pick(props.onPrepareWords)}
                 title="Спросить ИИ про все подсвеченные слова заранее: потом варианты откроются сразу"
               >
-                Подготовить варианты для неуверенных слов
+                Подготовить варианты для неуверенных слов{own.variants ? ` · ${own.variants}` : ''}
               </button>
             </>
           )}

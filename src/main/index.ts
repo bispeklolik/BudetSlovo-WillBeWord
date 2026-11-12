@@ -18,6 +18,7 @@ import { exportTranscript, buildTextDocx, type ExportFormat } from './export'
 import {
   registerProvider,
   getProvider,
+  providerForTask,
   type SummaryLevel,
   type SummaryDomain,
   type AiProvider
@@ -40,6 +41,7 @@ import {
   clientDynamics
 } from './ai/insights'
 import { missedSystem } from '../shared/aiTasks'
+import { resolveAiEngine } from '../shared/aiRouting'
 import { transcribeClip, transcribeAudioText } from './stt/clip'
 import { toDataURL as qrDataUrl } from 'qrcode'
 import { startPhoneUpload, stopPhoneUpload } from './phone/server'
@@ -114,7 +116,8 @@ import type {
   NoteInput,
   AnonRule,
   ProjectMeta,
-  AskTurn
+  AskTurn,
+  AiTask
 } from '../shared/types'
 
 // Профиль Chromium — внутри папки данных (у владельца это D:, где есть место).
@@ -153,10 +156,11 @@ let settings: Settings = loadSettings()
 setClaudeConfig(settings.anthropicKey, settings.claudeModel)
 setOpenrouterConfig(settings.openrouterKey, settings.openrouterModel)
 
-// Готовит выбранный движок для одиночных вызовов (саммари/мысли): для локального
-// поднимает Ollama; проверяет доступность (ключ/модель). Обезличивание — всегда локально.
-async function prepareEngine(): Promise<AiProvider> {
-  const provider = getProvider(settings.aiEngine ?? 'local-llama')
+// Готовит движок ЭТОЙ задачи (свой из settings.aiTasks, иначе общий aiEngine) для
+// одиночных вызовов: для локального поднимает Ollama; проверяет доступность (ключ/модель).
+// Обезличивание записи (ai:anonymize) — всегда локально и сюда не ходит.
+async function prepareEngine(task: AiTask): Promise<AiProvider> {
+  const provider = providerForTask(settings, task)
   if (!provider) throw new Error('AI_PROVIDER_NOT_FOUND')
   if (provider.isLocal && !(await ensureOllama())) throw new Error('AI_UNAVAILABLE')
   if (!(await provider.isAvailable())) throw new Error('AI_MODEL_MISSING')
@@ -270,7 +274,7 @@ ipcMain.handle('call:missed', async (_e, id: string, minutes: number) => {
     }
     if (text.replace(/[\s.,!?…-]/g, '').length < 3) return `За последние ${m} мин речи почти не слышно.`
     try {
-      const provider = await prepareEngine()
+      const provider = await prepareEngine('notes')
       return (await provider.generate(missedSystem(m), text)).trim()
     } catch {
       return `ИИ сейчас недоступен — вот текст последних ${m} мин:\n\n${text}`
@@ -710,7 +714,7 @@ ipcMain.handle('ai:available', async () => {
 })
 ipcMain.handle('ai:hasBackup', (_e, slug: string) => hasAiBackup(slug))
 ipcMain.handle('ai:cleanup', (_e, slug: string) =>
-  runCleanup(slug, settings.aiEngine ?? 'local-llama', (p) =>
+  runCleanup(slug, resolveAiEngine(settings, 'cleanup'), (p) =>
     win?.webContents.send('ai:progress', p)
   )
 )
@@ -720,7 +724,7 @@ ipcMain.handle(
   async (_e, slug: string, level: SummaryLevel, domain: SummaryDomain) => {
     const meta = getProject(slug)
     if (!meta?.turns) return null
-    const provider = await prepareEngine()
+    const provider = await prepareEngine('notes')
     return generateSmart(
       provider,
       SUMMARY_BASE + SUMMARY_DOMAIN[domain] + SUMMARY_LEVEL[level],
@@ -734,14 +738,14 @@ ipcMain.handle('stt:clip', (_e, data: ArrayBuffer) => transcribeClip(Buffer.from
 ipcMain.handle('ai:runPrompt', async (_e, slug: string, system: string) => {
   const meta = getProject(slug)
   if (!meta?.turns) return null
-  const provider = await prepareEngine()
+  const provider = await prepareEngine('notes')
   return generateSmart(provider, system, transcriptText(meta))
 })
 // ---------- варианты неуверенного слова (волна 7) ----------
 // Облачный ИИ — только если человек уже выбрал облачный движок: отдельного выбора нет.
 // Локальный используем, если Ollama уже запущена (на щелчок её не поднимаем).
 async function variantsProvider(): Promise<AiProvider | null> {
-  const p = getProvider(settings.aiEngine ?? 'local-llama')
+  const p = providerForTask(settings, 'variants')
   return p && (await aiReady(p)) ? p : null
 }
 let prepareJob: { cancelled: boolean } | null = null
@@ -766,7 +770,7 @@ ipcMain.handle('words:ai', async (_e, slug: string, wordId: number) => {
 // Для «на всю запись» локальный ИИ считаем готовым, если Ollama и модель стоят на диске:
 // сервер поднимет prepareEngine в words:prepare.
 async function prepareReady(): Promise<boolean> {
-  const p = getProvider(settings.aiEngine ?? 'local-llama')
+  const p = providerForTask(settings, 'variants')
   if (!p?.wordVariants) return false
   if (p.isLocal) {
     const s = await ollamaQuickStatus()
@@ -783,7 +787,7 @@ ipcMain.handle('words:prepare', async (_e, slug: string): Promise<PrepareDone> =
   const job = { cancelled: false }
   prepareJob = job // занимаем место до первого await: второй вызов уже не пройдёт
   try {
-    const provider = await prepareEngine() // для локального поднимает Ollama; без ключа — честная ошибка
+    const provider = await prepareEngine('variants') // для локального поднимает Ollama; без ключа — честная ошибка
     if (!provider.wordVariants) throw new Error('Этот ИИ не умеет подбирать варианты слов.')
     return await prepareAll(provider, slug, settings.vocab, (p) => win?.webContents.send('words:progress', p), job)
   } finally {
@@ -826,7 +830,7 @@ ipcMain.handle('project:setMyNotes', (_e, slug: string, text: string) => {
 ipcMain.handle('ai:enhanceNotes', async (_e, slug: string) => {
   const meta = getProject(slug)
   if (!meta) throw new Error('Запись не найдена.')
-  const provider = await prepareEngine()
+  const provider = await prepareEngine('notes')
   const body = await enhanceNotes(provider, meta)
   return saveNote({ title: `Конспект: ${meta.title}`, body, kind: 'summary', sourceSlug: slug, sourceTitle: meta.title })
 })
@@ -835,7 +839,7 @@ ipcMain.handle(
   async (_e, slug: string, question: string, history: AskTurn[], thorough?: boolean) => {
     const meta = getProject(slug)
     if (!meta) throw new Error('Запись не найдена.')
-    const provider = await prepareEngine()
+    const provider = await prepareEngine('ask')
     return askRecording(provider, meta, String(question), history ?? [], !!thorough)
   }
 )
@@ -843,7 +847,7 @@ ipcMain.handle(
   'ai:askAll',
   async (_e, question: string, folder: string | null, history: AskTurn[], thorough?: boolean) => {
     const projects = projectsIn(listProjects(), folder)
-    const provider = await prepareEngine()
+    const provider = await prepareEngine('ask')
     if (!thorough) return askAll(provider, projects, String(question), history ?? [])
     return askAllThorough(provider, projects, String(question), history ?? [], (done, total) =>
       win?.webContents.send('ai:progress', { done, total, phase: `Читаю запись ${Math.min(done + 1, total)} из ${total}` })
@@ -852,7 +856,7 @@ ipcMain.handle(
 )
 ipcMain.handle('ai:dynamics', async (_e, folder: string) => {
   const sessions = dynamicsSessions(listProjects(), folder)
-  const provider = await prepareEngine()
+  const provider = await prepareEngine('notes')
   const body = await clientDynamics(provider, sessions, {
     progress: (done, total) =>
       win?.webContents.send('ai:progress', {
@@ -873,7 +877,7 @@ ipcMain.handle('ai:dynamics', async (_e, folder: string) => {
 ipcMain.handle('ai:highlights', async (_e, slug: string) => {
   const meta = getProject(slug)
   if (!meta?.turns) return null
-  const provider = await prepareEngine()
+  const provider = await prepareEngine('highlights')
   const phrases = await provider.highlights(transcriptText(meta))
   return saveTranscript(slug, applyHighlights(meta.turns, phrases), meta.speakers ?? [])
 })
@@ -978,7 +982,7 @@ app.whenReady().then(() => {
   // Системная диктовка: оверлей + глобальная клавиша (если включена).
   const overlay = createDictationOverlay()
   initDictation(win!, overlay, rendererUrl('overlay'), async (system, user) => {
-    const provider = await prepareEngine()
+    const provider = await prepareEngine('dictation')
     // Промт режима и проверка ответа — в shared/dictModes.ts и dictation/polish.ts.
     // Диктовка ждёт ответа — берём быструю модель, если движок её умеет (Claude → Haiku).
     return provider.generateFast ? provider.generateFast(system, user) : provider.generate(system, user)

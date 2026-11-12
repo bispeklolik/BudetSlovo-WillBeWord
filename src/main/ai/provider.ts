@@ -1,3 +1,5 @@
+import type { Settings, AiTask } from '../../shared/types'
+import { resolveAiEngine } from '../../shared/aiRouting'
 import type { AnonRule } from '../../shared/anon'
 import type { AiItem, AiRawItem } from '../../shared/wordVariantsAi'
 
@@ -73,4 +75,9 @@ export function getProvider(id: string): AiProvider | undefined {
 
 export function listProviders(): AiProvider[] {
   return [...providers.values()]
+}
+
+/** Провайдер для задачи: свой из settings.aiTasks, иначе общий aiEngine. */
+export function providerForTask(settings: Pick<Settings, 'aiEngine' | 'aiTasks'>, task: AiTask): AiProvider | undefined {
+  return getProvider(resolveAiEngine(settings, task))
 }
