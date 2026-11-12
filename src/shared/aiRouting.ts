@@ -15,7 +15,7 @@ export const AI_TASKS: { id: AiTask; label: string; hint: string }[] = [
 export const AI_ENGINE_LABELS: Record<AiEngine, string> = {
   claude: 'Claude (облако)',
   openrouter: 'OpenRouter (облако)',
-  'local-llama': 'На компьютере'
+  'local-llama': 'Локально'
 }
 
 const isEngine = (x: unknown): x is AiEngine => x === 'claude' || x === 'openrouter' || x === 'local-llama'
@@ -37,7 +37,7 @@ export function aiEngineLabel(
   task: AiTask
 ): string {
   const e = resolveAiEngine(settings, task)
-  if (e === 'claude') return 'Claude (облако)'
+  if (e === 'claude') return AI_ENGINE_LABELS.claude
   if (e === 'openrouter') return `OpenRouter (${settings.openrouterModel ?? 'облако'})`
-  return 'Локально'
+  return AI_ENGINE_LABELS['local-llama']
 }

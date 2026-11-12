@@ -789,7 +789,7 @@ export default function SettingsPage({
         <Disclosure open={tasksMore} onToggle={() => setTasksMore((v) => !v)} label="Свой ИИ для отдельных задач">
           <div className="panel-note">
             Например, диктовку чистить на компьютере, а конспекты делать в облаке. Облако быстрее и точнее. На компьютере
-            бесплатно, и текст не уходит в интернет. Для варианта «На компьютере» нужен скачанный локальный ИИ.
+            бесплатно, и текст не уходит в интернет. Для варианта «Локально» нужен скачанный локальный ИИ.
           </div>
           {AI_TASKS.map((t) => {
             const own = aiTasks[t.id]
@@ -819,7 +819,7 @@ export default function SettingsPage({
                     <option value="local-llama">{AI_ENGINE_LABELS['local-llama']}</option>
                   </select>
                 </div>
-                {eff === 'local-llama' && aiReady === false && (
+                {own === 'local-llama' && aiReady === false && (
                   <div className="settings-row">
                     <span className="key-bad">Локальный ИИ ещё не скачан.</span>
                     <button className="btn" onClick={onOpenWelcome}>
@@ -828,8 +828,15 @@ export default function SettingsPage({
                   </div>
                 )}
                 {noKey && (
-                  <div className="panel-note key-bad">
-                    Нет ключа {eff === 'claude' ? 'Anthropic' : 'OpenRouter'}. Чтобы его вписать, на минуту выберите «{AI_ENGINE_LABELS[eff]}» в строке «Движок» выше.
+                  <div>
+                    <div className="input-label key-bad">
+                      Нет ключа {eff === 'claude' ? 'Anthropic' : 'OpenRouter'}. Вставьте его здесь; он общий для всех задач.
+                    </div>
+                    {eff === 'claude' ? (
+                      <KeyField service="claude" value={key} placeholder="sk-ant-…" onChange={setKey} onSave={(v) => save({ anthropicKey: v })} />
+                    ) : (
+                      <KeyField service="openrouter" value={orKey} placeholder="sk-or-…" onChange={setOrKey} onSave={(v) => save({ openrouterKey: v })} />
+                    )}
                   </div>
                 )}
               </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveAiEngine, commonAiEngine, aiEngineLabel, AI_TASKS } from './aiRouting'
+import { resolveAiEngine, commonAiEngine, aiEngineLabel, AI_ENGINE_LABELS, AI_TASKS } from './aiRouting'
 import { mergeStoredSettings } from './settingsMerge'
 import { searchSettings } from './settingsIndex'
 
@@ -52,5 +52,12 @@ describe('настройки и поиск', () => {
   it('поиск «диктовка ии» находит блок задач', () => {
     expect(searchSettings('диктовка ии').map((e) => e.id)).toContain('ai-tasks')
     expect(searchSettings('отдельных задач').map((e) => e.id)).toContain('ai-tasks')
+  })
+})
+
+describe('единые названия движков', () => {
+  it('в меню и в Настройках локальный движок называется одинаково', () => {
+    expect(aiEngineLabel({ aiEngine: 'local-llama' }, 'notes')).toBe(AI_ENGINE_LABELS['local-llama'])
+    expect(aiEngineLabel({ aiEngine: 'claude' }, 'notes')).toBe(AI_ENGINE_LABELS.claude)
   })
 })
