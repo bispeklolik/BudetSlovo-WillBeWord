@@ -813,7 +813,7 @@ export default function SettingsPage({
                       save({ aiTasks: next })
                     }}
                   >
-                    <option value="">Как везде ({AI_ENGINE_LABELS[engine]})</option>
+                    <option value="">Как везде — {AI_ENGINE_LABELS[engine]}</option>
                     <option value="claude">{AI_ENGINE_LABELS.claude}</option>
                     <option value="openrouter">{AI_ENGINE_LABELS.openrouter}</option>
                     <option value="local-llama">{AI_ENGINE_LABELS['local-llama']}</option>
